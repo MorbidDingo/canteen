@@ -1,5 +1,5 @@
 {
-  "name": "canteen",
+  "name": "cafe-venus",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -41,7 +41,7 @@
     "@types/pg": "^8.18.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "drizzle-kit": "^0.18.1",
+    "drizzle-kit": "^0.31.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "shadcn": "^3.8.5",
