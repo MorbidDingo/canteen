@@ -3,7 +3,7 @@
 import { useCartStore } from "@/lib/store/cart-store";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { emitEvent } from "@/lib/events";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,10 +31,11 @@ import {
   ShoppingCart,
   Loader2,
   UtensilsCrossed,
-  ArrowRight,
-  Smartphone,
-  Banknote,
   CreditCard,
+  Wallet,
+  Check,
+  ArrowRight,
+  IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
@@ -65,6 +73,14 @@ interface RazorpayInstance {
   close: () => void;
 }
 
+type ChildWallet = {
+  childId: string;
+  childName: string;
+  balance: number;
+};
+
+type SlideState = "idle" | "sliding" | "paying" | "paid";
+
 export default function CartPage() {
   const {
     items,
@@ -77,7 +93,19 @@ export default function CartPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ONLINE");
+
+  // Wallet state
+  const [wallets, setWallets] = useState<ChildWallet[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+  const [walletsLoading, setWalletsLoading] = useState(false);
+
+  // Slide-to-pay state
+  const [slideState, setSlideState] = useState<SlideState>("idle");
+  const [slideX, setSlideX] = useState(0);
+  const slideTrackRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -89,8 +117,81 @@ export default function CartPage() {
     }
   }, []);
 
+  // Fetch wallets when wallet payment is selected
+  const fetchWallets = useCallback(async () => {
+    setWalletsLoading(true);
+    try {
+      const res = await fetch("/api/wallet");
+      if (res.ok) {
+        const data: ChildWallet[] = await res.json();
+        setWallets(data);
+        setSelectedChildId((prev) => {
+          if (!prev && data.length > 0) return data[0].childId;
+          return prev;
+        });
+      }
+    } catch {
+      toast.error("Failed to load wallets");
+    } finally {
+      setWalletsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (paymentMethod === "WALLET") {
+      fetchWallets();
+    }
+  }, [paymentMethod, fetchWallets]);
+
+  // Reset slide state when payment method changes
+  useEffect(() => {
+    setSlideState("idle");
+    setSlideX(0);
+  }, [paymentMethod]);
+
+  const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
+  const total = getTotal();
+  const hasEnoughBalance = selectedWallet
+    ? selectedWallet.balance >= total
+    : false;
+
+  // ─── Slide-to-pay handlers ──────────────────────────
+  const THUMB_SIZE = 52;
+
+  const getTrackWidth = () => {
+    if (!slideTrackRef.current) return 300;
+    return slideTrackRef.current.offsetWidth - THUMB_SIZE;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (slideState !== "idle" || !hasEnoughBalance) return;
+    isDragging.current = true;
+    startX.current = e.clientX - slideX;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    const maxX = getTrackWidth();
+    const newX = Math.max(0, Math.min(e.clientX - startX.current, maxX));
+    setSlideX(newX);
+  };
+
+  const handlePointerUp = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    const maxX = getTrackWidth();
+    if (slideX > maxX * 0.85) {
+      setSlideX(maxX);
+      setSlideState("paying");
+      handleWalletPayment();
+    } else {
+      setSlideX(0);
+    }
+  };
+
+  // ─── Razorpay flow ─────────────────────────────────
   const handleRazorpayPayment = async (orderId: string) => {
-    // Step 1: Create Razorpay order
     const res = await fetch("/api/payments/create-order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,7 +205,6 @@ export default function CartPage() {
 
     const { razorpayOrderId, amount, currency, keyId } = await res.json();
 
-    // Step 2: Open Razorpay checkout
     return new Promise<void>((resolve, reject) => {
       if (!window.Razorpay) {
         reject(
@@ -122,7 +222,6 @@ export default function CartPage() {
         order_id: razorpayOrderId,
         handler: async (response: RazorpayResponse) => {
           try {
-            // Step 3: Verify payment on server
             const verifyRes = await fetch("/api/payments/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -148,9 +247,7 @@ export default function CartPage() {
           name: session?.user?.name || "",
           email: session?.user?.email || "",
         },
-        theme: {
-          color: "#1a3a8f", // Venus brand primary
-        },
+        theme: { color: "#6366f1" },
         modal: {
           ondismiss: () => {
             reject(new Error("Payment cancelled"));
@@ -163,6 +260,57 @@ export default function CartPage() {
     });
   };
 
+  // ─── Wallet payment flow ───────────────────────────
+  const handleWalletPayment = async () => {
+    if (!session) {
+      toast.error("Please sign in to place an order");
+      setSlideState("idle");
+      setSlideX(0);
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((item) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            instructions: [...item.instructions.toggles, item.instructions.text]
+              .filter(Boolean)
+              .join(", "),
+          })),
+          paymentMethod: "WALLET",
+          childId: selectedChildId,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to place order");
+      }
+
+      // Animate: paying → paid
+      await new Promise((r) => setTimeout(r, 1500));
+      setSlideState("paid");
+
+      await new Promise((r) => setTimeout(r, 1200));
+      toast.success("Paid via wallet! Order placed.");
+      clearCart();
+      emitEvent("orders-updated");
+      router.push("/orders");
+    } catch (error) {
+      setSlideState("idle");
+      setSlideX(0);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to place order",
+      );
+    }
+  };
+
+  // ─── Razorpay order flow ───────────────────────────
   const handlePlaceOrder = async () => {
     if (!session) {
       toast.error("Please sign in to place an order");
@@ -175,9 +323,10 @@ export default function CartPage() {
       return;
     }
 
+    if (paymentMethod === "WALLET") return;
+
     setLoading(true);
     try {
-      // Step 1: Create the order in our system
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -189,7 +338,7 @@ export default function CartPage() {
               .filter(Boolean)
               .join(", "),
           })),
-          paymentMethod,
+          paymentMethod: "ONLINE",
         }),
       });
 
@@ -200,29 +349,22 @@ export default function CartPage() {
 
       const { order: createdOrder } = await res.json();
 
-      // Step 2: If ONLINE payment, trigger Razorpay
-      if (paymentMethod === "ONLINE") {
-        try {
-          await handleRazorpayPayment(createdOrder.id);
-          toast.success("Payment successful! Order placed.");
-        } catch (paymentError) {
-          // Order is created but payment failed/cancelled
-          // The order will stay as UNPAID, user can pay later
-          if (
-            paymentError instanceof Error &&
-            paymentError.message === "Payment cancelled"
-          ) {
-            toast.info(
-              "Payment cancelled. Your order is saved — you can pay later from your orders page.",
-            );
-          } else {
-            toast.error(
-              "Payment failed. Your order is saved — you can retry payment from your orders page.",
-            );
-          }
+      try {
+        await handleRazorpayPayment(createdOrder.id);
+        toast.success("Payment successful! Order placed.");
+      } catch (paymentError) {
+        if (
+          paymentError instanceof Error &&
+          paymentError.message === "Payment cancelled"
+        ) {
+          toast.info(
+            "Payment cancelled. Your order is saved — you can pay later from your orders page.",
+          );
+        } else {
+          toast.error(
+            "Payment failed. Your order is saved — you can retry payment from your orders page.",
+          );
         }
-      } else {
-        toast.success("Order placed successfully!");
       }
 
       clearCart();
@@ -260,7 +402,7 @@ export default function CartPage() {
           Add some items from the menu to get started
         </p>
         <Link href="/menu">
-          <Button className="mt-6 gap-2">
+          <Button className="mt-6 gap-2 btn-gradient">
             <UtensilsCrossed className="h-4 w-4" />
             Browse Menu
           </Button>
@@ -284,7 +426,7 @@ export default function CartPage() {
           {items.map((item, index) => (
             <Card
               key={item.menuItemId}
-              className="animate-fade-in-up"
+              className="animate-fade-in-up glass-card"
               style={{ animationDelay: `${index * 60}ms` }}
             >
               <CardHeader className="pb-3">
@@ -379,7 +521,7 @@ export default function CartPage() {
 
         {/* Order Summary */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-20 animate-scale-in">
+          <Card className="sticky top-20 animate-scale-in glass-card">
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
@@ -398,137 +540,261 @@ export default function CartPage() {
               <Separator />
               <div className="flex justify-between font-semibold text-lg">
                 <span>Total</span>
-                <span>₹{getTotal().toFixed(2)}</span>
+                <span>₹{total.toFixed(2)}</span>
               </div>
 
-              <div className="pt-2 space-y-2">
+              {/* Payment Method */}
+              <div className="pt-3 space-y-3">
                 <Label className="text-sm text-muted-foreground">
                   Payment Method
                 </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("CASH")}
-                    className={`flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all ${
-                      paymentMethod === "CASH"
-                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-muted hover:border-muted-foreground/30"
-                    }`}
-                  >
-                    <Banknote
-                      className={`h-5 w-5 shrink-0 ${paymentMethod === "CASH" ? "text-primary" : "text-muted-foreground"}`}
-                    />
-                    <div>
-                      <p className="text-sm font-medium">Cash</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Pay on serving
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("UPI")}
-                    className={`flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all ${
-                      paymentMethod === "UPI"
-                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-muted hover:border-muted-foreground/30"
-                    }`}
-                  >
-                    <Smartphone
-                      className={`h-5 w-5 shrink-0 ${paymentMethod === "UPI" ? "text-primary" : "text-muted-foreground"}`}
-                    />
-                    <div>
-                      <p className="text-sm font-medium">UPI</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Scan &amp; pay
-                      </p>
-                    </div>
-                  </button>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Razorpay Option */}
                   <button
                     type="button"
                     onClick={() => setPaymentMethod("ONLINE")}
-                    className={`flex items-center gap-2 rounded-lg border-2 p-3 text-left transition-all ${
+                    className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
                       paymentMethod === "ONLINE"
-                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                        : "border-muted hover:border-muted-foreground/30"
+                        ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10 shadow-md shadow-primary/10"
+                        : "border-border hover:border-primary/30 hover:bg-muted/50"
                     }`}
                   >
-                    <CreditCard
-                      className={`h-5 w-5 shrink-0 ${paymentMethod === "ONLINE" ? "text-primary" : "text-muted-foreground"}`}
-                    />
+                    <div
+                      className={`rounded-full p-2.5 transition-all duration-300 ${
+                        paymentMethod === "ONLINE"
+                          ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/25"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <CreditCard className="h-5 w-5" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium">Online</p>
+                      <p className="text-sm font-semibold">Razorpay</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Razorpay
+                        UPI · Cards · Wallets
                       </p>
                     </div>
+                    {paymentMethod === "ONLINE" && (
+                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-0.5 animate-scale-in">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Wallet Option */}
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("WALLET")}
+                    className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
+                      paymentMethod === "WALLET"
+                        ? "border-emerald-500 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 shadow-md shadow-emerald-500/10"
+                        : "border-border hover:border-emerald-500/30 hover:bg-muted/50"
+                    }`}
+                  >
+                    <div
+                      className={`rounded-full p-2.5 transition-all duration-300 ${
+                        paymentMethod === "WALLET"
+                          ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      <Wallet className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">Wallet</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Instant pay
+                      </p>
+                    </div>
+                    {paymentMethod === "WALLET" && (
+                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5 animate-scale-in">
+                        <Check className="h-3 w-3 text-white" />
+                      </div>
+                    )}
                   </button>
                 </div>
 
-                {paymentMethod === "UPI" && (
-                  <Card className="border-dashed animate-in fade-in slide-in-from-top-1 duration-300">
-                    <CardContent className="py-3 text-center space-y-2">
-                      <div className="mx-auto w-32 h-32 rounded-lg bg-muted flex items-center justify-center">
-                        <div className="text-center">
-                          <Smartphone className="h-8 w-8 text-muted-foreground mx-auto mb-1" />
-                          <p className="text-[10px] text-muted-foreground">
-                            QR Code
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-sm font-medium">schoolcafe@upi</p>
+                {/* Razorpay info panel */}
+                {paymentMethod === "ONLINE" && (
+                  <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent animate-in fade-in slide-in-from-top-2 duration-300">
+                    <CardContent className="py-3 text-center space-y-1.5">
+                      <p className="text-sm font-medium text-primary">
+                        Secure payment via Razorpay
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        Pay ₹{getTotal().toFixed(2)} via any UPI app.
-                        <br />
-                        Order will be marked{" "}
-                        <Badge
-                          variant="outline"
-                          className="ml-1 text-[10px] px-1.5 py-0"
-                        >
-                          UNPAID
-                        </Badge>{" "}
-                        until admin confirms.
+                        You&apos;ll be redirected after placing the order
                       </p>
                     </CardContent>
                   </Card>
                 )}
 
-                {paymentMethod === "ONLINE" && (
-                  <Card className="border-dashed border-[#1a3a8f]/30 bg-[#1a3a8f]/5 animate-in fade-in slide-in-from-top-1 duration-300">
-                    <CardContent className="py-3 text-center space-y-2">
-                      <CreditCard className="h-8 w-8 text-[#1a3a8f] mx-auto" />
-                      <p className="text-sm font-medium text-[#1a3a8f]">
-                        Pay securely via Razorpay
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        UPI, Cards, Net Banking, Wallets &amp; more.
-                        <br />
-                        You&apos;ll be redirected to Razorpay after placing the
-                        order.
-                      </p>
-                    </CardContent>
-                  </Card>
+                {/* Wallet panel */}
+                {paymentMethod === "WALLET" && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {walletsLoading ? (
+                      <div className="flex justify-center py-4">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : wallets.length === 0 ? (
+                      <Card className="border-dashed">
+                        <CardContent className="py-4 text-center">
+                          <Wallet className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            No wallets found. Add a child first.
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <>
+                        {/* Child selector */}
+                        {wallets.length > 1 && (
+                          <Select
+                            value={selectedChildId}
+                            onValueChange={setSelectedChildId}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select child" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {wallets.map((w) => (
+                                <SelectItem key={w.childId} value={w.childId}>
+                                  {w.childName} — ₹{w.balance.toFixed(2)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+
+                        {/* Balance card */}
+                        {selectedWallet && (
+                          <Card className="border-0 bg-gradient-to-br from-emerald-500 to-teal-600 text-white overflow-hidden">
+                            <CardContent className="py-3 flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-white/70">
+                                  {selectedWallet.childName}&apos;s Balance
+                                </p>
+                                <p className="text-xl font-bold flex items-center gap-0.5">
+                                  <IndianRupee className="h-4 w-4" />
+                                  {selectedWallet.balance.toFixed(2)}
+                                </p>
+                              </div>
+                              {!hasEnoughBalance && (
+                                <Badge className="bg-white/20 text-white border-0 text-[10px]">
+                                  Insufficient
+                                </Badge>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Slide-to-pay */}
+                        {selectedWallet && (
+                          <div className="pt-1">
+                            <div
+                              ref={slideTrackRef}
+                              className={`relative h-14 rounded-full overflow-hidden transition-colors duration-300 ${
+                                slideState === "paid"
+                                  ? "bg-emerald-500"
+                                  : slideState === "paying"
+                                    ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
+                                    : hasEnoughBalance
+                                      ? "bg-gradient-to-r from-muted to-muted/80"
+                                      : "bg-muted/50 opacity-50"
+                              }`}
+                            >
+                              {/* Track label */}
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                {slideState === "idle" && (
+                                  <span
+                                    className={`text-sm font-medium transition-opacity duration-200 ${
+                                      slideX > 20 ? "opacity-0" : "opacity-60"
+                                    }`}
+                                  >
+                                    {hasEnoughBalance
+                                      ? "Slide to pay"
+                                      : "Insufficient balance"}
+                                  </span>
+                                )}
+                                {slideState === "paying" && (
+                                  <div className="flex items-center gap-2 text-emerald-600">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span className="text-sm font-medium">
+                                      Processing...
+                                    </span>
+                                  </div>
+                                )}
+                                {slideState === "paid" && (
+                                  <div className="flex items-center gap-2 text-white animate-scale-in">
+                                    <Check className="h-5 w-5" />
+                                    <span className="text-sm font-bold">
+                                      Paid ₹{total.toFixed(0)}!
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Sliding progress fill */}
+                              {slideState === "idle" && slideX > 0 && (
+                                <div
+                                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500/20 to-emerald-500/30 rounded-full transition-none"
+                                  style={{ width: slideX + THUMB_SIZE }}
+                                />
+                              )}
+
+                              {/* Thumb */}
+                              {slideState === "idle" && (
+                                <div
+                                  className={`absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none ${
+                                    hasEnoughBalance
+                                      ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing active:scale-95"
+                                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                                  }`}
+                                  style={{
+                                    transform: `translateX(${slideX}px)`,
+                                    transition: isDragging.current
+                                      ? "none"
+                                      : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                                  }}
+                                  onPointerDown={handlePointerDown}
+                                  onPointerMove={handlePointerMove}
+                                  onPointerUp={handlePointerUp}
+                                  onPointerCancel={handlePointerUp}
+                                >
+                                  <ArrowRight className="h-5 w-5" />
+                                </div>
+                              )}
+
+                              {/* Paying spinner in thumb position */}
+                              {slideState === "paying" && (
+                                <div className="absolute top-1 right-1 h-12 w-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-lg animate-pulse">
+                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-2">
-              <Button
-                className="w-full gap-2 shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
-                size="lg"
-                onClick={handlePlaceOrder}
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : paymentMethod === "ONLINE" ? (
-                  <CreditCard className="h-4 w-4" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )}
-                {paymentMethod === "ONLINE"
-                  ? "Place Order & Pay"
-                  : "Place Order"}
-              </Button>
+              {paymentMethod === "ONLINE" && (
+                <Button
+                  className="w-full gap-2 btn-gradient btn-shimmer text-base h-12"
+                  size="lg"
+                  onClick={handlePlaceOrder}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-4 w-4" />
+                  )}
+                  Place Order &amp; Pay
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

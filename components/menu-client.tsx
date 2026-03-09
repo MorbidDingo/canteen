@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -23,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddToCartButton } from "@/components/add-to-cart-button";
+import { useCartStore } from "@/lib/store/cart-store";
 import {
   MENU_CATEGORIES,
   MENU_CATEGORY_LABELS,
@@ -37,6 +39,8 @@ import {
   X,
   ArrowUpDown,
   Package,
+  ShoppingCart,
+  ArrowRight,
 } from "lucide-react";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
@@ -76,6 +80,8 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
+  const cartItemCount = useCartStore((s) => s.getItemCount());
+  const cartTotal = useCartStore((s) => s.getTotal());
 
   // Compute price range from data
   const priceRange = useMemo(() => {
@@ -351,6 +357,35 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
             </TabsContent>
           ))}
         </Tabs>
+      )}
+
+      {/* Floating Cart Bar */}
+      {cartItemCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="mx-auto max-w-lg px-4 pb-4">
+            <Link href="/cart">
+              <Button
+                size="lg"
+                className="w-full shadow-lg hover:shadow-xl transition-all gap-3 h-14 text-base"
+              >
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  <Badge
+                    variant="secondary"
+                    className="bg-white/20 text-white hover:bg-white/20 text-sm px-2"
+                  >
+                    {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
+                  </Badge>
+                </div>
+                <span className="mx-auto font-semibold">Go to Cart</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-bold">₹{cartTotal.toFixed(2)}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </div>
+              </Button>
+            </Link>
+          </div>
+        </div>
       )}
     </>
   );

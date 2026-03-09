@@ -154,7 +154,7 @@ export default function ManagementCardsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
+    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
       {/* Header bar */}
       <div className="border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order, orderItem, menuItem } from "@/lib/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { order, orderItem, menuItem, wallet, walletTransaction, child } from "@/lib/db/schema";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
 const orderItemSchema = z.object({
@@ -13,7 +13,8 @@ const orderItemSchema = z.object({
 
 const createOrderSchema = z.object({
   items: z.array(orderItemSchema).min(1, "Order must have at least one item"),
-  paymentMethod: z.enum(["CASH", "UPI", "ONLINE"]).default("CASH"),
+  paymentMethod: z.enum(["ONLINE", "WALLET"]).default("ONLINE"),
+  childId: z.string().optional(), // required for WALLET payments
 });
 
 // POST — create a new order
@@ -34,7 +35,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items: orderItems, paymentMethod } = parsed.data;
+    const { items: orderItems, paymentMethod, childId } = parsed.data;
+
+    // For WALLET payment, childId is required
+    if (paymentMethod === "WALLET" && !childId) {
+      return NextResponse.json(
+        { error: "Please select a child for wallet payment" },
+        { status: 400 }
+      );
+    }
 
     // Fetch current menu prices to prevent tampering
     const menuItemIds = orderItems.map((i) => i.menuItemId);
@@ -69,14 +78,48 @@ export async function POST(request: NextRequest) {
 
     // Create order and items in a transaction
     const newOrder = await db.transaction(async (tx) => {
+      // If WALLET payment, verify and debit wallet
+      let walletRow = null;
+      if (paymentMethod === "WALLET" && childId) {
+        // Verify child belongs to parent
+        const children = await tx
+          .select()
+          .from(child)
+          .where(and(eq(child.id, childId), eq(child.parentId, session.user.id)))
+          .limit(1);
+
+        if (children.length === 0) {
+          throw new Error("Child not found");
+        }
+
+        const wallets = await tx
+          .select()
+          .from(wallet)
+          .where(eq(wallet.childId, childId))
+          .limit(1);
+
+        if (wallets.length === 0) {
+          throw new Error("Wallet not found for this child");
+        }
+
+        walletRow = wallets[0];
+
+        if (walletRow.balance < totalAmount) {
+          throw new Error(
+            `Insufficient wallet balance. Available: ₹${walletRow.balance.toFixed(2)}, Required: ₹${totalAmount.toFixed(2)}`
+          );
+        }
+      }
+
       const [createdOrder] = await tx
         .insert(order)
         .values({
           userId: session.user.id,
+          childId: paymentMethod === "WALLET" ? childId : undefined,
           totalAmount,
           paymentMethod,
           status: "PLACED",
-          paymentStatus: "UNPAID",
+          paymentStatus: paymentMethod === "WALLET" ? "PAID" : "UNPAID",
         })
         .returning();
 
@@ -89,6 +132,25 @@ export async function POST(request: NextRequest) {
       }));
 
       await tx.insert(orderItem).values(itemsToInsert);
+
+      // Debit wallet if WALLET payment
+      if (paymentMethod === "WALLET" && walletRow) {
+        const newBalance = walletRow.balance - totalAmount;
+
+        await tx
+          .update(wallet)
+          .set({ balance: newBalance, updatedAt: new Date() })
+          .where(eq(wallet.id, walletRow.id));
+
+        await tx.insert(walletTransaction).values({
+          walletId: walletRow.id,
+          type: "DEBIT",
+          amount: totalAmount,
+          balanceAfter: newBalance,
+          description: `Order #${createdOrder.tokenCode || createdOrder.id.slice(0, 6)}`,
+          orderId: createdOrder.id,
+        });
+      }
 
       return createdOrder;
     });

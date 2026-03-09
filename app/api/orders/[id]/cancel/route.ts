@@ -1,54 +1,195 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
-import { order } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { order, orderItem, menuItem, wallet, walletTransaction, child } from "@/lib/db/schema";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+const orderItemSchema = z.object({
+  menuItemId: z.string().min(1),
+  quantity: z.number().int().positive(),
+  instructions: z.string().optional(),
+});
+
+const createOrderSchema = z.object({
+  items: z.array(orderItemSchema).min(1, "Order must have at least one item"),
+  paymentMethod: z.enum(["ONLINE", "WALLET"]).default("ONLINE"),
+  childId: z.string().optional(), // required for WALLET payments
+});
+
+// POST — create a new order
+export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params;
+    const body = await request.json();
+    const parsed = createOrderSchema.safeParse(body);
 
-    // Fetch the order (must belong to the current user)
-    const [existingOrder] = await db
-      .select()
-      .from(order)
-      .where(and(eq(order.id, id), eq(order.userId, session.user.id)));
-
-    if (!existingOrder) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-
-    if (existingOrder.status !== "PLACED") {
+    if (!parsed.success) {
       return NextResponse.json(
-        {
-          error: `Cannot cancel order with status "${existingOrder.status}". Only orders with status "PLACED" can be cancelled.`,
-        },
+        { error: "Invalid order data", details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    const [updatedOrder] = await db
-      .update(order)
-      .set({
-        status: "CANCELLED",
-        updatedAt: new Date(),
-      })
-      .where(eq(order.id, id))
-      .returning();
+    const { items: orderItems, paymentMethod, childId } = parsed.data;
 
-    return NextResponse.json({ order: updatedOrder });
+    // For WALLET payment, childId is required
+    if (paymentMethod === "WALLET" && !childId) {
+      return NextResponse.json(
+        { error: "Please select a child for wallet payment" },
+        { status: 400 }
+      );
+    }
+
+    // Fetch current menu prices to prevent tampering
+    const menuItemIds = orderItems.map((i) => i.menuItemId);
+    const menuItems = await db
+      .select()
+      .from(menuItem)
+      .where(inArray(menuItem.id, menuItemIds));
+
+    // Validate all items exist and are available
+    const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
+    for (const item of orderItems) {
+      const mi = menuItemMap.get(item.menuItemId);
+      if (!mi) {
+        return NextResponse.json(
+          { error: `Menu item ${item.menuItemId} not found` },
+          { status: 400 }
+        );
+      }
+      if (!mi.available) {
+        return NextResponse.json(
+          { error: `${mi.name} is currently unavailable` },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Calculate total from server-side prices
+    const totalAmount = orderItems.reduce((sum, item) => {
+      const mi = menuItemMap.get(item.menuItemId)!;
+      return sum + mi.price * item.quantity;
+    }, 0);
+
+    // Create order and items in a transaction
+    const newOrder = await db.transaction(async (tx) => {
+      // If WALLET payment, verify and debit wallet
+      let walletRow = null;
+      if (paymentMethod === "WALLET" && childId) {
+        // Verify child belongs to parent
+        const children = await tx
+          .select()
+          .from(child)
+          .where(and(eq(child.id, childId), eq(child.parentId, session.user.id)))
+          .limit(1);
+
+        if (children.length === 0) {
+          throw new Error("Child not found");
+        }
+
+        const wallets = await tx
+          .select()
+          .from(wallet)
+          .where(eq(wallet.childId, childId))
+          .limit(1);
+
+        if (wallets.length === 0) {
+          throw new Error("Wallet not found for this child");
+        }
+
+        walletRow = wallets[0];
+
+        if (walletRow.balance < totalAmount) {
+          throw new Error(
+            `Insufficient wallet balance. Available: ₹${walletRow.balance.toFixed(2)}, Required: ₹${totalAmount.toFixed(2)}`
+          );
+        }
+      }
+
+      const [createdOrder] = await tx
+        .insert(order)
+        .values({
+          userId: session.user.id,
+          childId: paymentMethod === "WALLET" ? childId : undefined,
+          totalAmount,
+          paymentMethod,
+          status: "PLACED",
+          paymentStatus: paymentMethod === "WALLET" ? "PAID" : "UNPAID",
+        })
+        .returning();
+
+      const itemsToInsert = orderItems.map((item) => ({
+        orderId: createdOrder.id,
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        unitPrice: menuItemMap.get(item.menuItemId)!.price,
+        instructions: item.instructions || null,
+      }));
+
+      await tx.insert(orderItem).values(itemsToInsert);
+
+      // Debit wallet if WALLET payment
+      if (paymentMethod === "WALLET" && walletRow) {
+        const newBalance = walletRow.balance - totalAmount;
+
+        await tx
+          .update(wallet)
+          .set({ balance: newBalance, updatedAt: new Date() })
+          .where(eq(wallet.id, walletRow.id));
+
+        await tx.insert(walletTransaction).values({
+          walletId: walletRow.id,
+          type: "DEBIT",
+          amount: totalAmount,
+          balanceAfter: newBalance,
+          description: `Order #${createdOrder.tokenCode || createdOrder.id.slice(0, 6)}`,
+          orderId: createdOrder.id,
+        });
+      }
+
+      return createdOrder;
+    });
+
+    return NextResponse.json({ order: newOrder }, { status: 201 });
   } catch (error) {
-    console.error("Cancel order error:", error);
+    console.error("Order creation error:", error);
     return NextResponse.json(
-      { error: "Failed to cancel order" },
+      { error: "Failed to create order" },
+      { status: 500 }
+    );
+  }
+}
+
+// GET — list current user's orders
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const orders = await db.query.order.findMany({
+      where: eq(order.userId, session.user.id),
+      orderBy: [desc(order.createdAt)],
+      with: {
+        items: {
+          with: {
+            menuItem: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json({ orders });
+  } catch (error) {
+    console.error("Order fetch error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch orders" },
       { status: 500 }
     );
   }

@@ -106,16 +106,17 @@ export default function WalletPage() {
       if (res.ok) {
         const data: ChildWallet[] = await res.json();
         setWallets(data);
-        if (data.length > 0 && !selectedChildId) {
-          setSelectedChildId(data[0].childId);
-        }
+        setSelectedChildId((prev) => {
+          if (!prev && data.length > 0) return data[0].childId;
+          return prev;
+        });
       }
     } catch {
       toast.error("Failed to load wallets");
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId]);
+  }, []);
 
   const fetchTransactions = useCallback(async (childId: string) => {
     setTxLoading(true);
@@ -142,6 +143,67 @@ export default function WalletPage() {
   }, [selectedChildId, fetchTransactions]);
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
+
+  const handleRazorpayTopUp = (
+    razorpayOrderId: string,
+    amountPaise: number,
+    keyId: string,
+    walletId: string,
+    childName: string,
+  ): Promise<{ newBalance: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!window.Razorpay) {
+        reject(
+          new Error("Payment SDK not loaded. Please refresh and try again."),
+        );
+        return;
+      }
+
+      const options: RazorpayOptions = {
+        key: keyId,
+        amount: amountPaise,
+        currency: "INR",
+        name: "Venus Café",
+        description: `Wallet top-up for ${childName}`,
+        order_id: razorpayOrderId,
+        handler: async (response: RazorpayResponse) => {
+          try {
+            const verifyRes = await fetch("/api/wallet/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                walletId,
+                amount: amountPaise,
+              }),
+            });
+
+            if (!verifyRes.ok) {
+              const data = await verifyRes.json();
+              reject(new Error(data.error || "Payment verification failed"));
+              return;
+            }
+
+            const result = await verifyRes.json();
+            resolve(result);
+          } catch (err) {
+            reject(err);
+          }
+        },
+        theme: { color: "var(--primary)" },
+        modal: {
+          ondismiss: () => {
+            reject(new Error("Payment cancelled"));
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    });
+  };
 
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
@@ -176,80 +238,38 @@ export default function WalletPage() {
         walletId,
       } = await res.json();
 
-      // Step 2: Open Razorpay checkout
-      if (!window.Razorpay) {
-        throw new Error(
-          "Payment SDK not loaded. Please refresh and try again.",
-        );
-      }
-
       const childName =
         wallets.find((w) => w.childId === selectedChildId)?.childName || "";
 
-      const options: RazorpayOptions = {
-        key: keyId,
-        amount: amountPaise,
-        currency: "INR",
-        name: "Venus Café",
-        description: `Wallet top-up for ${childName}`,
-        order_id: razorpayOrderId,
-        handler: async (response: RazorpayResponse) => {
-          try {
-            // Step 3: Verify payment on server
-            const verifyRes = await fetch("/api/wallet/verify", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                walletId,
-                amount: amountPaise,
-              }),
-            });
-
-            if (!verifyRes.ok) {
-              const data = await verifyRes.json();
-              throw new Error(data.error || "Payment verification failed");
-            }
-
-            const { newBalance } = await verifyRes.json();
-            toast.success(`₹${amount.toFixed(0)} added to wallet!`);
-            setTopUpAmount("");
-
-            // Update wallet balance locally
-            setWallets((prev) =>
-              prev.map((w) =>
-                w.childId === selectedChildId
-                  ? { ...w, balance: newBalance }
-                  : w,
-              ),
-            );
-
-            // Refresh transactions
-            fetchTransactions(selectedChildId);
-          } catch (err) {
-            toast.error(
-              err instanceof Error
-                ? err.message
-                : "Payment verification failed",
-            );
-          }
-        },
-        theme: { color: "#1a3a8f" },
-        modal: {
-          ondismiss: () => {
-            toast.info("Payment cancelled");
-          },
-        },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to initiate payment",
+      // Step 2: Open Razorpay checkout and wait for result
+      const { newBalance } = await handleRazorpayTopUp(
+        razorpayOrderId,
+        amountPaise,
+        keyId,
+        walletId,
+        childName,
       );
+
+      toast.success(`₹${amount.toFixed(0)} added to wallet!`);
+      setTopUpAmount("");
+
+      // Update wallet balance locally
+      setWallets((prev) =>
+        prev.map((w) =>
+          w.childId === selectedChildId ? { ...w, balance: newBalance } : w,
+        ),
+      );
+
+      // Refresh transactions
+      fetchTransactions(selectedChildId);
+    } catch (err) {
+      if (err instanceof Error && err.message === "Payment cancelled") {
+        toast.info("Payment cancelled");
+      } else {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to initiate payment",
+        );
+      }
     } finally {
       setTopUpLoading(false);
     }
@@ -258,11 +278,11 @@ export default function WalletPage() {
   const txIcon = (type: WalletTransactionType) => {
     switch (type) {
       case "TOP_UP":
-        return <ArrowUpCircle className="h-4 w-4 text-[#2eab57]" />;
+        return <ArrowUpCircle className="h-4 w-4 text-emerald-500" />;
       case "DEBIT":
-        return <ArrowDownCircle className="h-4 w-4 text-[#e32726]" />;
+        return <ArrowDownCircle className="h-4 w-4 text-destructive" />;
       case "REFUND":
-        return <RotateCcw className="h-4 w-4 text-[#1a3a8f]" />;
+        return <RotateCcw className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -293,7 +313,7 @@ export default function WalletPage() {
     <div className="container mx-auto max-w-lg px-4 py-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <WalletIcon className="h-6 w-6 text-[#1a3a8f]" />
+          <WalletIcon className="h-6 w-6 text-primary" />
           Wallet
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -319,7 +339,7 @@ export default function WalletPage() {
 
       {/* Balance card */}
       {selectedWallet && (
-        <Card className="bg-gradient-to-br from-[#1a3a8f] to-[#2eab57] text-white">
+        <Card className="glass-card bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground border border-border">
           <CardContent className="pt-6 pb-6 text-center">
             <p className="text-sm opacity-80">
               {selectedWallet.childName}&apos;s Balance
@@ -354,9 +374,7 @@ export default function WalletPage() {
                 size="sm"
                 onClick={() => setTopUpAmount(String(amt))}
                 className={
-                  topUpAmount === String(amt)
-                    ? "bg-[#1a3a8f] hover:bg-[#15307a]"
-                    : ""
+                  topUpAmount === String(amt) ? "btn-gradient btn-shimmer" : ""
                 }
               >
                 ₹{amt}
@@ -383,7 +401,7 @@ export default function WalletPage() {
             <Button
               onClick={handleTopUp}
               disabled={topUpLoading || !topUpAmount}
-              className="bg-[#2eab57] hover:bg-[#259a4a] min-w-[120px]"
+              className="btn-gradient btn-shimmer min-w-[120px]"
             >
               {topUpLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -442,8 +460,8 @@ export default function WalletPage() {
                       <p
                         className={`font-semibold ${
                           tx.type === "DEBIT"
-                            ? "text-[#e32726]"
-                            : "text-[#2eab57]"
+                            ? "text-destructive"
+                            : "text-emerald-500"
                         }`}
                       >
                         {tx.type === "DEBIT" ? "-" : "+"}₹{tx.amount.toFixed(2)}
