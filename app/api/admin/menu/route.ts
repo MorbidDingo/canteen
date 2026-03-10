@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { menuItem } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { menuItem, discount } from "@/lib/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { getSession } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list all menu items (including unavailable ones for admin)
 export async function GET() {
@@ -12,7 +14,37 @@ export async function GET() {
       .from(menuItem)
       .orderBy(desc(menuItem.createdAt));
 
-    return NextResponse.json({ items });
+    // Join active discounts
+    const activeDiscounts = await db
+      .select()
+      .from(discount)
+      .where(eq(discount.active, true));
+
+    const discountMap = new Map(
+      activeDiscounts.map((d) => [d.menuItemId, d])
+    );
+
+    const now = new Date();
+    const enriched = items.map((item) => {
+      const d = discountMap.get(item.id);
+      let discountedPrice = null;
+      let discountInfo = null;
+      if (
+        d &&
+        (!d.startDate || d.startDate <= now) &&
+        (!d.endDate || d.endDate >= now)
+      ) {
+        const applied =
+          d.type === "PERCENTAGE"
+            ? Math.round(item.price * (1 - d.value / 100) * 100) / 100
+            : Math.max(0, Math.round((item.price - d.value) * 100) / 100);
+        discountedPrice = applied;
+        discountInfo = { id: d.id, type: d.type, value: d.value, mode: d.mode };
+      }
+      return { ...item, discountedPrice, discountInfo };
+    });
+
+    return NextResponse.json({ items: enriched });
   } catch (error) {
     console.error("Admin fetch menu error:", error);
     return NextResponse.json(
@@ -29,6 +61,7 @@ const createMenuItemSchema = z.object({
   category: z.enum(["SNACKS", "MEALS", "DRINKS"]),
   imageUrl: z.string().optional().or(z.literal("")),
   available: z.boolean().default(true),
+  availableUnits: z.number().int().min(0).nullable().optional(),
 });
 
 // POST — create a new menu item
@@ -55,8 +88,20 @@ export async function POST(request: NextRequest) {
         category: data.category,
         imageUrl: data.imageUrl || null,
         available: data.available,
+        availableUnits: data.availableUnits ?? null,
       })
       .returning();
+
+    const session = await getSession();
+    if (session?.user) {
+      logAudit({
+        userId: session.user.id,
+        userRole: session.user.role,
+        action: AUDIT_ACTIONS.MENU_ITEM_CREATED,
+        details: { menuItemId: created.id, name: data.name, price: data.price, category: data.category },
+        request,
+      });
+    }
 
     return NextResponse.json({ item: created }, { status: 201 });
   } catch (error) {

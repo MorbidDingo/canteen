@@ -34,6 +34,7 @@ type MenuItem = {
   category: MenuCategory;
   imageUrl: string | null;
   available: boolean;
+  availableUnits?: number | null;
 };
 
 type CartItem = {
@@ -77,8 +78,18 @@ export default function KioskPage() {
       const res = await fetch("/api/menu");
       if (res.ok) {
         const data = await res.json();
-        const items: MenuItem[] = data.items || data;
-        setMenuItems(items.filter((item) => item.available));
+        const items: MenuItem[] = (data.items || data).filter((item: MenuItem) => item.available);
+        setMenuItems(items);
+        // Sync cart with fresh menu data so availableUnits stay current
+        setCart((prev) =>
+          prev
+            .map((c) => {
+              const fresh = items.find((i) => i.id === c.menuItem.id);
+              if (!fresh) return null; // item no longer available
+              return { ...c, menuItem: fresh };
+            })
+            .filter((c): c is CartItem => c !== null),
+        );
       }
     } catch {
       toast.error("Failed to load menu");
@@ -89,6 +100,20 @@ export default function KioskPage() {
 
   useEffect(() => {
     fetchMenu();
+  }, [fetchMenu]);
+
+  // SSE: auto-refetch when menu updates
+  useEffect(() => {
+    const eventSource = new EventSource("/api/events");
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === "menu-updated") {
+          fetchMenu();
+        }
+      } catch { /* ignore */ }
+    };
+    return () => eventSource.close();
   }, [fetchMenu]);
 
   // ─── Auto-focus RFID input in checkout phase ─────────
@@ -133,9 +158,14 @@ export default function KioskPage() {
   // ─── Cart helpers ────────────────────────────────────
 
   const addToCart = (item: MenuItem) => {
+    const MAX_QTY = 5;
     setCart((prev) => {
       const existing = prev.find((c) => c.menuItem.id === item.id);
       if (existing) {
+        const maxAllowed = item.availableUnits != null
+          ? Math.min(MAX_QTY, item.availableUnits)
+          : MAX_QTY;
+        if (existing.quantity >= maxAllowed) return prev;
         return prev.map((c) =>
           c.menuItem.id === item.id ? { ...c, quantity: c.quantity + 1 } : c,
         );
@@ -295,11 +325,12 @@ export default function KioskPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
               {filteredItems.map((item) => {
                 const inCart = cart.find((c) => c.menuItem.id === item.id);
+                const isSoldOut = item.availableUnits === 0;
                 return (
                   <Card
                     key={item.id}
-                    className="overflow-hidden cursor-pointer hover:shadow-lg active:scale-[0.97] transition-all touch-manipulation select-none"
-                    onClick={() => addToCart(item)}
+                    className={`overflow-hidden cursor-pointer hover:shadow-lg active:scale-[0.97] transition-all touch-manipulation select-none ${isSoldOut ? "opacity-50 pointer-events-none" : ""}`}
+                    onClick={() => !isSoldOut && addToCart(item)}
                   >
                     <div className="aspect-square bg-gray-100 relative">
                       {item.imageUrl ? (
@@ -313,9 +344,21 @@ export default function KioskPage() {
                           🍽️
                         </div>
                       )}
-                      {inCart && (
+                      {isSoldOut && (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                            SOLD OUT
+                          </span>
+                        </div>
+                      )}
+                      {inCart && !isSoldOut && (
                         <div className="absolute top-2 right-2 bg-[#2eab57] text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-xs shadow-lg">
                           {inCart.quantity}
+                        </div>
+                      )}
+                      {item.availableUnits != null && item.availableUnits > 0 && (
+                        <div className="absolute top-2 left-2 bg-white/90 text-xs px-1.5 py-0.5 rounded font-medium">
+                          {item.availableUnits} left
                         </div>
                       )}
                     </div>
@@ -327,8 +370,7 @@ export default function KioskPage() {
                     </CardContent>
                   </Card>
                 );
-              })}
-            </div>
+              })}            </div>
           )}
         </div>
 

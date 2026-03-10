@@ -9,12 +9,14 @@ interface AddToCartButtonProps {
   menuItemId: string;
   name: string;
   price: number;
+  availableUnits?: number | null;
 }
 
 export function AddToCartButton({
   menuItemId,
   name,
   price,
+  availableUnits,
 }: AddToCartButtonProps) {
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -22,8 +24,15 @@ export function AddToCartButton({
     s.items.find((i) => i.menuItemId === menuItemId),
   );
   const quantity = cartItem?.quantity ?? 0;
+  const isSoldOut = availableUnits === 0;
+  const MAX_QTY = 5;
+  const maxAllowed = availableUnits != null
+    ? Math.min(MAX_QTY, availableUnits)
+    : MAX_QTY;
+  const atMax = quantity >= maxAllowed;
 
   const handleAdd = () => {
+    if (isSoldOut || atMax) return;
     addItem({ menuItemId, name, price });
     if (quantity === 0) {
       toast.success(`${name} added to cart`);
@@ -38,6 +47,19 @@ export function AddToCartButton({
       updateQuantity(menuItemId, quantity - 1);
     }
   };
+
+  if (isSoldOut) {
+    return (
+      <Button
+        size="sm"
+        className="w-full gap-2"
+        variant="outline"
+        disabled
+      >
+        Sold Out
+      </Button>
+    );
+  }
 
   if (quantity > 0) {
     return (
@@ -56,6 +78,7 @@ export function AddToCartButton({
           variant="outline"
           className="h-8 w-8 shrink-0"
           onClick={handleAdd}
+          disabled={atMax}
         >
           <Plus className="h-3.5 w-3.5" />
         </Button>

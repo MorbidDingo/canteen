@@ -34,14 +34,16 @@ export const useCartStore = create<CartStore>()(
       items: [],
 
       addItem: (item) => {
+        const MAX_QTY = 5;
         const existing = get().items.find(
           (i) => i.menuItemId === item.menuItemId
         );
         if (existing) {
+          if (existing.quantity >= MAX_QTY) return;
           set({
             items: get().items.map((i) =>
               i.menuItemId === item.menuItemId
-                ? { ...i, quantity: i.quantity + 1 }
+                ? { ...i, quantity: Math.min(i.quantity + 1, MAX_QTY) }
                 : i
             ),
           });
@@ -68,9 +70,11 @@ export const useCartStore = create<CartStore>()(
           get().removeItem(menuItemId);
           return;
         }
+        const MAX_QTY = 5;
+        const capped = Math.min(quantity, MAX_QTY);
         set({
           items: get().items.map((i) =>
-            i.menuItemId === menuItemId ? { ...i, quantity } : i
+            i.menuItemId === menuItemId ? { ...i, quantity: capped } : i
           ),
         });
       },

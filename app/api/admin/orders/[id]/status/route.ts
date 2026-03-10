@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order } from "@/lib/db/schema";
+import { order, orderItem, wallet, walletTransaction } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getSession } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { incrementUnits } from "@/lib/units";
+import { broadcast } from "@/lib/sse";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   PLACED: ["PREPARING", "CANCELLED"],
@@ -54,14 +58,77 @@ export async function PATCH(
       );
     }
 
+    // If cancelling a PAID order, refund wallet + restore stock
+    if (newStatus === "CANCELLED" && existingOrder.paymentStatus === "PAID") {
+      const items = await db
+        .select({ menuItemId: orderItem.menuItemId, quantity: orderItem.quantity })
+        .from(orderItem)
+        .where(eq(orderItem.orderId, id));
+
+      await db.transaction(async (tx) => {
+        // Refund to wallet if order has a childId
+        if (existingOrder.childId) {
+          const [walletRow] = await tx
+            .select()
+            .from(wallet)
+            .where(eq(wallet.childId, existingOrder.childId))
+            .limit(1);
+
+          if (walletRow) {
+            const newBalance = walletRow.balance + existingOrder.totalAmount;
+
+            await tx
+              .update(wallet)
+              .set({ balance: newBalance, updatedAt: new Date() })
+              .where(eq(wallet.id, walletRow.id));
+
+            await tx.insert(walletTransaction).values({
+              walletId: walletRow.id,
+              type: "REFUND",
+              amount: existingOrder.totalAmount,
+              balanceAfter: newBalance,
+              description: `Refund for cancelled order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)}`,
+              orderId: id,
+            });
+          }
+        }
+
+        // Restore stock
+        if (items.length > 0) {
+          await incrementUnits(items, tx);
+        }
+
+        await tx
+          .update(order)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(eq(order.id, id));
+      });
+
+      broadcast("menu-updated");
+    } else {
+      await db
+        .update(order)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(eq(order.id, id));
+    }
+
     const [updatedOrder] = await db
-      .update(order)
-      .set({
-        status: newStatus,
-        updatedAt: new Date(),
-      })
-      .where(eq(order.id, id))
-      .returning();
+      .select()
+      .from(order)
+      .where(eq(order.id, id));
+
+    const session = await getSession();
+    if (session?.user) {
+      logAudit({
+        userId: session.user.id,
+        userRole: session.user.role,
+        action: AUDIT_ACTIONS.ORDER_STATUS_CHANGED,
+        details: { orderId: id, from: existingOrder.status, to: newStatus },
+        request,
+      });
+    }
+
+    broadcast("orders-updated");
 
     return NextResponse.json({ order: updatedOrder });
   } catch (error) {

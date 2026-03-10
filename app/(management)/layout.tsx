@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth-server";
+import { ManagementNav } from "./management-nav";
 
 export default async function ManagementLayout({
   children,
@@ -16,5 +17,10 @@ export default async function ManagementLayout({
     redirect("/");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
+      <ManagementNav />
+      {children}
+    </div>
+  );
 }

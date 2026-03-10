@@ -29,13 +29,13 @@ interface SummaryData {
   };
 }
 
-export function DailySummary() {
+export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl?: string }) {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchSummary = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/summary");
+      const res = await fetch(summaryUrl);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setSummary(data.summary);
@@ -44,7 +44,7 @@ export function DailySummary() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [summaryUrl]);
 
   useEffect(() => {
     fetchSummary();

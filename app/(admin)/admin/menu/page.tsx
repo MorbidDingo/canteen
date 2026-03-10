@@ -50,6 +50,7 @@ interface MenuItem {
   category: string;
   imageUrl: string | null;
   available: boolean;
+  availableUnits: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +62,7 @@ interface FormData {
   category: MenuCategory;
   imageUrl: string;
   available: boolean;
+  availableUnits: string;
 }
 
 const emptyForm: FormData = {
@@ -70,6 +72,7 @@ const emptyForm: FormData = {
   category: "SNACKS",
   imageUrl: "",
   available: true,
+  availableUnits: "",
 };
 
 export default function AdminMenuPage() {
@@ -117,6 +120,7 @@ export default function AdminMenuPage() {
       category: item.category as MenuCategory,
       imageUrl: item.imageUrl || "",
       available: item.available,
+      availableUnits: item.availableUnits !== null ? item.availableUnits.toString() : "",
     });
     setDialogOpen(true);
   };
@@ -141,6 +145,9 @@ export default function AdminMenuPage() {
         category: formData.category,
         imageUrl: formData.imageUrl.trim() || "",
         available: formData.available,
+        availableUnits: formData.availableUnits.trim() !== ""
+          ? parseInt(formData.availableUnits)
+          : null,
       };
 
       let res: Response;
@@ -316,6 +323,21 @@ export default function AdminMenuPage() {
                                 className="text-[10px]"
                               >
                                 Unavailable
+                              </Badge>
+                            )}
+                            {item.availableUnits !== null && (
+                              <Badge
+                                variant={item.availableUnits === 0 ? "destructive" : "outline"}
+                                className="text-[10px]"
+                              >
+                                {item.availableUnits === 0
+                                  ? "Sold Out"
+                                  : `${item.availableUnits} left`}
+                              </Badge>
+                            )}
+                            {item.availableUnits === null && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                ∞
                               </Badge>
                             )}
                           </div>
@@ -537,6 +559,23 @@ function MenuItemForm({
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="availableUnits">Available Units</Label>
+        <Input
+          id="availableUnits"
+          type="number"
+          min="0"
+          value={formData.availableUnits}
+          onChange={(e) =>
+            setFormData({ ...formData, availableUnits: e.target.value })
+          }
+          placeholder="Leave empty for unlimited"
+        />
+        <p className="text-xs text-muted-foreground">
+          Empty = unlimited supply. Set a number to track and auto-decrement on orders.
+        </p>
       </div>
 
       <div className="flex items-center gap-2">

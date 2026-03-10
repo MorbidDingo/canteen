@@ -352,18 +352,52 @@ export default function CartPage() {
       try {
         await handleRazorpayPayment(createdOrder.id);
         toast.success("Payment successful! Order placed.");
-      } catch (paymentError) {
-        if (
-          paymentError instanceof Error &&
-          paymentError.message === "Payment cancelled"
-        ) {
-          toast.info(
-            "Payment cancelled. Your order is saved — you can pay later from your orders page.",
-          );
-        } else {
-          toast.error(
-            "Payment failed. Your order is saved — you can retry payment from your orders page.",
-          );
+      } catch {
+        // Razorpay failed or was dismissed — try wallet fallback
+        try {
+          const walletsRes = await fetch("/api/wallet");
+          const walletsData: ChildWallet[] = walletsRes.ok
+            ? await walletsRes.json()
+            : [];
+
+          // Pick the first wallet with enough balance, or the first wallet
+          const bestWallet =
+            walletsData.find((w) => w.balance >= createdOrder.totalAmount) ||
+            walletsData[0];
+
+          if (bestWallet) {
+            const fallbackRes = await fetch("/api/payments/wallet-fallback", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId: createdOrder.id,
+                childId: bestWallet.childId,
+              }),
+            });
+
+            const fallbackData = await fallbackRes.json();
+
+            if (fallbackRes.ok && fallbackData.fallback === "paid") {
+              toast.success(
+                "Razorpay payment failed — paid via wallet instead!",
+              );
+            } else {
+              toast.error(
+                fallbackData.reason ||
+                  "Payment failed and insufficient wallet balance. Order cancelled.",
+              );
+            }
+          } else {
+            // No wallets at all — cancel the order
+            await fetch(`/api/orders/${createdOrder.id}/cancel`, {
+              method: "PATCH",
+            });
+            toast.error(
+              "Payment failed and no wallet available. Order cancelled.",
+            );
+          }
+        } catch {
+          toast.error("Payment failed. Order may remain unpaid.");
         }
       }
 

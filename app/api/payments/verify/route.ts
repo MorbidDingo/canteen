@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order } from "@/lib/db/schema";
+import { order, orderItem, menuItem } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
+import { decrementUnits } from "@/lib/units";
+import { broadcast } from "@/lib/sse";
 
 const verifyPaymentSchema = z.object({
   razorpay_order_id: z.string().min(1),
@@ -86,6 +88,21 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
       })
       .where(eq(order.id, orderId));
+
+    // Decrement units for paid online order
+    const items = await db
+      .select({ menuItemId: orderItem.menuItemId, quantity: orderItem.quantity })
+      .from(orderItem)
+      .where(eq(orderItem.orderId, orderId));
+
+    if (items.length > 0) {
+      await decrementUnits(
+        items.map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+        db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+      );
+      broadcast("menu-updated");
+    }
+    broadcast("orders-updated");
 
     return NextResponse.json({
       success: true,

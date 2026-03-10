@@ -12,6 +12,7 @@ import {
 import { eq, and, gte, sql } from "drizzle-orm";
 import { generateTokenCode } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
+import { validateUnits, decrementUnits } from "@/lib/units";
 
 // POST /api/kiosk/order — no auth session; RFID card is the auth
 export async function POST(request: NextRequest) {
@@ -162,6 +163,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ── 6b. Check available units ─────────────────────
+    const unitError = await validateUnits(
+      orderItemsData.map((oi) => ({ menuItemId: oi.menuItemId, quantity: oi.quantity })),
+      db,
+    );
+    if (unitError) {
+      return NextResponse.json(
+        { success: false, reason: unitError },
+        { status: 200 }
+      );
+    }
+
     // ── 7. Check per-order limit ──────────────────────
     if (control?.perOrderLimit && total > control.perOrderLimit) {
       return NextResponse.json(
@@ -258,8 +271,15 @@ export async function POST(request: NextRequest) {
       orderId: newOrder.id,
     });
 
-    // ── 11. Emit SSE event ────────────────────────────
+    // Decrement available units
+    await decrementUnits(
+      orderItemsData.map((oi) => ({ menuItemId: oi.menuItemId, quantity: oi.quantity })),
+      db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
+    );
+
+    // ── 11. Emit SSE events ───────────────────────────
     broadcast("orders-updated");
+    broadcast("menu-updated");
 
     // ── 12. Return success ────────────────────────────
     return NextResponse.json({

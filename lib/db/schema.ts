@@ -162,6 +162,7 @@ export const menuItem = pgTable("menu_item", {
   category: text("category", { enum: ["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"] }).notNull(),
   imageUrl: text("image_url"),
   available: boolean("available").notNull().default(true),
+  availableUnits: integer("available_units"), // null = unlimited, 0 = sold out
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -267,4 +268,46 @@ export const orderItemRelations = relations(orderItem, ({ one }) => ({
 export const menuItemRelations = relations(menuItem, ({ many }) => ({
   orderItems: many(orderItem),
   preOrderItems: many(preOrderItem),
+  discounts: many(discount),
+}));
+
+// ─── Discounts ───────────────────────────────────────────
+
+export const discount = pgTable("discount", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  menuItemId: text("menu_item_id")
+    .notNull()
+    .references(() => menuItem.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["PERCENTAGE", "FLAT"] }).notNull(),
+  value: doublePrecision("value").notNull(),
+  reason: text("reason"),
+  mode: text("mode", { enum: ["AUTO", "MANUAL"] }).notNull().default("MANUAL"),
+  active: boolean("active").notNull().default(false),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const discountRelations = relations(discount, ({ one }) => ({
+  menuItem: one(menuItem, { fields: [discount.menuItemId], references: [menuItem.id] }),
+}));
+
+// ─── Audit Log ───────────────────────────────────────────
+
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  userRole: text("user_role").notNull(),
+  action: text("action").notNull(),
+  details: text("details"), // JSON string
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  user: one(user, { fields: [auditLog.userId], references: [user.id] }),
 }));

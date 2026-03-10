@@ -141,6 +141,55 @@ export const PREDEFINED_INSTRUCTIONS = [
   "No onion",
 ] as const;
 
+// ─── Discount Types ──────────────────────────────────────
+
+export const DISCOUNT_TYPE = {
+  PERCENTAGE: "PERCENTAGE",
+  FLAT: "FLAT",
+} as const;
+
+export type DiscountType = (typeof DISCOUNT_TYPE)[keyof typeof DISCOUNT_TYPE];
+
+export const DISCOUNT_TYPE_LABELS: Record<DiscountType, string> = {
+  PERCENTAGE: "Percentage",
+  FLAT: "Flat Amount",
+};
+
+export const DISCOUNT_MODE = {
+  AUTO: "AUTO",
+  MANUAL: "MANUAL",
+} as const;
+
+export type DiscountMode = (typeof DISCOUNT_MODE)[keyof typeof DISCOUNT_MODE];
+
+export const DISCOUNT_MODE_LABELS: Record<DiscountMode, string> = {
+  AUTO: "Auto-applied",
+  MANUAL: "Manual",
+};
+
+// ─── Analytics ───────────────────────────────────────────
+
+export const CONFIDENCE_LEVELS = {
+  HIGH: "HIGH",
+  MEDIUM: "MEDIUM",
+  LOW: "LOW",
+} as const;
+
+export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[keyof typeof CONFIDENCE_LEVELS];
+
+export const CONFIDENCE_COLORS: Record<ConfidenceLevel, string> = {
+  HIGH: "bg-emerald-500/15 text-emerald-700",
+  MEDIUM: "bg-amber-500/15 text-amber-700",
+  LOW: "bg-red-500/15 text-red-700",
+};
+
+export const CATEGORY_CHART_COLORS: Record<MenuCategory, string> = {
+  SNACKS: "#f58220",
+  MEALS: "#1a3a8f",
+  DRINKS: "#2eab57",
+  PACKED_FOOD: "#e32726",
+};
+
 // ─── Token Code Generation ──────────────────────────────
 
 const TOKEN_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L

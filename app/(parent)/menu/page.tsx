@@ -13,6 +13,7 @@ interface MenuItem {
   category: string;
   imageUrl: string | null;
   available: boolean;
+  availableUnits?: number | null;
 }
 
 export default function MenuPage() {

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { child } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -41,6 +42,14 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date(),
     })
     .where(eq(child.id, childId));
+
+  logAudit({
+    userId: session.user.id,
+    userRole: session.user.role,
+    action: rfidCardId ? AUDIT_ACTIONS.CARD_ASSIGNED : AUDIT_ACTIONS.CARD_UNLINKED,
+    details: { childId, rfidCardId: rfidCardId || null },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

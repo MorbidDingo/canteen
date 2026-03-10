@@ -20,11 +20,9 @@ import {
   Search,
   CheckCircle,
   Loader2,
-  LogOut,
   NfcIcon,
   Users,
 } from "lucide-react";
-import { signOut } from "@/lib/auth-client";
 
 type ChildInfo = {
   id: string;
@@ -154,37 +152,7 @@ export default function ManagementCardsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
-      {/* Header bar */}
-      <div className="border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <NfcIcon className="h-5 w-5 text-[#1a3a8f]" />
-            <span className="font-bold text-lg">
-              Management — Card Assignment
-            </span>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    window.location.href = "/login";
-                  },
-                },
-              })
-            }
-            className="gap-2 text-destructive"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </Button>
-        </div>
-      </div>
-
-      <div className="container mx-auto max-w-2xl px-4 py-8 space-y-6">
+    <div className="container mx-auto max-w-2xl px-4 py-8 space-y-6">
         {/* Search */}
         <Card>
           <CardHeader className="pb-3">
@@ -378,6 +346,5 @@ export default function ManagementCardsPage() {
           </Card>
         )}
       </div>
-    </div>
   );
 }

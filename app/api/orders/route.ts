@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { order, orderItem, menuItem, wallet, walletTransaction, child } from "@/lib/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
+import { validateUnits, decrementUnits } from "@/lib/units";
+import { broadcast } from "@/lib/sse";
 
 const orderItemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -75,6 +77,18 @@ export async function POST(request: NextRequest) {
       const mi = menuItemMap.get(item.menuItemId)!;
       return sum + mi.price * item.quantity;
     }, 0);
+
+    // Validate available units
+    const unitError = await validateUnits(
+      orderItems.map((item) => ({
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+      })),
+      db,
+    );
+    if (unitError) {
+      return NextResponse.json({ error: unitError }, { status: 400 });
+    }
 
     // Create order and items in a transaction
     const newOrder = await db.transaction(async (tx) => {
@@ -150,10 +164,22 @@ export async function POST(request: NextRequest) {
           description: `Order #${createdOrder.tokenCode || createdOrder.id.slice(0, 6)}`,
           orderId: createdOrder.id,
         });
+
+        // Decrement units for wallet (paid immediately)
+        await decrementUnits(
+          orderItems.map((item) => ({ menuItemId: item.menuItemId, quantity: item.quantity })),
+          tx,
+        );
       }
 
       return createdOrder;
     });
+
+    // Emit SSE events
+    if (paymentMethod === "WALLET") {
+      broadcast("menu-updated");
+    }
+    broadcast("orders-updated");
 
     return NextResponse.json({ order: newOrder }, { status: 201 });
   } catch (error) {

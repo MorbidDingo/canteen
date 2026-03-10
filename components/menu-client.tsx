@@ -58,6 +58,7 @@ interface MenuItem {
   category: string;
   imageUrl: string | null;
   available: boolean;
+  availableUnits?: number | null;
 }
 
 type SortOption =
@@ -330,12 +331,24 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
                         <CardTitle className="text-base">{item.name}</CardTitle>
-                        <Badge
-                          variant="outline"
-                          className="shrink-0 font-bold text-sm"
-                        >
-                          ₹{item.price}
-                        </Badge>
+                        <div className="flex gap-1.5 items-center shrink-0">
+                          {item.availableUnits === 0 && (
+                            <Badge variant="destructive" className="text-[10px]">
+                              Sold Out
+                            </Badge>
+                          )}
+                          {item.availableUnits != null && item.availableUnits > 0 && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {item.availableUnits} left
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="shrink-0 font-bold text-sm"
+                          >
+                            ₹{item.price}
+                          </Badge>
+                        </div>
                       </div>
                       {item.description && (
                         <CardDescription className="text-sm line-clamp-2">
@@ -349,6 +362,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                         menuItemId={item.id}
                         name={item.name}
                         price={item.price}
+                        availableUnits={item.availableUnits}
                       />
                     </CardFooter>
                   </Card>
