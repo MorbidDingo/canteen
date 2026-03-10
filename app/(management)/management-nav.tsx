@@ -12,6 +12,7 @@ import {
   LogOut,
   Settings,
   Users,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ const links = [
   { href: "/management/cards", label: "Cards", icon: CreditCard },
   { href: "/management/students", label: "Students", icon: GraduationCap },
   { href: "/management/parents", label: "Parents", icon: Users },
+  { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/audit", label: "Audit Log", icon: ScrollText },
 ];

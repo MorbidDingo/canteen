@@ -40,12 +40,17 @@ export const auth = betterAuth({
       `;
 
       if (transporter) {
-        await transporter.sendMail({
-          from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@venuscafe.com",
-          to: user.email,
-          subject: "Reset your Venus Café password",
-          html,
-        });
+        try {
+          await transporter.sendMail({
+            from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@venuscafe.com",
+            to: user.email,
+            subject: "Reset your Venus Café password",
+            html,
+          });
+        } catch (err) {
+          console.error("[Password Reset] Failed to send email:", err);
+          // Don't rethrow — let better-auth return success to prevent email enumeration
+        }
       } else {
         console.log("\n╔══════════════════════════════════════════════════╗");
         console.log("║        PASSWORD RESET (SMTP not configured)      ║");
