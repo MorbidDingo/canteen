@@ -13,7 +13,7 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at").notNull(),
 
   // App-specific fields
-  role: text("role", { enum: ["PARENT", "ADMIN", "OPERATOR", "MANAGEMENT"] })
+  role: text("role", { enum: ["PARENT", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR"] })
     .notNull()
     .default("PARENT"),
   phone: text("phone"),
@@ -97,7 +97,7 @@ export const walletTransaction = pgTable("wallet_transaction", {
   walletId: text("wallet_id")
     .notNull()
     .references(() => wallet.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["TOP_UP", "DEBIT", "REFUND"] }).notNull(),
+  type: text("type", { enum: ["TOP_UP", "DEBIT", "REFUND", "LIBRARY_FINE"] }).notNull(),
   amount: doublePrecision("amount").notNull(),
   balanceAfter: doublePrecision("balance_after").notNull(),
   description: text("description"),
@@ -226,6 +226,7 @@ export const childRelations = relations(child, ({ one, many }) => ({
   parentControl: one(parentControl),
   orders: many(order),
   preOrders: many(preOrder),
+  bookIssuances: many(bookIssuance),
 }));
 
 export const walletRelations = relations(wallet, ({ one, many }) => ({
@@ -310,4 +311,100 @@ export const auditLog = pgTable("audit_log", {
 
 export const auditLogRelations = relations(auditLog, ({ one }) => ({
   user: one(user, { fields: [auditLog.userId], references: [user.id] }),
+}));
+
+// ─── Library: Book (master record) ───────────────────────
+
+export const book = pgTable("book", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  isbn: text("isbn"),
+  title: text("title").notNull(),
+  author: text("author").notNull(),
+  publisher: text("publisher"),
+  edition: text("edition"),
+  category: text("category", {
+    enum: ["FICTION", "NON_FICTION", "TEXTBOOK", "REFERENCE", "PERIODICAL", "GENERAL"],
+  }).notNull().default("GENERAL"),
+  description: text("description"),
+  coverImageUrl: text("cover_image_url"),
+  totalCopies: integer("total_copies").notNull().default(0),
+  availableCopies: integer("available_copies").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Library: Book Copy (physical copy) ──────────────────
+
+export const bookCopy = pgTable("book_copy", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => book.id, { onDelete: "cascade" }),
+  accessionNumber: text("accession_number").unique().notNull(),
+  condition: text("condition", {
+    enum: ["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"],
+  }).notNull().default("NEW"),
+  status: text("status", {
+    enum: ["AVAILABLE", "ISSUED", "LOST", "DAMAGED", "RETIRED"],
+  }).notNull().default("AVAILABLE"),
+  location: text("location"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Library: Book Issuance (issue/return ledger) ────────
+
+export const bookIssuance = pgTable("book_issuance", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bookCopyId: text("book_copy_id")
+    .notNull()
+    .references(() => bookCopy.id),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  issuedAt: timestamp("issued_at").notNull().$defaultFn(() => new Date()),
+  dueDate: timestamp("due_date").notNull(),
+  returnedAt: timestamp("returned_at"),
+  status: text("status", {
+    enum: ["ISSUED", "RETURNED", "OVERDUE", "LOST", "RETURN_PENDING"],
+  }).notNull().default("ISSUED"),
+  reissueCount: integer("reissue_count").notNull().default(0),
+  issuedBy: text("issued_by"),
+  returnConfirmedBy: text("return_confirmed_by").references(() => user.id),
+  fineAmount: doublePrecision("fine_amount").notNull().default(0),
+  fineDeducted: boolean("fine_deducted").notNull().default(false),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Library: Settings (key-value config) ────────────────
+
+export const librarySetting = pgTable("library_setting", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text("key").unique().notNull(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+  updatedBy: text("updated_by").references(() => user.id),
+});
+
+// ─── Library Relations ───────────────────────────────────
+
+export const bookRelations = relations(book, ({ many }) => ({
+  copies: many(bookCopy),
+}));
+
+export const bookCopyRelations = relations(bookCopy, ({ one, many }) => ({
+  book: one(book, { fields: [bookCopy.bookId], references: [book.id] }),
+  issuances: many(bookIssuance),
+}));
+
+export const bookIssuanceRelations = relations(bookIssuance, ({ one }) => ({
+  bookCopy: one(bookCopy, { fields: [bookIssuance.bookCopyId], references: [bookCopy.id] }),
+  child: one(child, { fields: [bookIssuance.childId], references: [child.id] }),
+  returnConfirmer: one(user, { fields: [bookIssuance.returnConfirmedBy], references: [user.id] }),
+}));
+
+export const librarySettingRelations = relations(librarySetting, ({ one }) => ({
+  updater: one(user, { fields: [librarySetting.updatedBy], references: [user.id] }),
 }));

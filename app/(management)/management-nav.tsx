@@ -13,6 +13,7 @@ import {
   Settings,
   Users,
   Upload,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ const links = [
   { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/audit", label: "Audit Log", icon: ScrollText },
+  { href: "/management/library/books", label: "Library", icon: BookOpen },
 ];
 
 export function ManagementNav() {
@@ -35,21 +37,27 @@ export function ManagementNav() {
           <Settings className="h-5 w-5 text-[#1a3a8f] mr-2 shrink-0" />
           <span className="font-bold text-lg hidden sm:inline shrink-0">Management</span>
           <nav className="flex items-center gap-1 ml-4">
-            {links.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href}>
-                <Button
-                  variant={pathname === href ? "secondary" : "ghost"}
-                  size="sm"
-                  className={cn(
-                    "gap-1.5 text-xs sm:text-sm",
-                    pathname === href && "font-semibold",
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{label}</span>
-                </Button>
-              </Link>
-            ))}
+            {links.map(({ href, label, icon: Icon }) => {
+              const isActive =
+                href === "/management/library/books"
+                  ? pathname.startsWith("/management/library")
+                  : pathname === href;
+              return (
+                <Link key={href} href={href}>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "gap-1.5 text-xs sm:text-sm",
+                      isActive && "font-semibold",
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{label}</span>
+                  </Button>
+                </Link>
+              );
+            })}
           </nav>
         </div>
         <Button

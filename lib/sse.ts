@@ -2,7 +2,7 @@
 // This runs only on the server — API routes call `broadcast()` after mutations,
 // and the SSE endpoint streams events to all connected clients.
 
-export type AppEvent = "orders-updated" | "menu-updated";
+export type AppEvent = "orders-updated" | "menu-updated" | "library-updated";
 
 type Listener = (event: AppEvent) => void;
 

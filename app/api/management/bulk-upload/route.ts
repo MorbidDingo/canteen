@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { user, account, child, wallet, parentControl } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import * as XLSX from "xlsx";
@@ -21,6 +21,8 @@ interface RowData {
   class: string | null;
   section: string | null;
 }
+
+const PARALLEL_BATCH_SIZE = 20;
 
 // POST — process Excel bulk upload
 export async function POST(request: NextRequest) {
@@ -81,51 +83,72 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Validation errors", errors }, { status: 400 });
     }
 
-    // Deduplicate: check which GR numbers already exist
-    const grNumbers = rows.map((r) => r.gr);
-    const existingChildren = await db
-      .select({ grNumber: child.grNumber })
-      .from(child)
-      .where(
-        // Using raw SQL for IN clause with parameterized GRs
-        eq(child.grNumber, grNumbers[0]), // placeholder, will be overridden
-      );
+    // ── Batch lookup: existing GR numbers (single query) ──
+    const grNumbers = [...new Set(rows.map((r) => r.gr))];
+    const existingGrRows = grNumbers.length > 0
+      ? await db.select({ grNumber: child.grNumber }).from(child).where(inArray(child.grNumber, grNumbers))
+      : [];
+    const existingGrSet = new Set(existingGrRows.map((r) => r.grNumber).filter(Boolean) as string[]);
 
-    // Actually fetch all existing GRs more efficiently
-    const existingGrSet = new Set<string>();
-    for (const gr of grNumbers) {
-      const [found] = await db
-        .select({ grNumber: child.grNumber })
-        .from(child)
-        .where(eq(child.grNumber, gr))
-        .limit(1);
-      if (found?.grNumber) existingGrSet.add(found.grNumber);
-    }
-
-    // Deduplicate emails from the spreadsheet — group rows by parent email
-    const emailToRows = new Map<string, number[]>();
-    for (let i = 0; i < rows.length; i++) {
-      const email = rows[i].email?.toLowerCase();
-      if (email) {
-        if (!emailToRows.has(email)) emailToRows.set(email, []);
-        emailToRows.get(email)!.push(i);
-      }
-    }
-
-    // Check which parent emails already exist
-    const existingParents = new Map<string, string>(); // email -> userId
-    for (const email of emailToRows.keys()) {
-      const [found] = await db
-        .select({ id: user.id })
-        .from(user)
-        .where(eq(user.email, email))
-        .limit(1);
-      if (found) existingParents.set(email, found.id);
+    // ── Batch lookup: existing parent emails (single query) ──
+    const uniqueEmails = [...new Set(rows.map((r) => r.email?.toLowerCase()).filter(Boolean) as string[])];
+    const existingParents = new Map<string, string>();
+    if (uniqueEmails.length > 0) {
+      const existingUsers = await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.email, uniqueEmails));
+      for (const u of existingUsers) existingParents.set(u.email.toLowerCase(), u.id);
     }
 
     const { hashPassword } = await import("better-auth/crypto");
 
-    const results: {
+    // ── Phase 1: Create new parent accounts (sequentially to avoid duplicate emails) ──
+    const createdParents = new Map<string, { id: string; password: string }>();
+    const newParentEmails = uniqueEmails.filter((e) => !existingParents.has(e));
+
+    // Pre-generate passwords & hashes in parallel
+    const parentPrep = await Promise.all(
+      newParentEmails.map(async (email) => {
+        const password = generatePassword();
+        const hashedPassword = await hashPassword(password);
+        // Find the first row with this email for the parent name
+        const row = rows.find((r) => r.email?.toLowerCase() === email);
+        const name = row?.parent || row?.student + " Parent" || "Parent";
+        return { email, password, hashedPassword, name };
+      })
+    );
+
+    // Batch insert parents in chunks
+    for (let i = 0; i < parentPrep.length; i += PARALLEL_BATCH_SIZE) {
+      const batch = parentPrep.slice(i, i + PARALLEL_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async ({ email, password, hashedPassword, name }) => {
+          const newParentId = crypto.randomUUID();
+          const now = new Date();
+          await db.insert(user).values({
+            id: newParentId,
+            name,
+            email,
+            emailVerified: false,
+            role: "PARENT",
+            createdAt: now,
+            updatedAt: now,
+          });
+          await db.insert(account).values({
+            id: crypto.randomUUID(),
+            accountId: newParentId,
+            providerId: "credential",
+            userId: newParentId,
+            password: hashedPassword,
+            createdAt: now,
+            updatedAt: now,
+          });
+          createdParents.set(email, { id: newParentId, password });
+          existingParents.set(email, newParentId);
+        })
+      );
+    }
+
+    // ── Phase 2: Build result array & identify students to create ──
+    type ResultRow = {
       row: number;
       studentName: string;
       grNumber: string;
@@ -136,152 +159,103 @@ export async function POST(request: NextRequest) {
       message: string;
       parentId: string | null;
       isNewParent: boolean;
-    }[] = [];
+    };
 
-    // Track newly created parents within this upload
-    const createdParents = new Map<string, { id: string; password: string }>(); // email -> { id, password }
+    const results: ResultRow[] = new Array(rows.length);
+    const toCreate: { idx: number; row: RowData; parentId: string; email: string | null; isNewParent: boolean; password: string | null }[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
 
-      // Skip if GR already exists
       if (existingGrSet.has(row.gr)) {
-        results.push({
-          row: i + 2,
-          studentName: row.student,
-          grNumber: row.gr,
-          parentName: row.parent,
-          parentEmail: row.email,
-          password: null,
-          status: "skipped",
-          message: `GR number ${row.gr} already exists`,
-          parentId: null,
-          isNewParent: false,
-        });
+        results[i] = {
+          row: i + 2, studentName: row.student, grNumber: row.gr,
+          parentName: row.parent, parentEmail: row.email, password: null,
+          status: "skipped", message: `GR number ${row.gr} already exists`,
+          parentId: null, isNewParent: false,
+        };
         continue;
       }
 
-      try {
-        let parentId: string | null = null;
-        let password: string | null = null;
-        let isNewParent = false;
-        const email = row.email?.toLowerCase() || null;
+      const email = row.email?.toLowerCase() || null;
+      let parentId: string | null = null;
+      let password: string | null = null;
+      let isNewParent = false;
 
-        if (email) {
-          // Check if we already created this parent in this batch
-          if (createdParents.has(email)) {
-            parentId = createdParents.get(email)!.id;
-            password = createdParents.get(email)!.password;
-          } else if (existingParents.has(email)) {
-            // Parent already exists in DB
-            parentId = existingParents.get(email)!;
-          } else {
-            // Create new parent
-            password = generatePassword();
-            const hashedPassword = await hashPassword(password);
-            const newParentId = crypto.randomUUID();
-            const now = new Date();
-
-            await db.insert(user).values({
-              id: newParentId,
-              name: row.parent || row.student + " Parent",
-              email,
-              emailVerified: false,
-              role: "PARENT",
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            await db.insert(account).values({
-              id: crypto.randomUUID(),
-              accountId: newParentId,
-              providerId: "credential",
-              userId: newParentId,
-              password: hashedPassword,
-              createdAt: now,
-              updatedAt: now,
-            });
-
-            parentId = newParentId;
-            isNewParent = true;
-            createdParents.set(email, { id: newParentId, password });
-            existingParents.set(email, newParentId);
-          }
+      if (email) {
+        if (createdParents.has(email)) {
+          parentId = createdParents.get(email)!.id;
+          password = createdParents.get(email)!.password;
+          isNewParent = true;
+        } else if (existingParents.has(email)) {
+          parentId = existingParents.get(email)!;
         }
+      }
 
-        if (!parentId) {
-          // No email provided — create student without parent? We need a parent.
-          // Create a placeholder parent with no email
-          results.push({
-            row: i + 2,
-            studentName: row.student,
-            grNumber: row.gr,
-            parentName: row.parent,
-            parentEmail: null,
-            password: null,
-            status: "skipped",
-            message: "No email provided — cannot create parent account",
-            parentId: null,
-            isNewParent: false,
+      if (!parentId) {
+        results[i] = {
+          row: i + 2, studentName: row.student, grNumber: row.gr,
+          parentName: row.parent, parentEmail: null, password: null,
+          status: "skipped", message: "No email provided — cannot create parent account",
+          parentId: null, isNewParent: false,
+        };
+        continue;
+      }
+
+      toCreate.push({ idx: i, row, parentId, email, isNewParent, password });
+    }
+
+    // ── Phase 3: Create students in parallel batches ──
+    for (let i = 0; i < toCreate.length; i += PARALLEL_BATCH_SIZE) {
+      const batch = toCreate.slice(i, i + PARALLEL_BATCH_SIZE);
+      const batchResults = await Promise.allSettled(
+        batch.map(async ({ idx, row, parentId, email, isNewParent, password }) => {
+          await db.transaction(async (tx) => {
+            const [created] = await tx
+              .insert(child)
+              .values({
+                parentId,
+                name: row.student.trim(),
+                grNumber: row.gr.trim(),
+                className: row.class?.trim() || null,
+                section: row.section?.trim() || null,
+              })
+              .returning();
+
+            await Promise.all([
+              tx.insert(wallet).values({ childId: created.id, balance: 0 }),
+              tx.insert(parentControl).values({
+                childId: created.id,
+                blockedCategories: "[]",
+                blockedItemIds: "[]",
+              }),
+            ]);
           });
-          continue;
+          return { idx, row, email, isNewParent, password };
+        })
+      );
+
+      for (const result of batchResults) {
+        if (result.status === "fulfilled") {
+          const { idx, row, email, isNewParent, password } = result.value;
+          results[idx] = {
+            row: idx + 2, studentName: row.student, grNumber: row.gr,
+            parentName: row.parent, parentEmail: email, password: isNewParent ? password : null,
+            status: "created",
+            message: isNewParent ? "Student & parent created" : "Student created (parent already existed)",
+            parentId: existingParents.get(email || "") || null, isNewParent,
+          };
+        } else {
+          const entry = batch[batchResults.indexOf(result)];
+          const err = result.reason;
+          console.error(`Bulk upload row ${entry.idx + 2} error:`, err);
+          results[entry.idx] = {
+            row: entry.idx + 2, studentName: entry.row.student, grNumber: entry.row.gr,
+            parentName: entry.row.parent, parentEmail: entry.row.email, password: null,
+            status: "error", message: err instanceof Error ? err.message : "Unknown error",
+            parentId: null, isNewParent: false,
+          };
         }
-
-        // Create the student in a transaction
-        await db.transaction(async (tx) => {
-          const [created] = await tx
-            .insert(child)
-            .values({
-              parentId: parentId!,
-              name: row.student.trim(),
-              grNumber: row.gr.trim(),
-              className: row.class?.trim() || null,
-              section: row.section?.trim() || null,
-            })
-            .returning();
-
-          await tx.insert(wallet).values({
-            childId: created.id,
-            balance: 0,
-          });
-
-          await tx.insert(parentControl).values({
-            childId: created.id,
-            blockedCategories: "[]",
-            blockedItemIds: "[]",
-          });
-        });
-
-        existingGrSet.add(row.gr);
-
-        results.push({
-          row: i + 2,
-          studentName: row.student,
-          grNumber: row.gr,
-          parentName: row.parent,
-          parentEmail: email,
-          password: isNewParent ? password : null,
-          status: "created",
-          message: isNewParent
-            ? "Student & parent created"
-            : "Student created (parent already existed)",
-          parentId,
-          isNewParent,
-        });
-      } catch (err) {
-        console.error(`Bulk upload row ${i + 2} error:`, err);
-        results.push({
-          row: i + 2,
-          studentName: row.student,
-          grNumber: row.gr,
-          parentName: row.parent,
-          parentEmail: row.email,
-          password: null,
-          status: "error",
-          message: err instanceof Error ? err.message : "Unknown error",
-          parentId: null,
-          isNewParent: false,
-        });
       }
     }
 

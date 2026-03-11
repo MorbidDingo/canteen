@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 
 // ─── Event Types ─────────────────────────────────────────
-export type AppEvent = "orders-updated" | "menu-updated";
+export type AppEvent = "orders-updated" | "menu-updated" | "library-updated";
 
 // ─── Client-side event emitter (fires server broadcast) ──
 /**

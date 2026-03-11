@@ -7,7 +7,7 @@ async function createUserWithRole(
   email: string,
   password: string,
   name: string,
-  role: "PARENT" | "ADMIN" | "OPERATOR" | "MANAGEMENT"
+  role: "PARENT" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR"
 ) {
   const existing = await db
     .select()
@@ -59,6 +59,13 @@ async function seed() {
     "Management@123",
     "School Manager",
     "MANAGEMENT"
+  );
+
+  const libOperator = await createUserWithRole(
+    "librarian@schoolcafe.com",
+    "Librarian@123",
+    "Library Operator",
+    "LIB_OPERATOR"
   );
 
   const parent = await createUserWithRole(
@@ -306,11 +313,12 @@ async function seed() {
 
   console.log("\n✨ Seed complete!");
   console.log("\n📋 Test Accounts:");
-  console.log("  Admin:      admin@schoolcafe.com / Admin@123");
-  console.log("  Operator:   operator@schoolcafe.com / Operator@123");
-  console.log("  Management: management@schoolcafe.com / Management@123");
-  console.log("  Parent:     parent@schoolcafe.com / Parent@123");
-  console.log("  Children:   Arjun Sharma (CARD001), Priya Sharma (CARD002)");
+  console.log("  Admin:        admin@schoolcafe.com / Admin@123");
+  console.log("  Operator:     operator@schoolcafe.com / Operator@123");
+  console.log("  Management:   management@schoolcafe.com / Management@123");
+  console.log("  Lib Operator: librarian@schoolcafe.com / Librarian@123");
+  console.log("  Parent:       parent@schoolcafe.com / Parent@123");
+  console.log("  Children:     Arjun Sharma (CARD001), Priya Sharma (CARD002)");
 }
 
 seed()

@@ -85,6 +85,7 @@ export const USER_ROLES = {
   ADMIN: "ADMIN",
   OPERATOR: "OPERATOR",
   MANAGEMENT: "MANAGEMENT",
+  LIB_OPERATOR: "LIB_OPERATOR",
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -94,6 +95,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Admin",
   OPERATOR: "Operator",
   MANAGEMENT: "Management",
+  LIB_OPERATOR: "Library Operator",
 };
 
 // ─── Wallet Transaction Types ────────────────────────────
@@ -102,6 +104,7 @@ export const WALLET_TRANSACTION_TYPE = {
   TOP_UP: "TOP_UP",
   DEBIT: "DEBIT",
   REFUND: "REFUND",
+  LIBRARY_FINE: "LIBRARY_FINE",
 } as const;
 
 export type WalletTransactionType =
@@ -111,6 +114,7 @@ export const WALLET_TRANSACTION_LABELS: Record<WalletTransactionType, string> = 
   TOP_UP: "Top Up",
   DEBIT: "Purchase",
   REFUND: "Refund",
+  LIBRARY_FINE: "Library Fine",
 };
 
 // ─── Pre-Order Statuses ──────────────────────────────────
@@ -201,3 +205,107 @@ export function generateTokenCode(): string {
   }
   return code;
 }
+
+// ─── Library: Book Categories ────────────────────────────
+
+export const BOOK_CATEGORIES = {
+  FICTION: "FICTION",
+  NON_FICTION: "NON_FICTION",
+  TEXTBOOK: "TEXTBOOK",
+  REFERENCE: "REFERENCE",
+  PERIODICAL: "PERIODICAL",
+  GENERAL: "GENERAL",
+} as const;
+
+export type BookCategory = (typeof BOOK_CATEGORIES)[keyof typeof BOOK_CATEGORIES];
+
+export const BOOK_CATEGORY_LABELS: Record<BookCategory, string> = {
+  FICTION: "Fiction",
+  NON_FICTION: "Non-Fiction",
+  TEXTBOOK: "Textbook",
+  REFERENCE: "Reference",
+  PERIODICAL: "Periodical",
+  GENERAL: "General",
+};
+
+// ─── Library: Book Copy Status ───────────────────────────
+
+export const BOOK_COPY_STATUS = {
+  AVAILABLE: "AVAILABLE",
+  ISSUED: "ISSUED",
+  LOST: "LOST",
+  DAMAGED: "DAMAGED",
+  RETIRED: "RETIRED",
+} as const;
+
+export type BookCopyStatus = (typeof BOOK_COPY_STATUS)[keyof typeof BOOK_COPY_STATUS];
+
+export const BOOK_COPY_STATUS_LABELS: Record<BookCopyStatus, string> = {
+  AVAILABLE: "Available",
+  ISSUED: "Issued",
+  LOST: "Lost",
+  DAMAGED: "Damaged",
+  RETIRED: "Retired",
+};
+
+// ─── Library: Book Copy Condition ────────────────────────
+
+export const BOOK_COPY_CONDITION = {
+  NEW: "NEW",
+  GOOD: "GOOD",
+  FAIR: "FAIR",
+  POOR: "POOR",
+  DAMAGED: "DAMAGED",
+} as const;
+
+export type BookCopyCondition = (typeof BOOK_COPY_CONDITION)[keyof typeof BOOK_COPY_CONDITION];
+
+export const BOOK_COPY_CONDITION_LABELS: Record<BookCopyCondition, string> = {
+  NEW: "New",
+  GOOD: "Good",
+  FAIR: "Fair",
+  POOR: "Poor",
+  DAMAGED: "Damaged",
+};
+
+// ─── Library: Issuance Status ────────────────────────────
+
+export const ISSUANCE_STATUS = {
+  ISSUED: "ISSUED",
+  RETURNED: "RETURNED",
+  OVERDUE: "OVERDUE",
+  LOST: "LOST",
+  RETURN_PENDING: "RETURN_PENDING",
+} as const;
+
+export type IssuanceStatus = (typeof ISSUANCE_STATUS)[keyof typeof ISSUANCE_STATUS];
+
+export const ISSUANCE_STATUS_LABELS: Record<IssuanceStatus, string> = {
+  ISSUED: "Issued",
+  RETURNED: "Returned",
+  OVERDUE: "Overdue",
+  LOST: "Lost",
+  RETURN_PENDING: "Return Pending",
+};
+
+export const ISSUANCE_STATUS_COLORS: Record<IssuanceStatus, string> = {
+  ISSUED: "bg-[#1a3a8f]/10 text-[#1a3a8f]",
+  RETURNED: "bg-[#2eab57]/15 text-[#1e7a3c]",
+  OVERDUE: "bg-[#e32726]/10 text-[#e32726]",
+  LOST: "bg-[#e32726]/10 text-[#e32726]",
+  RETURN_PENDING: "bg-[#f58220]/15 text-[#c66a10]",
+};
+
+// ─── Library: Settings Defaults ──────────────────────────
+
+export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
+  issue_duration_days: "7",
+  max_reissues: "3",
+  reissue_duration_days: "7",
+  max_books_per_student: "3",
+  require_operator_return_confirmation: "false",
+  block_issue_if_overdue: "true",
+  fine_per_day: "0",
+  max_fine_per_book: "100",
+  allow_self_service_issue: "true",
+};

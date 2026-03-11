@@ -60,6 +60,9 @@ export default function LoginPage() {
       case "MANAGEMENT":
         router.push("/management/cards");
         break;
+      case "LIB_OPERATOR":
+        router.push("/lib-operator/dashboard");
+        break;
       default:
         router.push("/menu");
     }

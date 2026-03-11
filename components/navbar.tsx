@@ -25,9 +25,10 @@ import {
   Wallet,
   Shield,
   CalendarClock,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
@@ -40,6 +41,7 @@ const parentLinks = [
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/controls", label: "Controls", icon: Shield },
   { href: "/pre-orders", label: "Pre-Orders", icon: CalendarClock },
+  { href: "/library-history", label: "Library", icon: BookOpen },
 ];
 
 const adminLinks = [
@@ -53,14 +55,26 @@ export function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const cartCount = useCartStore((s) => s.getItemCount());
+  const [overdueCount, setOverdueCount] = useState(0);
 
   const role = session?.user?.role;
 
-  // Operator and Management have their own layouts with built-in nav
-  if (role === "OPERATOR" || role === "MANAGEMENT") return null;
+  // Fetch overdue count for parent users
+  useEffect(() => {
+    if (role !== "PARENT") return;
+    fetch("/api/library/history")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.overdueCount) setOverdueCount(data.overdueCount);
+      })
+      .catch(() => {});
+  }, [role]);
+
+  // Operator, Management, and Library Operator have their own layouts with built-in nav
+  if (role === "OPERATOR" || role === "MANAGEMENT" || role === "LIB_OPERATOR") return null;
 
   // Kiosk has its own layout — no navbar
-  if (pathname.startsWith("/kiosk")) return null;
+  if (pathname.startsWith("/kiosk") || pathname.startsWith("/library")) return null;
 
   const isAdmin = role === "ADMIN";
   const links = isAdmin ? adminLinks : parentLinks;
@@ -106,6 +120,11 @@ export function Navbar() {
                   {href === "/cart" && cartCount > 0 && (
                     <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
                       {cartCount}
+                    </Badge>
+                  )}
+                  {href === "/library-history" && overdueCount > 0 && (
+                    <Badge variant="destructive" className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
+                      {overdueCount}
                     </Badge>
                   )}
                 </Button>
