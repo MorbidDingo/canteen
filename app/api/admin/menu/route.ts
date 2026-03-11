@@ -58,7 +58,7 @@ const createMenuItemSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   description: z.string().max(500).optional(),
   price: z.number().positive("Price must be positive"),
-  category: z.enum(["SNACKS", "MEALS", "DRINKS"]),
+  category: z.enum(["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"]),
   imageUrl: z.string().optional().or(z.literal("")),
   available: z.boolean().default(true),
   availableUnits: z.number().int().min(0).nullable().optional(),

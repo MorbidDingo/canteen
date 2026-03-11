@@ -8,6 +8,7 @@ import {
   menuItem,
   order,
   orderItem,
+  discount,
 } from "@/lib/db/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { generateTokenCode } from "@/lib/constants";
@@ -141,7 +142,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 6. Calculate total ────────────────────────────
+    // ── 6. Calculate total (with discounts) ─────────
+    const activeDiscounts = await db
+      .select()
+      .from(discount)
+      .where(eq(discount.active, true));
+
+    const now = new Date();
+    const discountMap = new Map(
+      activeDiscounts
+        .filter((d) => (!d.startDate || d.startDate <= now) && (!d.endDate || d.endDate >= now))
+        .map((d) => [d.menuItemId, d])
+    );
+
     let total = 0;
     const orderItemsData: {
       menuItemId: string;
@@ -153,12 +166,19 @@ export async function POST(request: NextRequest) {
     for (const cartItem of items) {
       const m = menuItems.find((mi) => mi.id === cartItem.menuItemId);
       if (!m) continue;
-      const subtotal = m.price * cartItem.quantity;
+      const d = discountMap.get(m.id);
+      let effectivePrice = m.price;
+      if (d) {
+        effectivePrice = d.type === "PERCENTAGE"
+          ? Math.round(m.price * (1 - d.value / 100) * 100) / 100
+          : Math.max(0, Math.round((m.price - d.value) * 100) / 100);
+      }
+      const subtotal = effectivePrice * cartItem.quantity;
       total += subtotal;
       orderItemsData.push({
         menuItemId: m.id,
         quantity: cartItem.quantity,
-        unitPrice: m.price,
+        unitPrice: effectivePrice,
         name: m.name,
       });
     }

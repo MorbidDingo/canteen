@@ -10,6 +10,7 @@ export interface CartItem {
   menuItemId: string;
   name: string;
   price: number;
+  discountedPrice?: number;
   quantity: number;
   instructions: CartItemInstruction;
 }
@@ -91,7 +92,7 @@ export const useCartStore = create<CartStore>()(
 
       getTotal: () =>
         get().items.reduce(
-          (total, item) => total + item.price * item.quantity,
+          (total, item) => total + (item.discountedPrice ?? item.price) * item.quantity,
           0
         ),
 

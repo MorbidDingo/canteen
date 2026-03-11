@@ -41,6 +41,9 @@ import {
   Package,
   ShoppingCart,
   ArrowRight,
+  Percent,
+  Sparkles,
+  Tag,
 } from "lucide-react";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
@@ -55,6 +58,8 @@ interface MenuItem {
   name: string;
   description: string | null;
   price: number;
+  discountedPrice?: number | null;
+  discountInfo?: { type: string; value: number; mode: string } | null;
   category: string;
   imageUrl: string | null;
   available: boolean;
@@ -81,8 +86,22 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
+  const [discountsOnly, setDiscountsOnly] = useState(false);
   const cartItemCount = useCartStore((s) => s.getItemCount());
   const cartTotal = useCartStore((s) => s.getTotal());
+
+  const discountedItems = useMemo(
+    () => items.filter((i) => i.discountedPrice != null),
+    [items],
+  );
+  const bestDiscount = useMemo(() => {
+    if (discountedItems.length === 0) return null;
+    return discountedItems.reduce((best, item) => {
+      const saving = item.price - (item.discountedPrice ?? item.price);
+      const bestSaving = best.price - (best.discountedPrice ?? best.price);
+      return saving > bestSaving ? item : best;
+    }, discountedItems[0]);
+  }, [discountedItems]);
 
   // Compute price range from data
   const priceRange = useMemo(() => {
@@ -94,6 +113,11 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
   // Filter + search + sort
   const filteredItems = useMemo(() => {
     let result = [...items];
+
+    // Discounts-only filter
+    if (discountsOnly) {
+      result = result.filter((item) => item.discountedPrice != null);
+    }
 
     // Search by name & description
     if (searchQuery.trim()) {
@@ -128,7 +152,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
     }
 
     return result;
-  }, [items, searchQuery, sortBy, maxPrice]);
+  }, [items, searchQuery, sortBy, maxPrice, discountsOnly]);
 
   // Group by category
   const grouped = Object.values(MENU_CATEGORIES).reduce(
@@ -144,17 +168,62 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
     "SNACKS";
 
   const hasActiveFilters =
-    searchQuery.trim() || maxPrice || sortBy !== "default";
+    searchQuery.trim() || maxPrice || sortBy !== "default" || discountsOnly;
   const totalFiltered = filteredItems.length;
 
   const clearFilters = () => {
     setSearchQuery("");
     setMaxPrice("");
     setSortBy("default");
+    setDiscountsOnly(false);
   };
 
   return (
     <>
+      {/* Discount Banner */}
+      {discountedItems.length > 0 && !discountsOnly && (
+        <button
+          onClick={() => setDiscountsOnly(true)}
+          className="w-full mb-6 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 p-[1px] animate-fade-in"
+        >
+          <div className="rounded-[11px] bg-gradient-to-r from-emerald-500/90 via-teal-500/90 to-cyan-500/90 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between gap-3 text-white">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="shrink-0 rounded-full bg-white/20 p-2">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 text-left">
+                <p className="font-bold text-sm sm:text-base truncate">
+                  {discountedItems.length} item{discountedItems.length > 1 ? "s" : ""} on discount!
+                </p>
+                {bestDiscount && (
+                  <p className="text-xs sm:text-sm text-white/80 truncate">
+                    Save up to ₹{(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 text-xs sm:text-sm font-semibold">
+              <Tag className="h-3.5 w-3.5" />
+              View Deals
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* Discount filter active indicator */}
+      {discountsOnly && (
+        <div className="flex items-center gap-2 mb-4 animate-fade-in">
+          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1 py-1 px-3">
+            <Tag className="h-3 w-3" />
+            Showing discounted items only
+          </Badge>
+          <Button variant="ghost" size="sm" onClick={() => setDiscountsOnly(false)} className="text-xs h-7 gap-1">
+            <X className="h-3 w-3" />
+            Show All
+          </Button>
+        </div>
+      )}
+
       {/* Search & Filter Bar */}
       <div className="space-y-3 mb-6 animate-fade-in">
         {/* Search row */}
@@ -342,12 +411,27 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                               {item.availableUnits} left
                             </Badge>
                           )}
-                          <Badge
-                            variant="outline"
-                            className="shrink-0 font-bold text-sm"
-                          >
-                            ₹{item.price}
-                          </Badge>
+                          {item.discountedPrice != null ? (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
+                                <Percent className="h-2.5 w-2.5" />
+                                {item.discountInfo?.type === "PERCENTAGE"
+                                  ? `${item.discountInfo.value}% OFF`
+                                  : `₹${item.discountInfo?.value} OFF`}
+                              </Badge>
+                              <Badge variant="outline" className="shrink-0 font-bold text-sm">
+                                <span className="line-through text-muted-foreground text-xs mr-1">₹{item.price}</span>
+                                ₹{item.discountedPrice}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="shrink-0 font-bold text-sm"
+                            >
+                              ₹{item.price}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       {item.description && (
@@ -362,6 +446,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                         menuItemId={item.id}
                         name={item.name}
                         price={item.price}
+                        discountedPrice={item.discountedPrice}
                         availableUnits={item.availableUnits}
                       />
                     </CardFooter>
@@ -375,7 +460,7 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
 
       {/* Floating Cart Bar */}
       {cartItemCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-14 md:bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 duration-300">
           <div className="mx-auto max-w-lg px-4 pb-4">
             <Link href="/cart">
               <Button

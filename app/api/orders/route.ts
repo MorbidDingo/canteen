@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order, orderItem, menuItem, wallet, walletTransaction, child } from "@/lib/db/schema";
+import { order, orderItem, menuItem, wallet, walletTransaction, child, discount } from "@/lib/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validateUnits, decrementUnits } from "@/lib/units";
@@ -72,10 +72,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Calculate total from server-side prices
+    // Calculate total from server-side prices (with discounts)
+    const activeDiscounts = await db
+      .select()
+      .from(discount)
+      .where(eq(discount.active, true));
+
+    const now = new Date();
+    const discountMap = new Map(
+      activeDiscounts
+        .filter((d) => (!d.startDate || d.startDate <= now) && (!d.endDate || d.endDate >= now))
+        .map((d) => [d.menuItemId, d])
+    );
+
+    const effectivePriceMap = new Map<string, number>();
+    for (const mi of menuItems) {
+      const d = discountMap.get(mi.id);
+      if (d) {
+        effectivePriceMap.set(
+          mi.id,
+          d.type === "PERCENTAGE"
+            ? Math.round(mi.price * (1 - d.value / 100) * 100) / 100
+            : Math.max(0, Math.round((mi.price - d.value) * 100) / 100)
+        );
+      } else {
+        effectivePriceMap.set(mi.id, mi.price);
+      }
+    }
+
     const totalAmount = orderItems.reduce((sum, item) => {
-      const mi = menuItemMap.get(item.menuItemId)!;
-      return sum + mi.price * item.quantity;
+      return sum + effectivePriceMap.get(item.menuItemId)! * item.quantity;
     }, 0);
 
     // Validate available units
@@ -141,7 +167,7 @@ export async function POST(request: NextRequest) {
         orderId: createdOrder.id,
         menuItemId: item.menuItemId,
         quantity: item.quantity,
-        unitPrice: menuItemMap.get(item.menuItemId)!.price,
+        unitPrice: effectivePriceMap.get(item.menuItemId)!,
         instructions: item.instructions || null,
       }));
 

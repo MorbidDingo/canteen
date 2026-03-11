@@ -10,6 +10,8 @@ interface MenuItem {
   name: string;
   description: string | null;
   price: number;
+  discountedPrice?: number | null;
+  discountInfo?: { type: string; value: number; mode: string } | null;
   category: string;
   imageUrl: string | null;
   available: boolean;

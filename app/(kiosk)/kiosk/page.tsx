@@ -31,6 +31,8 @@ type MenuItem = {
   name: string;
   description: string | null;
   price: number;
+  discountedPrice?: number | null;
+  discountInfo?: { type: string; value: number; mode: string } | null;
   category: MenuCategory;
   imageUrl: string | null;
   available: boolean;
@@ -185,7 +187,7 @@ export default function KioskPage() {
   };
 
   const cartTotal = cart.reduce(
-    (sum, c) => sum + c.menuItem.price * c.quantity,
+    (sum, c) => sum + (c.menuItem.discountedPrice ?? c.menuItem.price) * c.quantity,
     0,
   );
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
@@ -344,6 +346,13 @@ export default function KioskPage() {
                           🍽️
                         </div>
                       )}
+                      {item.discountedPrice != null && !isSoldOut && (
+                        <div className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-md">
+                          {item.discountInfo?.type === "PERCENTAGE"
+                            ? `${item.discountInfo.value}% OFF`
+                            : `₹${item.discountInfo?.value} OFF`}
+                        </div>
+                      )}
                       {isSoldOut && (
                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                           <span className="bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold">
@@ -366,7 +375,14 @@ export default function KioskPage() {
                       <p className="font-semibold text-sm truncate">
                         {item.name}
                       </p>
-                      <p className="text-[#1a3a8f] font-bold">₹{item.price}</p>
+                      {item.discountedPrice != null ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="line-through text-muted-foreground text-xs">₹{item.price}</span>
+                          <span className="text-[#2eab57] font-bold">₹{item.discountedPrice}</span>
+                        </div>
+                      ) : (
+                        <p className="text-[#1a3a8f] font-bold">₹{item.price}</p>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -508,7 +524,14 @@ export default function KioskPage() {
                           {c.menuItem.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          ₹{c.menuItem.price} each
+                          {c.menuItem.discountedPrice != null ? (
+                            <>
+                              <span className="line-through">₹{c.menuItem.price}</span>{" "}
+                              <span className="text-emerald-600 font-medium">₹{c.menuItem.discountedPrice}</span> each
+                            </>
+                          ) : (
+                            <>₹{c.menuItem.price} each</>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -536,7 +559,7 @@ export default function KioskPage() {
                           <Plus className="h-3 w-3" />
                         </Button>
                         <p className="w-14 text-right font-semibold text-sm">
-                          ₹{(c.menuItem.price * c.quantity).toFixed(0)}
+                          ₹{((c.menuItem.discountedPrice ?? c.menuItem.price) * c.quantity).toFixed(0)}
                         </p>
                       </div>
                     </div>

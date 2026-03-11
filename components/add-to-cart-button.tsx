@@ -9,6 +9,7 @@ interface AddToCartButtonProps {
   menuItemId: string;
   name: string;
   price: number;
+  discountedPrice?: number | null;
   availableUnits?: number | null;
 }
 
@@ -16,6 +17,7 @@ export function AddToCartButton({
   menuItemId,
   name,
   price,
+  discountedPrice,
   availableUnits,
 }: AddToCartButtonProps) {
   const addItem = useCartStore((s) => s.addItem);
@@ -33,7 +35,7 @@ export function AddToCartButton({
 
   const handleAdd = () => {
     if (isSoldOut || atMax) return;
-    addItem({ menuItemId, name, price });
+    addItem({ menuItemId, name, price, ...(discountedPrice != null ? { discountedPrice } : {}) });
     if (quantity === 0) {
       toast.success(`${name} added to cart`);
     }

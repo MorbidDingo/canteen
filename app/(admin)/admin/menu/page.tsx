@@ -486,7 +486,7 @@ function MenuItemForm({
               <>
                 <ImagePlus className="h-8 w-8" />
                 <span className="text-sm">Click to upload photo</span>
-                <span className="text-xs">JPEG, PNG, WebP, GIF — max 2MB</span>
+                <span className="text-xs">JPEG, PNG, WebP, GIF — max 20MB</span>
               </>
             )}
           </button>

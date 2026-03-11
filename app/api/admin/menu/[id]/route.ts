@@ -10,7 +10,7 @@ const updateMenuItemSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
   price: z.number().positive().optional(),
-  category: z.enum(["SNACKS", "MEALS", "DRINKS"]).optional(),
+  category: z.enum(["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"]).optional(),
   imageUrl: z.string().optional().or(z.literal("")).optional(),
   available: z.boolean().optional(),
   availableUnits: z.number().int().min(0).nullable().optional(),

@@ -468,7 +468,14 @@ export default function CartPage() {
                   <div>
                     <CardTitle className="text-base">{item.name}</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      ₹{item.price} each
+                      {item.discountedPrice != null ? (
+                        <>
+                          <span className="line-through">₹{item.price}</span>{" "}
+                          <span className="text-emerald-600 font-medium">₹{item.discountedPrice}</span> each
+                        </>
+                      ) : (
+                        <>₹{item.price} each</>
+                      )}
                     </p>
                   </div>
                   <Button
@@ -511,7 +518,7 @@ export default function CartPage() {
                     </Button>
                   </div>
                   <span className="ml-auto font-semibold">
-                    ₹{(item.price * item.quantity).toFixed(2)}
+                    ₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}
                   </span>
                 </div>
 
@@ -568,7 +575,7 @@ export default function CartPage() {
                   <span className="text-muted-foreground">
                     {item.name} × {item.quantity}
                   </span>
-                  <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                  <span>₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
               <Separator />
