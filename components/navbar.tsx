@@ -33,6 +33,7 @@ import { useState, useEffect } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const canteenLinks = [
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },
@@ -181,6 +182,7 @@ export function Navbar() {
 
           {/* Right side: auth */}
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {isPending ? (
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
             ) : session ? (
