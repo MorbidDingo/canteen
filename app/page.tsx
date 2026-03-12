@@ -303,7 +303,7 @@ export default function Home() {
               {/* Tabs */}
               <div className="flex items-center gap-4 border-b border-border/30 pb-3 mb-4">
                 <span className="text-xs font-medium border-b-2 border-primary pb-3 -mb-3 text-foreground">
-                  Queue Stats up-date
+                  Queue Stats update
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Assign issue to experts
