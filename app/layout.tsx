@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
+import { SyncManager } from "@/components/sync-manager";
+import { PwaRegister } from "@/components/pwa-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -109,10 +111,12 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <Navbar />
-        <main className="min-h-[calc(100vh-3.5rem)] pb-14 md:pb-0">{children}</main>
+        <main className="min-h-[calc(100vh-3.5rem)] pb-28 md:pb-0">{children}</main>
+        <PwaRegister />
+        <SyncManager />
         <Toaster
           richColors
-          position="top-center"
+          position="bottom-center"
           toastOptions={{ className: "text-sm" }}
         />
       </body>

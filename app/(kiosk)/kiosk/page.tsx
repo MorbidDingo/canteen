@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import {
   Minus,
   ShoppingCart,
   ArrowLeft,
-  ArrowRight,
   CreditCard,
   CheckCircle2,
   XCircle,
@@ -23,8 +23,13 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { MENU_CATEGORY_LABELS, type MenuCategory } from "@/lib/constants";
-
-// ─── Types ───────────────────────────────────────────────
+import {
+  cacheMenuItems,
+  enqueueOfflineAction,
+  getCachedMenuItems,
+} from "@/lib/store/offline-db";
+import { printCanteenReceipt } from "@/lib/printer";
+import { PrinterStatusBadge } from "@/components/kiosk/printer-status";
 
 type MenuItem = {
   id: string;
@@ -44,7 +49,7 @@ type CartItem = {
   quantity: number;
 };
 
-type KioskPhase = "browse" | "checkout" | "result";
+type KioskPhase = "tap" | "browse" | "result";
 
 type OrderResult = {
   success: boolean;
@@ -56,10 +61,8 @@ type OrderResult = {
   reason?: string;
 };
 
-// ─── Kiosk Page ──────────────────────────────────────────
-
 export default function KioskPage() {
-  const [phase, setPhase] = useState<KioskPhase>("browse");
+  const [phase, setPhase] = useState<KioskPhase>("tap");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<MenuCategory | "ALL">(
     "ALL",
@@ -68,33 +71,48 @@ export default function KioskPage() {
   const [menuLoading, setMenuLoading] = useState(true);
   const [orderLoading, setOrderLoading] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(5);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeRfid, setActiveRfid] = useState("");
+  const [activeChildName, setActiveChildName] = useState<string | null>(null);
+
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-
-  // ─── Fetch menu items ────────────────────────────────
 
   const fetchMenu = useCallback(async () => {
     try {
       const res = await fetch("/api/menu");
       if (res.ok) {
         const data = await res.json();
-        const items: MenuItem[] = (data.items || data).filter((item: MenuItem) => item.available);
+        const items: MenuItem[] = (data.items || data).filter(
+          (item: MenuItem) => item.available,
+        );
         setMenuItems(items);
-        // Sync cart with fresh menu data so availableUnits stay current
+        void cacheMenuItems(items);
         setCart((prev) =>
           prev
             .map((c) => {
               const fresh = items.find((i) => i.id === c.menuItem.id);
-              if (!fresh) return null; // item no longer available
+              if (!fresh) return null;
               return { ...c, menuItem: fresh };
             })
             .filter((c): c is CartItem => c !== null),
         );
+      } else {
+        const cachedItems = await getCachedMenuItems<MenuItem>();
+        if (cachedItems.length > 0) {
+          setMenuItems(cachedItems.filter((item) => item.available));
+          toast.warning("Showing cached menu (offline mode)");
+        }
       }
     } catch {
-      toast.error("Failed to load menu");
+      const cachedItems = await getCachedMenuItems<MenuItem>();
+      if (cachedItems.length > 0) {
+        setMenuItems(cachedItems.filter((item) => item.available));
+        toast.warning("Showing cached menu (offline mode)");
+      } else {
+        toast.error("Failed to load menu");
+      }
     } finally {
       setMenuLoading(false);
     }
@@ -104,7 +122,6 @@ export default function KioskPage() {
     fetchMenu();
   }, [fetchMenu]);
 
-  // SSE: auto-refetch when menu updates
   useEffect(() => {
     const eventSource = new EventSource("/api/events");
     eventSource.onmessage = (e) => {
@@ -113,21 +130,15 @@ export default function KioskPage() {
         if (data.type === "menu-updated") {
           fetchMenu();
         }
-      } catch { /* ignore */ }
+      } catch {}
     };
     return () => eventSource.close();
   }, [fetchMenu]);
 
-  // ─── Auto-focus RFID input in checkout phase ─────────
-
   useEffect(() => {
-    if (phase === "checkout" && rfidInputRef.current) {
-      rfidInputRef.current.focus();
-    }
-  }, [phase]);
+    if (phase !== "tap") return;
+    if (rfidInputRef.current) rfidInputRef.current.focus();
 
-  useEffect(() => {
-    if (phase !== "checkout") return;
     const interval = setInterval(() => {
       if (
         rfidInputRef.current &&
@@ -139,11 +150,9 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, [phase]);
 
-  // ─── Auto-reset after result ─────────────────────────
-
   useEffect(() => {
     if (phase !== "result") return;
-    setCountdown(10);
+    setCountdown(5);
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -154,19 +163,17 @@ export default function KioskPage() {
       });
     }, 1000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
-
-  // ─── Cart helpers ────────────────────────────────────
 
   const addToCart = (item: MenuItem) => {
     const MAX_QTY = 5;
     setCart((prev) => {
       const existing = prev.find((c) => c.menuItem.id === item.id);
       if (existing) {
-        const maxAllowed = item.availableUnits != null
-          ? Math.min(MAX_QTY, item.availableUnits)
-          : MAX_QTY;
+        const maxAllowed =
+          item.availableUnits != null
+            ? Math.min(MAX_QTY, item.availableUnits)
+            : MAX_QTY;
         if (existing.quantity >= maxAllowed) return prev;
         return prev.map((c) =>
           c.menuItem.id === item.id ? { ...c, quantity: c.quantity + 1 } : c,
@@ -194,41 +201,146 @@ export default function KioskPage() {
 
   const resetKiosk = () => {
     setCart([]);
-    setPhase("browse");
+    setPhase("tap");
     setResult(null);
     setActiveCategory("ALL");
     setSearchQuery("");
+    setActiveRfid("");
+    setActiveChildName(null);
   };
 
-  // ─── RFID scan handler ──────────────────────────────
+  const handleCardTap = async (rfidCardId: string) => {
+    const card = rfidCardId.trim();
+    if (!card) return;
 
-  const handleRfidScan = async (rfidCardId: string) => {
-    if (!rfidCardId.trim() || cart.length === 0) return;
     setOrderLoading(true);
     try {
       const res = await fetch("/api/kiosk/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rfidCardId: rfidCardId.trim(),
-          items: cart.map((c) => ({
-            menuItemId: c.menuItem.id,
-            quantity: c.quantity,
-          })),
-        }),
+        body: JSON.stringify({ rfidCardId: card, mode: "AUTO_PREORDER" }),
       });
       const data = await res.json();
-      setResult(data);
-      setPhase("result");
+
+      if (!data.success) {
+        setResult({ success: false, reason: data.reason || "Card check failed" });
+        setPhase("result");
+        return;
+      }
+
+      setActiveRfid(card);
+      setActiveChildName(data.childName || null);
+
+      if (data.autoPreOrder) {
+        try {
+          await printCanteenReceipt({
+            tokenCode: data.tokenCode,
+            items: (data.items ?? []) as { name: string; quantity: number; subtotal: number }[],
+            total: data.total ?? 0,
+            childName: data.childName,
+            isOffline: false,
+          });
+        } catch {
+          toast.warning("Pre-order placed, but receipt printer is disconnected.");
+        }
+
+        setResult({
+          success: true,
+          tokenCode: data.tokenCode,
+          items: data.items,
+          total: data.total,
+          balanceAfter: data.balanceAfter,
+          childName: data.childName,
+          reason:
+            data.preOrderMode === "SUBSCRIPTION"
+              ? "Subscription pre-order placed automatically."
+              : "Today pre-order placed automatically.",
+        });
+        setPhase("result");
+        return;
+      }
+
+      setPhase("browse");
+      toast.success(`Welcome ${data.childName || "Student"}. Select items to order.`);
     } catch {
-      setResult({ success: false, reason: "Network error. Please try again." });
+      setResult({ success: false, reason: "Failed to verify card. Please try again." });
       setPhase("result");
     } finally {
       setOrderLoading(false);
     }
   };
 
-  // ─── Filtered items ─────────────────────────────────
+  const placeManualOrder = async () => {
+    if (!activeRfid || cart.length === 0) return;
+
+    const payload = {
+      rfidCardId: activeRfid,
+      mode: "MANUAL",
+      items: cart.map((c) => ({
+        menuItemId: c.menuItem.id,
+        quantity: c.quantity,
+      })),
+    };
+
+    setOrderLoading(true);
+    try {
+      const res = await fetch("/api/kiosk/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.success) {
+        try {
+          await printCanteenReceipt({
+            tokenCode: data.tokenCode,
+            items: (data.items ?? []) as { name: string; quantity: number; subtotal: number }[],
+            total: data.total ?? cartTotal,
+            childName: data.childName,
+            isOffline: false,
+          });
+        } catch {
+          toast.warning("Order placed, but receipt printer is disconnected.");
+        }
+      }
+      setResult(data);
+      setPhase("result");
+    } catch {
+      const queued = await enqueueOfflineAction({
+        type: "KIOSK_ORDER",
+        payload,
+      });
+
+      const offlineToken = `OFF-${queued.id.slice(0, 6).toUpperCase()}`;
+      const offlineItems = cart.map((c) => ({
+        name: c.menuItem.name,
+        quantity: c.quantity,
+        subtotal: (c.menuItem.discountedPrice ?? c.menuItem.price) * c.quantity,
+      }));
+
+      try {
+        await printCanteenReceipt({
+          tokenCode: offlineToken,
+          items: offlineItems,
+          total: cartTotal,
+          isOffline: true,
+        });
+      } catch {
+        toast.warning("Saved offline, but receipt printer is disconnected.");
+      }
+
+      setResult({
+        success: true,
+        tokenCode: offlineToken,
+        items: offlineItems,
+        total: cartTotal,
+        reason: "Saved offline. Will sync automatically when network returns.",
+      });
+      setPhase("result");
+    } finally {
+      setOrderLoading(false);
+    }
+  };
 
   const searchFiltered = searchQuery.trim()
     ? menuItems.filter((item) =>
@@ -250,14 +362,53 @@ export default function KioskPage() {
     })),
   ];
 
-  // ═════════════════════════════════════════════════════
-  // PHASE A — Browse & Add to Cart
-  // ═════════════════════════════════════════════════════
+  if (phase === "tap") {
+    return (
+      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col items-center justify-center p-6">
+        <div className="max-w-lg w-full text-center space-y-5">
+          {orderLoading ? (
+            <>
+              <Loader2 className="h-16 w-16 animate-spin text-[#1a3a8f] mx-auto" />
+              <h1 className="text-2xl font-bold text-[#1a3a8f]">Checking pre-orders...</h1>
+            </>
+          ) : (
+            <>
+              <CreditCard className="h-20 w-20 text-[#1a3a8f] mx-auto animate-pulse" />
+              <h1 className="text-3xl font-bold text-[#1a3a8f]">Tap Your RFID Card</h1>
+              <p className="text-muted-foreground">
+                If a pre-order/subscription exists for today, it will be placed automatically.
+                Otherwise you can select items and place order.
+              </p>
+            </>
+          )}
+          <input
+            ref={rfidInputRef}
+            type="text"
+            className="opacity-0 absolute -z-10"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const value = (e.target as HTMLInputElement).value;
+                (e.target as HTMLInputElement).value = "";
+                void handleCardTap(value);
+              }
+            }}
+            aria-label="RFID card scan input"
+          />
+          <div className="flex justify-center gap-3">
+            <Link href="/kiosk/offline">
+              <Button variant="outline" size="sm">Offline Ops</Button>
+            </Link>
+            <PrinterStatusBadge />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (phase === "browse") {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
-        {/* Top bar — search + logo */}
         <div className="shrink-0 flex items-center justify-between gap-4 px-5 py-3 bg-white border-b shadow-sm">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -281,6 +432,13 @@ export default function KioskPage() {
               </button>
             )}
           </div>
+
+          {activeChildName && (
+            <Badge variant="secondary" className="whitespace-nowrap">
+              {activeChildName}
+            </Badge>
+          )}
+
           <Image
             src="/cropped-logo-venus-1-2.png"
             alt="Venus World Schools"
@@ -288,9 +446,12 @@ export default function KioskPage() {
             height={52}
             className="shrink-0"
           />
+          <Link href="/kiosk/offline">
+            <Button variant="outline" size="sm">Offline Ops</Button>
+          </Link>
+          <PrinterStatusBadge />
         </div>
 
-        {/* Category tabs */}
         <div
           className={`shrink-0 bg-white border-b px-4 py-2.5 flex gap-2 overflow-x-auto ${searchQuery ? "opacity-40 pointer-events-none" : ""}`}
         >
@@ -311,7 +472,6 @@ export default function KioskPage() {
           ))}
         </div>
 
-        {/* Menu grid — only this area scrolls */}
         <div className="flex-1 overflow-y-auto p-4 pb-24">
           {menuLoading ? (
             <div className="flex items-center justify-center h-full">
@@ -319,9 +479,7 @@ export default function KioskPage() {
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-lg text-muted-foreground">
-                No items available
-              </p>
+              <p className="text-lg text-muted-foreground">No items available</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
@@ -350,7 +508,7 @@ export default function KioskPage() {
                         <div className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-md">
                           {item.discountInfo?.type === "PERCENTAGE"
                             ? `${item.discountInfo.value}% OFF`
-                            : `₹${item.discountInfo?.value} OFF`}
+                            : `Rs${item.discountInfo?.value} OFF`}
                         </div>
                       )}
                       {isSoldOut && (
@@ -372,25 +530,23 @@ export default function KioskPage() {
                       )}
                     </div>
                     <CardContent className="p-2.5">
-                      <p className="font-semibold text-sm truncate">
-                        {item.name}
-                      </p>
+                      <p className="font-semibold text-sm truncate">{item.name}</p>
                       {item.discountedPrice != null ? (
                         <div className="flex items-center gap-1.5">
-                          <span className="line-through text-muted-foreground text-xs">₹{item.price}</span>
-                          <span className="text-[#2eab57] font-bold">₹{item.discountedPrice}</span>
+                          <span className="line-through text-muted-foreground text-xs">Rs{item.price}</span>
+                          <span className="text-[#2eab57] font-bold">Rs{item.discountedPrice}</span>
                         </div>
                       ) : (
-                        <p className="text-[#1a3a8f] font-bold">₹{item.price}</p>
+                        <p className="text-[#1a3a8f] font-bold">Rs{item.price}</p>
                       )}
                     </CardContent>
                   </Card>
                 );
-              })}            </div>
+              })}
+            </div>
           )}
         </div>
 
-        {/* Floating cart bar */}
         {cartCount > 0 && (
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-5 py-3 z-20">
             <div className="flex items-center justify-between max-w-4xl mx-auto">
@@ -403,25 +559,25 @@ export default function KioskPage() {
                     {cartCount} item{cartCount > 1 ? "s" : ""}
                   </p>
                   <p className="text-[#2eab57] font-bold text-lg leading-tight">
-                    ₹{cartTotal.toFixed(0)}
+                    Rs{cartTotal.toFixed(0)}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  onClick={resetKiosk}
+                  onClick={() => setCart([])}
                   className="text-[#e32726] border-[#e32726]/30 hover:bg-[#e32726]/5 hover:text-[#e32726] px-5"
                 >
                   <X className="h-4 w-4 mr-1" />
-                  Cancel
+                  Clear
                 </Button>
                 <Button
-                  onClick={() => setPhase("checkout")}
+                  onClick={() => void placeManualOrder()}
+                  disabled={orderLoading}
                   className="bg-[#2eab57] hover:bg-[#259a4a] px-6"
                 >
-                  Checkout
-                  <ArrowRight className="h-4 w-4 ml-1.5" />
+                  {orderLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Place Order"}
                 </Button>
               </div>
             </div>
@@ -430,170 +586,6 @@ export default function KioskPage() {
       </div>
     );
   }
-
-  // ═════════════════════════════════════════════════════
-  // PHASE B — Cart Review & RFID Tap
-  // ═════════════════════════════════════════════════════
-
-  if (phase === "checkout") {
-    return (
-      <div className="h-screen overflow-hidden bg-gray-50 flex flex-col">
-        {/* Compact header */}
-        <div className="shrink-0 bg-white border-b px-5 py-3 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPhase("browse")}
-            disabled={orderLoading}
-            className="text-muted-foreground"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1.5" />
-            Back to Menu
-          </Button>
-          <h2 className="font-bold text-lg">Checkout</h2>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={resetKiosk}
-            disabled={orderLoading}
-            className="text-[#e32726] border-[#e32726]/30 hover:bg-[#e32726]/5 hover:text-[#e32726]"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Cancel
-          </Button>
-        </div>
-
-        {/* Two-column layout */}
-        <div className="flex-1 flex gap-6 p-6 min-h-0">
-          {/* LEFT — RFID Tap */}
-          <div className="flex-1 flex items-center justify-center">
-            <Card className="w-full max-w-md shadow-lg border-2 border-dashed border-[#1a3a8f]">
-              <CardContent className="py-16 text-center">
-                {orderLoading ? (
-                  <div className="space-y-4">
-                    <Loader2 className="h-16 w-16 animate-spin text-[#1a3a8f] mx-auto" />
-                    <p className="text-xl font-semibold text-[#1a3a8f]">
-                      Processing...
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <CreditCard className="h-20 w-20 text-[#1a3a8f] mx-auto animate-pulse" />
-                    <p className="text-2xl font-bold text-[#1a3a8f]">
-                      TAP YOUR RFID CARD
-                    </p>
-                    <p className="text-muted-foreground">
-                      Place your card on the reader to pay from your wallet
-                    </p>
-                  </div>
-                )}
-                <input
-                  ref={rfidInputRef}
-                  type="text"
-                  className="opacity-0 absolute -z-10"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      const value = (e.target as HTMLInputElement).value;
-                      (e.target as HTMLInputElement).value = "";
-                      handleRfidScan(value);
-                    }
-                  }}
-                  aria-label="RFID card scan input"
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* RIGHT — Order summary */}
-          <div className="w-[360px] lg:w-[400px] flex flex-col min-h-0">
-            {/* Items card — scrollable inside */}
-            <Card className="shadow-lg flex flex-col min-h-0 flex-1">
-              <div className="shrink-0 px-4 py-3 border-b">
-                <h3 className="font-bold flex items-center gap-2">
-                  <ShoppingCart className="h-4 w-4 text-[#1a3a8f]" />
-                  Your Order
-                </h3>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-1">
-                {cart.map((c) => (
-                  <div key={c.menuItem.id}>
-                    <div className="flex items-center justify-between py-2">
-                      <div className="flex-1 min-w-0 mr-3">
-                        <p className="font-medium text-sm truncate">
-                          {c.menuItem.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {c.menuItem.discountedPrice != null ? (
-                            <>
-                              <span className="line-through">₹{c.menuItem.price}</span>{" "}
-                              <span className="text-emerald-600 font-medium">₹{c.menuItem.discountedPrice}</span> each
-                            </>
-                          ) : (
-                            <>₹{c.menuItem.price} each</>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => updateQuantity(c.menuItem.id, -1)}
-                        >
-                          {c.quantity === 1 ? (
-                            <Trash2 className="h-3 w-3" />
-                          ) : (
-                            <Minus className="h-3 w-3" />
-                          )}
-                        </Button>
-                        <span className="w-5 text-center font-bold text-sm">
-                          {c.quantity}
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() => updateQuantity(c.menuItem.id, 1)}
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                        <p className="w-14 text-right font-semibold text-sm">
-                          ₹{((c.menuItem.discountedPrice ?? c.menuItem.price) * c.quantity).toFixed(0)}
-                        </p>
-                      </div>
-                    </div>
-                    <Separator />
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            {/* Total card */}
-            <Card className="shadow-lg mt-3 shrink-0">
-              <CardContent className="px-4 py-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-lg">Total</p>
-                    <p className="text-xs text-muted-foreground">
-                      {cartCount} item{cartCount > 1 ? "s" : ""}
-                    </p>
-                  </div>
-                  <p className="text-3xl font-bold text-[#1a3a8f]">
-                    ₹{cartTotal.toFixed(0)}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ═════════════════════════════════════════════════════
-  // PHASE C — Result (Success / Failure)
-  // ═════════════════════════════════════════════════════
 
   if (phase === "result" && result) {
     if (result.success) {
@@ -604,19 +596,13 @@ export default function KioskPage() {
               <CheckCircle2 className="h-16 w-16 text-[#2eab57]" />
             </div>
 
-            <h2 className="text-3xl font-bold text-[#2eab57] mb-4">
-              ORDER PLACED!
-            </h2>
+            <h2 className="text-3xl font-bold text-[#2eab57] mb-4">ORDER PLACED!</h2>
 
             <Card className="bg-[#1a3a8f] text-white mb-4">
               <CardContent className="py-6 text-center">
                 <p className="text-sm opacity-75 mb-1">Your Token</p>
-                <p className="text-5xl font-mono font-bold tracking-widest">
-                  {result.tokenCode}
-                </p>
-                <p className="text-xs opacity-60 mt-2">
-                  Show this to the server
-                </p>
+                <p className="text-5xl font-mono font-bold tracking-widest">{result.tokenCode}</p>
+                <p className="text-xs opacity-60 mt-2">Show this to the server</p>
               </CardContent>
             </Card>
 
@@ -626,17 +612,15 @@ export default function KioskPage() {
                   {result.items.map((item, i) => (
                     <div key={i} className="flex justify-between text-sm">
                       <span>
-                        {item.name} × {item.quantity}
+                        {item.name} x {item.quantity}
                       </span>
-                      <span className="font-medium">
-                        ₹{item.subtotal.toFixed(0)}
-                      </span>
+                      <span className="font-medium">Rs{item.subtotal.toFixed(0)}</span>
                     </div>
                   ))}
                   <Separator className="my-2" />
                   <div className="flex justify-between font-bold">
                     <span>Total</span>
-                    <span>₹{result.total?.toFixed(0)}</span>
+                    <span>Rs{result.total?.toFixed(0)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -644,16 +628,14 @@ export default function KioskPage() {
 
             {result.childName && (
               <p className="text-sm text-muted-foreground mb-3">
-                {result.childName} • Balance: ₹{result.balanceAfter?.toFixed(0)}
+                {result.childName} - Balance: Rs{result.balanceAfter?.toFixed(0)}
               </p>
             )}
 
-            <Badge
-              variant="outline"
-              className="text-sm py-1 px-3 text-muted-foreground"
-            >
+            <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">
               Resetting in {countdown}s...
             </Badge>
+            {result.reason ? <p className="mt-2 text-xs text-muted-foreground">{result.reason}</p> : null}
           </div>
         </div>
       );
@@ -666,10 +648,7 @@ export default function KioskPage() {
             <XCircle className="h-16 w-16 text-[#e32726]" />
           </div>
 
-          <h2 className="text-3xl font-bold text-[#e32726] mb-2">
-            ORDER FAILED
-          </h2>
-
+          <h2 className="text-3xl font-bold text-[#e32726] mb-2">ORDER FAILED</h2>
           <p className="text-lg text-muted-foreground mb-6">{result.reason}</p>
 
           <Button
@@ -677,7 +656,7 @@ export default function KioskPage() {
             variant="outline"
             onClick={() => {
               setResult(null);
-              setPhase("checkout");
+              setPhase(activeRfid ? "browse" : "tap");
             }}
             className="px-8"
           >

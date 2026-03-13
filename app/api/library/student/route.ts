@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, bookIssuance, bookCopy, book } from "@/lib/db/schema";
+import { child, bookIssuance, bookCopy, book, parentControl } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
 // POST /api/library/student — look up child by RFID, return issued books
@@ -17,8 +17,18 @@ export async function POST(request: NextRequest) {
 
     // Look up child by RFID
     const children = await db
-      .select()
+      .select({
+        id: child.id,
+        name: child.name,
+        className: child.className,
+        section: child.section,
+        image: child.image,
+        preIssueBookId: parentControl.preIssueBookId,
+        preIssueExpiresAt: parentControl.preIssueExpiresAt,
+        preIssueDeclinedUntil: parentControl.preIssueDeclinedUntil,
+      })
       .from(child)
+      .leftJoin(parentControl, eq(parentControl.childId, child.id))
       .where(eq(child.rfidCardId, rfidCardId))
       .limit(1);
 
@@ -30,6 +40,53 @@ export async function POST(request: NextRequest) {
     }
 
     const studentChild = children[0];
+    const now = new Date();
+
+    let preIssueBook: {
+      id: string;
+      title: string;
+      author: string;
+      category: string;
+      expiresAt: string;
+    } | null = null;
+
+    if (studentChild.preIssueBookId && studentChild.preIssueExpiresAt) {
+      const expiresAt = new Date(studentChild.preIssueExpiresAt);
+      if (expiresAt <= now) {
+        await db
+          .update(parentControl)
+          .set({
+            preIssueBookId: null,
+            preIssueExpiresAt: null,
+            updatedAt: now,
+          })
+          .where(eq(parentControl.childId, studentChild.id));
+      } else {
+        const books = await db
+          .select({
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category,
+          })
+          .from(book)
+          .where(eq(book.id, studentChild.preIssueBookId))
+          .limit(1);
+
+        if (books.length > 0) {
+          preIssueBook = {
+            ...books[0],
+            expiresAt: expiresAt.toISOString(),
+          };
+        }
+      }
+    }
+
+    const issueBlockedUntil =
+      studentChild.preIssueDeclinedUntil &&
+      new Date(studentChild.preIssueDeclinedUntil) > now
+        ? studentChild.preIssueDeclinedUntil.toISOString()
+        : null;
 
     // Get active issuances (ISSUED or RETURN_PENDING)
     const issuances = await db
@@ -67,6 +124,8 @@ export async function POST(request: NextRequest) {
         section: studentChild.section,
         image: studentChild.image,
       },
+      preIssueBook,
+      issueBlockedUntil,
       issuedBooks: issuances.map((i) => ({
         issuanceId: i.id,
         issuedAt: i.issuedAt,

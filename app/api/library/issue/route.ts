@@ -6,8 +6,9 @@ import {
   bookCopy,
   bookIssuance,
   librarySetting,
+  parentControl,
 } from "@/lib/db/schema";
-import { eq, and, or, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -21,17 +22,27 @@ async function getSetting(key: string): Promise<string> {
   return rows[0]?.value ?? LIBRARY_SETTINGS_DEFAULTS[key] ?? "";
 }
 
+function safeParseJSON(val: string | null): string[] {
+  if (!val) return [];
+  try {
+    return JSON.parse(val);
+  } catch {
+    return [];
+  }
+}
+
 // POST /api/library/issue — issue a book copy to a child (RFID + accession#/ISBN)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { rfidCardId, scanInput } = body as {
+    const { rfidCardId, scanInput, preIssueAccepted } = body as {
       rfidCardId: string;
-      scanInput: string;
+      scanInput?: string;
+      preIssueAccepted?: boolean;
     };
 
     // ── Basic validation ──────────────────────────────
-    if (!rfidCardId || !scanInput) {
+    if (!rfidCardId || (!scanInput && !preIssueAccepted)) {
       return NextResponse.json(
         { success: false, reason: "Missing RFID card or book scan input" },
         { status: 400 }
@@ -62,6 +73,46 @@ export async function POST(request: NextRequest) {
     }
 
     const studentChild = children[0];
+    const now = new Date();
+
+    const controlRows = await db
+      .select({
+        blockedBookCategories: parentControl.blockedBookCategories,
+        blockedBookAuthors: parentControl.blockedBookAuthors,
+        blockedBookIds: parentControl.blockedBookIds,
+        preIssueBookId: parentControl.preIssueBookId,
+        preIssueExpiresAt: parentControl.preIssueExpiresAt,
+        preIssueDeclinedUntil: parentControl.preIssueDeclinedUntil,
+      })
+      .from(parentControl)
+      .where(eq(parentControl.childId, studentChild.id))
+      .limit(1);
+
+    const control = controlRows[0] ?? null;
+
+    if (control?.preIssueDeclinedUntil && new Date(control.preIssueDeclinedUntil) > now) {
+      return NextResponse.json(
+        {
+          success: false,
+          reason:
+            "You cannot issue a book right now. Please try again after 12 hours.",
+          blockedUntil: control.preIssueDeclinedUntil,
+        },
+        { status: 200 }
+      );
+    }
+
+    let activePreIssueBookId: string | null = null;
+    if (control?.preIssueBookId && control.preIssueExpiresAt) {
+      if (new Date(control.preIssueExpiresAt) > now) {
+        activePreIssueBookId = control.preIssueBookId;
+      } else {
+        await db
+          .update(parentControl)
+          .set({ preIssueBookId: null, preIssueExpiresAt: null, updatedAt: now })
+          .where(eq(parentControl.childId, studentChild.id));
+      }
+    }
 
     // ── 3. Check max books per student ────────────────
     const maxBooksStr = await getSetting("max_books_per_student");
@@ -87,7 +138,6 @@ export async function POST(request: NextRequest) {
     // ── 4. Check if student has overdue books ─────────
     const blockIfOverdue = await getSetting("block_issue_if_overdue");
     if (blockIfOverdue === "true") {
-      const now = new Date();
       const hasOverdue = activeIssuances.some(
         (i) => i.status === "ISSUED" && new Date(i.dueDate) < now
       );
@@ -104,49 +154,106 @@ export async function POST(request: NextRequest) {
     let resolvedCopy: typeof bookCopy.$inferSelect | null = null;
     let resolvedBook: typeof book.$inferSelect | null = null;
 
-    // Try accession number (exact match)
-    const copyByAccession = await db
-      .select()
-      .from(bookCopy)
-      .where(eq(bookCopy.accessionNumber, scanInput))
-      .limit(1);
+    if (activePreIssueBookId && !preIssueAccepted && scanInput) {
+      const preIssueBookRows = await db
+        .select({ title: book.title })
+        .from(book)
+        .where(eq(book.id, activePreIssueBookId))
+        .limit(1);
 
-    if (copyByAccession.length > 0) {
-      resolvedCopy = copyByAccession[0];
+      const preIssueTitle = preIssueBookRows[0]?.title ?? "requested book";
+      return NextResponse.json(
+        {
+          success: false,
+          reason: `Parent requested pre-issue for \"${preIssueTitle}\". Please respond to that first.`,
+        },
+        { status: 200 }
+      );
+    }
+
+    if (activePreIssueBookId && preIssueAccepted) {
       const books = await db
         .select()
         .from(book)
-        .where(eq(book.id, resolvedCopy.bookId))
+        .where(eq(book.id, activePreIssueBookId))
         .limit(1);
       resolvedBook = books[0] ?? null;
-    } else {
-      // Try ISBN — find a book, then pick first available copy
-      const booksByIsbn = await db
+
+      if (!resolvedBook) {
+        return NextResponse.json(
+          { success: false, reason: "Requested pre-issue book is no longer available." },
+          { status: 200 }
+        );
+      }
+
+      const availableCopies = await db
         .select()
-        .from(book)
-        .where(eq(book.isbn, scanInput))
+        .from(bookCopy)
+        .where(
+          and(eq(bookCopy.bookId, resolvedBook.id), eq(bookCopy.status, "AVAILABLE"))
+        )
         .limit(1);
 
-      if (booksByIsbn.length > 0) {
-        resolvedBook = booksByIsbn[0];
-        const availableCopies = await db
+      if (availableCopies.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            reason: `All copies of \"${resolvedBook.title}\" are currently issued.`,
+          },
+          { status: 200 }
+        );
+      }
+
+      resolvedCopy = availableCopies[0];
+    }
+
+    if (!resolvedBook || !resolvedCopy) {
+      // Try accession number (exact match)
+      const copyByAccession = await db
+        .select()
+        .from(bookCopy)
+        .where(eq(bookCopy.accessionNumber, scanInput ?? ""))
+        .limit(1);
+
+      if (copyByAccession.length > 0) {
+        resolvedCopy = copyByAccession[0];
+        const books = await db
           .select()
-          .from(bookCopy)
-          .where(
-            and(
-              eq(bookCopy.bookId, resolvedBook.id),
-              eq(bookCopy.status, "AVAILABLE")
-            )
-          )
+          .from(book)
+          .where(eq(book.id, resolvedCopy.bookId))
+          .limit(1);
+        resolvedBook = books[0] ?? null;
+      }
+
+      if (!resolvedBook || !resolvedCopy) {
+        // Try ISBN — find a book, then pick first available copy
+        const booksByIsbn = await db
+          .select()
+          .from(book)
+          .where(eq(book.isbn, scanInput ?? ""))
           .limit(1);
 
-        if (availableCopies.length > 0) {
-          resolvedCopy = availableCopies[0];
-        } else {
-          return NextResponse.json(
-            { success: false, reason: `All copies of "${resolvedBook.title}" are currently issued.` },
-            { status: 200 }
-          );
+        if (booksByIsbn.length > 0) {
+          resolvedBook = booksByIsbn[0];
+          const availableCopies = await db
+            .select()
+            .from(bookCopy)
+            .where(
+              and(
+                eq(bookCopy.bookId, resolvedBook.id),
+                eq(bookCopy.status, "AVAILABLE")
+              )
+            )
+            .limit(1);
+
+          if (availableCopies.length > 0) {
+            resolvedCopy = availableCopies[0];
+          } else {
+            return NextResponse.json(
+              { success: false, reason: `All copies of "${resolvedBook.title}" are currently issued.` },
+              { status: 200 }
+            );
+          }
         }
       }
     }
@@ -154,6 +261,33 @@ export async function POST(request: NextRequest) {
     if (!resolvedCopy || !resolvedBook) {
       return NextResponse.json(
         { success: false, reason: "Book not found. Please check the barcode/ISBN and try again." },
+        { status: 200 }
+      );
+    }
+
+    const blockedBookCategories = safeParseJSON(control?.blockedBookCategories ?? null);
+    const blockedBookAuthors = safeParseJSON(control?.blockedBookAuthors ?? null).map((a) =>
+      a.trim().toLowerCase()
+    );
+    const blockedBookIds = safeParseJSON(control?.blockedBookIds ?? null);
+
+    if (blockedBookIds.includes(resolvedBook.id)) {
+      return NextResponse.json(
+        { success: false, reason: "This book is blocked by parent controls." },
+        { status: 200 }
+      );
+    }
+
+    if (blockedBookCategories.includes(resolvedBook.category)) {
+      return NextResponse.json(
+        { success: false, reason: "This book category is blocked by parent controls." },
+        { status: 200 }
+      );
+    }
+
+    if (blockedBookAuthors.includes((resolvedBook.author || "").trim().toLowerCase())) {
+      return NextResponse.json(
+        { success: false, reason: "This author is blocked by parent controls." },
         { status: 200 }
       );
     }
@@ -192,7 +326,6 @@ export async function POST(request: NextRequest) {
     // ── 8. Calculate due date ─────────────────────────
     const issueDurationStr = await getSetting("issue_duration_days");
     const issueDurationDays = parseInt(issueDurationStr, 10) || 7;
-    const now = new Date();
     const dueDate = new Date(now);
     dueDate.setDate(dueDate.getDate() + issueDurationDays);
 
@@ -221,6 +354,18 @@ export async function POST(request: NextRequest) {
         updatedAt: now,
       })
       .where(eq(book.id, resolvedBook.id));
+
+    if (activePreIssueBookId && resolvedBook.id === activePreIssueBookId) {
+      await db
+        .update(parentControl)
+        .set({
+          preIssueBookId: null,
+          preIssueExpiresAt: null,
+          preIssueDeclinedUntil: null,
+          updatedAt: now,
+        })
+        .where(eq(parentControl.childId, studentChild.id));
+    }
 
     // ── 10. Broadcast SSE ─────────────────────────────
     broadcast("library-updated");

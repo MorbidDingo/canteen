@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -15,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -24,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddToCartButton } from "@/components/add-to-cart-button";
-import { useCartStore } from "@/lib/store/cart-store";
 import {
   MENU_CATEGORIES,
   MENU_CATEGORY_LABELS,
@@ -39,8 +36,6 @@ import {
   X,
   ArrowUpDown,
   Package,
-  ShoppingCart,
-  ArrowRight,
   Percent,
   Sparkles,
   Tag,
@@ -73,27 +68,30 @@ type SortOption =
   | "name-asc"
   | "name-desc";
 
+type CategoryFilter = "ALL" | MenuCategory;
+
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "default", label: "Default" },
-  { value: "price-asc", label: "Price: Low → High" },
-  { value: "price-desc", label: "Price: High → Low" },
-  { value: "name-asc", label: "Name: A → Z" },
-  { value: "name-desc", label: "Name: Z → A" },
+  { value: "price-asc", label: "Price: Low -> High" },
+  { value: "price-desc", label: "Price: High -> Low" },
+  { value: "name-asc", label: "Name: A -> Z" },
+  { value: "name-desc", label: "Name: Z -> A" },
 ];
 
-export function MenuClient({ items }: { items: MenuItem[] }) {
+export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [discountsOnly, setDiscountsOnly] = useState(false);
-  const cartItemCount = useCartStore((s) => s.getItemCount());
-  const cartTotal = useCartStore((s) => s.getTotal());
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
+  const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
 
   const discountedItems = useMemo(
     () => items.filter((i) => i.discountedPrice != null),
     [items],
   );
+
   const bestDiscount = useMemo(() => {
     if (discountedItems.length === 0) return null;
     return discountedItems.reduce((best, item) => {
@@ -103,23 +101,29 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
     }, discountedItems[0]);
   }, [discountedItems]);
 
-  // Compute price range from data
   const priceRange = useMemo(() => {
     if (items.length === 0) return { min: 0, max: 100 };
     const prices = items.map((i) => i.price);
     return { min: Math.min(...prices), max: Math.max(...prices) };
   }, [items]);
 
-  // Filter + search + sort
+  const categoryCounts = useMemo(() => {
+    return Object.values(MENU_CATEGORIES).reduce(
+      (acc, category) => {
+        acc[category] = items.filter((item) => item.category === category).length;
+        return acc;
+      },
+      {} as Record<MenuCategory, number>,
+    );
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     let result = [...items];
 
-    // Discounts-only filter
     if (discountsOnly) {
       result = result.filter((item) => item.discountedPrice != null);
     }
 
-    // Search by name & description
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
@@ -129,13 +133,15 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
       );
     }
 
-    // Price filter
     const maxP = parseFloat(maxPrice);
     if (!isNaN(maxP) && maxP > 0) {
       result = result.filter((item) => item.price <= maxP);
     }
 
-    // Sort
+    if (categoryFilter !== "ALL") {
+      result = result.filter((item) => item.category === categoryFilter);
+    }
+
     switch (sortBy) {
       case "price-asc":
         result.sort((a, b) => a.price - b.price);
@@ -149,46 +155,40 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
       case "name-desc":
         result.sort((a, b) => b.name.localeCompare(a.name));
         break;
+      default:
+        break;
     }
 
     return result;
-  }, [items, searchQuery, sortBy, maxPrice, discountsOnly]);
-
-  // Group by category
-  const grouped = Object.values(MENU_CATEGORIES).reduce(
-    (acc, cat) => {
-      acc[cat] = filteredItems.filter((item) => item.category === cat);
-      return acc;
-    },
-    {} as Record<MenuCategory, MenuItem[]>,
-  );
-
-  const firstNonEmptyCategory =
-    Object.entries(grouped).find(([, items]) => items.length > 0)?.[0] ||
-    "SNACKS";
+  }, [items, discountsOnly, searchQuery, maxPrice, categoryFilter, sortBy]);
 
   const hasActiveFilters =
-    searchQuery.trim() || maxPrice || sortBy !== "default" || discountsOnly;
-  const totalFiltered = filteredItems.length;
+    searchQuery.trim() ||
+    maxPrice ||
+    sortBy !== "default" ||
+    discountsOnly ||
+    categoryFilter !== "ALL";
 
   const clearFilters = () => {
     setSearchQuery("");
     setMaxPrice("");
     setSortBy("default");
     setDiscountsOnly(false);
+    setCategoryFilter("ALL");
   };
 
   return (
     <>
-      {/* Discount Banner */}
-      {discountedItems.length > 0 && !discountsOnly && (
-        <button
-          onClick={() => setDiscountsOnly(true)}
-          className="w-full mb-6 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 p-[1px] animate-fade-in"
-        >
-          <div className="rounded-[11px] bg-gradient-to-r from-emerald-500/90 via-teal-500/90 to-cyan-500/90 px-4 py-3 sm:px-6 sm:py-4 flex items-center justify-between gap-3 text-white">
+      {discountedItems.length > 0 && !discountsOnly && !dismissDiscountBanner && (
+        <div className="relative mb-6 overflow-hidden rounded-2xl border border-amber-200/70 bg-linear-to-r from-amber-400 via-yellow-300 to-amber-500 p-px shadow-[0_10px_24px_rgba(180,115,0,0.25)] animate-fade-in">
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_15%_30%,rgba(255,255,255,0.35),transparent_40%),radial-gradient(circle_at_85%_70%,rgba(255,255,255,0.25),transparent_45%)]" />
+          <div className="pointer-events-none absolute -left-1/3 top-0 h-full w-1/2 rotate-12 bg-linear-to-r from-transparent via-white/80 to-transparent animate-banner-glitter" />
+          <button
+            onClick={() => setDiscountsOnly(true)}
+            className="relative z-10 w-full rounded-[15px] bg-linear-to-r from-[#c9911c] via-[#e0ae2a] to-[#b97f14] px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 flex items-center justify-between gap-3 text-white text-left"
+          >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="shrink-0 rounded-full bg-white/20 p-2">
+              <div className="shrink-0 rounded-full bg-white/20 p-2 ring-1 ring-white/35">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div className="min-w-0 text-left">
@@ -197,36 +197,46 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                 </p>
                 {bestDiscount && (
                   <p className="text-xs sm:text-sm text-white/80 truncate">
-                    Save up to ₹{(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
+                    Save up to ₹
+                    {(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
                   </p>
                 )}
               </div>
             </div>
-            <div className="shrink-0 flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 text-xs sm:text-sm font-semibold">
+            <div className="shrink-0 flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 text-xs sm:text-sm font-semibold ring-1 ring-white/30">
               <Tag className="h-3.5 w-3.5" />
               View Deals
             </div>
-          </div>
-        </button>
-      )}
-
-      {/* Discount filter active indicator */}
-      {discountsOnly && (
-        <div className="flex items-center gap-2 mb-4 animate-fade-in">
-          <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white gap-1 py-1 px-3">
-            <Tag className="h-3 w-3" />
-            Showing discounted items only
-          </Badge>
-          <Button variant="ghost" size="sm" onClick={() => setDiscountsOnly(false)} className="text-xs h-7 gap-1">
-            <X className="h-3 w-3" />
-            Show All
+          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 z-20 h-8 w-8 rounded-full text-white hover:text-white hover:bg-black/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDismissDiscountBanner(true);
+            }}
+            aria-label="Dismiss discount banner"
+          >
+            <X className="h-4 w-4" />
           </Button>
         </div>
       )}
 
-      {/* Search & Filter Bar */}
+      {discountsOnly && (
+        <div className="flex items-center gap-2 mb-4 animate-fade-in justify-between w-full">
+          <Badge className="bg-gold-600 hover:bg-gold-700 text-gold gap-1 py-1 px-3">
+            <Tag className="h-3 w-3" />
+            Showing discounted items only
+          </Badge>
+          <Button variant='ghost' onClick={() => setDiscountsOnly(false)} className="">
+            <X className="bg-none" />
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-3 mb-6 animate-fade-in">
-        {/* Search row */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -258,13 +268,30 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
 
-        {/* Expandable filter panel */}
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Category</Label>
+          <Select
+            value={categoryFilter}
+            onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All Items ({items.length})</SelectItem>
+              {Object.values(MENU_CATEGORIES).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {MENU_CATEGORY_LABELS[value]} ({categoryCounts[value] ?? 0})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {showFilters && (
           <div className="flex flex-col sm:flex-row gap-3 p-3 rounded-lg border bg-muted/30 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex-1 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">
-                Max Price (₹)
-              </Label>
+              <Label className="text-xs text-muted-foreground">Max Price (₹)</Label>
               <Input
                 type="number"
                 placeholder={`Up to ₹${priceRange.max}`}
@@ -309,10 +336,9 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
           </div>
         )}
 
-        {/* Results count */}
         {hasActiveFilters && (
           <p className="text-xs text-muted-foreground animate-fade-in">
-            Showing {totalFiltered} of {items.length} items
+            Showing {filteredItems.length} of {items.length} items
             {searchQuery.trim() && (
               <>
                 {" "}
@@ -323,6 +349,9 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
                 &quot;
               </>
             )}
+            {categoryFilter !== "ALL" && (
+              <> in {MENU_CATEGORY_LABELS[categoryFilter]}</>
+            )}
             {maxPrice && !isNaN(parseFloat(maxPrice)) && (
               <> under ₹{parseFloat(maxPrice)}</>
             )}
@@ -330,7 +359,6 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
         )}
       </div>
 
-      {/* Menu Items */}
       {filteredItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
           <Search className="h-12 w-12 text-muted-foreground/30 mb-4" />
@@ -343,147 +371,90 @@ export function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
       ) : (
-        <Tabs defaultValue={firstNonEmptyCategory} className="w-full">
-          <TabsList className="w-full justify-start mb-4 overflow-x-auto overflow-y-hidden">
-            {Object.entries(MENU_CATEGORIES).map(([key, value]) => {
-              const Icon = categoryIcons[value];
-              const count = grouped[value]?.length || 0;
-              return (
-                <TabsTrigger
-                  key={key}
-                  value={value}
-                  className="gap-2"
-                  disabled={count === 0}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{MENU_CATEGORY_LABELS[value]}</span>
-                  {count > 0 && (
-                    <Badge variant="secondary" className="ml-1 text-xs">
-                      {count}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          {Object.entries(MENU_CATEGORIES).map(([key, value]) => (
-            <TabsContent key={key} value={value}>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {grouped[value]?.map((item, index) => (
-                  <Card
-                    key={item.id}
-                    className="flex flex-col card-interactive animate-fade-in-up"
-                    style={{ animationDelay: `${index * 60}ms` }}
-                  >
-                    <div className="relative h-32 sm:h-36 rounded-t-lg overflow-hidden bg-gradient-to-br from-muted/30 to-muted/80">
-                      {item.imageUrl ? (
-                        <Image
-                          src={item.imageUrl}
-                          alt={item.name}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          {(() => {
-                            const Icon =
-                              categoryIcons[item.category as MenuCategory];
-                            return (
-                              <Icon className="h-10 w-10 text-muted-foreground/40" />
-                            );
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-base">{item.name}</CardTitle>
-                        <div className="flex gap-1.5 items-center shrink-0">
-                          {item.availableUnits === 0 && (
-                            <Badge variant="destructive" className="text-[10px]">
-                              Sold Out
-                            </Badge>
-                          )}
-                          {item.availableUnits != null && item.availableUnits > 0 && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              {item.availableUnits} left
-                            </Badge>
-                          )}
-                          {item.discountedPrice != null ? (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
-                                <Percent className="h-2.5 w-2.5" />
-                                {item.discountInfo?.type === "PERCENTAGE"
-                                  ? `${item.discountInfo.value}% OFF`
-                                  : `₹${item.discountInfo?.value} OFF`}
-                              </Badge>
-                              <Badge variant="outline" className="shrink-0 font-bold text-sm">
-                                <span className="line-through text-muted-foreground text-xs mr-1">₹{item.price}</span>
-                                ₹{item.discountedPrice}
-                              </Badge>
-                            </div>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="shrink-0 font-bold text-sm"
-                            >
-                              ₹{item.price}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      {item.description && (
-                        <CardDescription className="text-sm line-clamp-2">
-                          {item.description}
-                        </CardDescription>
-                      )}
-                    </CardHeader>
-                    <CardContent className="flex-1" />
-                    <CardFooter>
-                      <AddToCartButton
-                        menuItemId={item.id}
-                        name={item.name}
-                        price={item.price}
-                        discountedPrice={item.discountedPrice}
-                        availableUnits={item.availableUnits}
-                      />
-                    </CardFooter>
-                  </Card>
-                ))}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredItems.map((item, index) => (
+            <Card
+              key={item.id}
+              className="flex flex-col card-interactive animate-fade-in-up"
+              style={{ animationDelay: `${index * 60}ms` }}
+            >
+              <div className="relative h-32 sm:h-36 rounded-t-lg overflow-hidden bg-linear-to-br from-muted/30 to-muted/80">
+                {item.imageUrl ? (
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    {(() => {
+                      const Icon = categoryIcons[item.category as MenuCategory];
+                      return <Icon className="h-10 w-10 text-muted-foreground/40" />;
+                    })()}
+                  </div>
+                )}
               </div>
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
-
-      {/* Floating Cart Bar */}
-      {cartItemCount > 0 && (
-        <div className="fixed bottom-14 md:bottom-0 left-0 right-0 z-50 animate-in slide-in-from-bottom-4 duration-300">
-          <div className="mx-auto max-w-lg px-4 pb-4">
-            <Link href="/cart">
-              <Button
-                size="lg"
-                className="w-full shadow-lg hover:shadow-xl transition-all gap-3 h-14 text-base"
-              >
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5" />
-                  <Badge
-                    variant="secondary"
-                    className="bg-white/20 text-white hover:bg-white/20 text-sm px-2"
-                  >
-                    {cartItemCount} {cartItemCount === 1 ? "item" : "items"}
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-base">{item.name}</CardTitle>
+                  <div className="flex gap-1.5 items-center shrink-0">
+                    {item.availableUnits === 0 && (
+                      <Badge variant="destructive" className="text-[10px]">
+                        Sold Out
+                      </Badge>
+                    )}
+                    {item.availableUnits != null && item.availableUnits > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        {item.availableUnits} left
+                      </Badge>
+                    )}
+                    {item.discountedPrice != null ? (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
+                          <Percent className="h-2.5 w-2.5" />
+                          {item.discountInfo?.type === "PERCENTAGE"
+                            ? `${item.discountInfo.value}% OFF`
+                            : `₹${item.discountInfo?.value} OFF`}
+                        </Badge>
+                        <Badge variant="outline" className="shrink-0 font-bold text-sm">
+                          <span className="line-through text-muted-foreground text-xs mr-1">₹{item.price}</span>
+                          ₹{item.discountedPrice}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="shrink-0 font-bold text-sm">
+                        ₹{item.price}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  {item.description ? (
+                    <CardDescription className="text-sm line-clamp-2">
+                      {item.description}
+                    </CardDescription>
+                  ) : (
+                    <CardDescription className="text-sm">&nbsp;</CardDescription>
+                  )}
+                  <Badge variant="secondary" className="text-[10px] shrink-0">
+                    {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
                   </Badge>
                 </div>
-                <span className="mx-auto font-semibold">Go to Cart</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-bold">₹{cartTotal.toFixed(2)}</span>
-                  <ArrowRight className="h-4 w-4" />
-                </div>
-              </Button>
-            </Link>
-          </div>
+              </CardHeader>
+              <CardContent className="flex-1" />
+              <CardFooter>
+                <AddToCartButton
+                  menuItemId={item.id}
+                  name={item.name}
+                  price={item.price}
+                  discountedPrice={item.discountedPrice}
+                  availableUnits={item.availableUnits}
+                />
+              </CardFooter>
+            </Card>
+          ))}
         </div>
       )}
     </>

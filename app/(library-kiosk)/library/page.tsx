@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { BOOK_CATEGORY_LABELS, type BookCategory } from "@/lib/constants";
+import { enqueueOfflineAction } from "@/lib/store/offline-db";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -61,9 +62,18 @@ type SearchBook = {
   availableCopies: number;
 };
 
+type PreIssueBook = {
+  id: string;
+  title: string;
+  author: string;
+  category: string;
+  expiresAt: string;
+};
+
 type TerminalPhase =
   | "idle"
   | "identified"
+  | "preissue"
   | "search"
   | "result";
 
@@ -86,6 +96,8 @@ export default function LibraryTerminalPage() {
   const [result, setResult] = useState<ActionResult | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [rfidCardId, setRfidCardId] = useState("");
+  const [preIssueBook, setPreIssueBook] = useState<PreIssueBook | null>(null);
+  const [issueBlockedUntil, setIssueBlockedUntil] = useState<string | null>(null);
 
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +114,8 @@ export default function LibraryTerminalPage() {
     setSearchQuery("");
     setResult(null);
     setRfidCardId("");
+    setPreIssueBook(null);
+    setIssueBlockedUntil(null);
   }, []);
 
   // ─── Inactivity auto-reset (30s) ──────────────────────
@@ -194,7 +208,14 @@ export default function LibraryTerminalPage() {
       setChildInfo(data.child);
       setIssuedBooks(data.issuedBooks);
       setRfidCardId(cardId);
-      setPhase("identified");
+      setPreIssueBook(data.preIssueBook ?? null);
+      setIssueBlockedUntil(data.issueBlockedUntil ?? null);
+
+      if (data.preIssueBook) {
+        setPhase("preissue");
+      } else {
+        setPhase("identified");
+      }
       resetInactivityTimer();
     } catch {
       toast.error("Failed to look up student");
@@ -217,10 +238,16 @@ export default function LibraryTerminalPage() {
     }
     setSearchLoading(true);
     try {
-      const res = await fetch(`/api/library/search?q=${encodeURIComponent(query)}`);
+      const params = new URLSearchParams({ q: query });
+      if (rfidCardId) params.set("rfidCardId", rfidCardId);
+
+      const res = await fetch(`/api/library/search?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
         setSearchResults(data.books);
+        if (data.blocked && data.reason) {
+          toast.error(data.reason);
+        }
       }
     } catch {
       toast.error("Search failed");
@@ -274,7 +301,87 @@ export default function LibraryTerminalPage() {
       });
       setPhase("result");
     } catch {
-      setResult({ success: false, message: "Failed to issue book" });
+      const queued = await enqueueOfflineAction({
+        type: "LIBRARY_ISSUE",
+        payload: { rfidCardId, scanInput },
+      });
+
+      setResult({
+        success: true,
+        message: `Saved offline (queue #${queued.id.slice(0, 6).toUpperCase()}). Will sync when network returns.`,
+        details: {
+          RFID: rfidCardId,
+          Scan: scanInput,
+          Mode: "Offline queued",
+        },
+      });
+      setPhase("result");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePreIssueResponse = async (accepted: boolean) => {
+    if (!rfidCardId) return;
+    setActionLoading(true);
+    try {
+      const responseRes = await fetch("/api/library/pre-issue-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rfidCardId, accepted }),
+      });
+
+      const responseData = await responseRes.json();
+      if (!responseData.success) {
+        setResult({
+          success: false,
+          message: responseData.reason || "Could not process pre-issue response.",
+        });
+        setPhase("result");
+        return;
+      }
+
+      if (!accepted) {
+        setResult({
+          success: true,
+          message:
+            responseData.message ||
+            "Okay, you cannot issue a book right now. Please try again after 12 hours.",
+        });
+        setPhase("result");
+        return;
+      }
+
+      const issueRes = await fetch("/api/library/issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rfidCardId, preIssueAccepted: true }),
+      });
+
+      const issueData = await issueRes.json();
+      if (!issueData.success) {
+        setResult({
+          success: false,
+          message: issueData.reason || "Pre-issue book could not be issued.",
+        });
+        setPhase("result");
+        return;
+      }
+
+      setResult({
+        success: true,
+        message: "Pre-issue book issued successfully!",
+        details: {
+          Title: issueData.issuance.bookTitle,
+          Author: issueData.issuance.bookAuthor,
+          "Accession #": issueData.issuance.accessionNumber,
+          "Due Date": new Date(issueData.issuance.dueDate).toLocaleDateString(),
+          Student: issueData.issuance.childName,
+        },
+      });
+      setPhase("result");
+    } catch {
+      setResult({ success: false, message: "Failed to process pre-issue action." });
       setPhase("result");
     } finally {
       setActionLoading(false);
@@ -316,7 +423,20 @@ export default function LibraryTerminalPage() {
       });
       setPhase("result");
     } catch {
-      setResult({ success: false, message: "Failed to return book" });
+      const queued = await enqueueOfflineAction({
+        type: "LIBRARY_RETURN",
+        payload: { rfidCardId, scanInput },
+      });
+
+      setResult({
+        success: true,
+        message: `Return saved offline (queue #${queued.id.slice(0, 6).toUpperCase()}). Will sync when network returns.`,
+        details: {
+          RFID: rfidCardId,
+          Scan: scanInput,
+          Mode: "Offline queued",
+        },
+      });
       setPhase("result");
     } finally {
       setActionLoading(false);
@@ -439,6 +559,57 @@ export default function LibraryTerminalPage() {
     );
   }
 
+  if (phase === "preissue" && childInfo && preIssueBook) {
+    return (
+      <div className="min-h-screen p-4 sm:p-6 max-w-2xl mx-auto space-y-4 sm:space-y-6">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">{childInfo.name}</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Parent requested pre-issue
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={resetTerminal} className="shrink-0">
+            <ArrowLeft className="h-4 w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Home</span>
+          </Button>
+        </div>
+
+        <Card>
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <p className="text-base sm:text-lg font-semibold">Do you want this book?</p>
+            <div className="rounded-lg border p-3 sm:p-4 space-y-1">
+              <p className="font-medium">{preIssueBook.title}</p>
+              <p className="text-sm text-muted-foreground">{preIssueBook.author}</p>
+              <p className="text-xs text-muted-foreground">
+                Request expires: {new Date(preIssueBook.expiresAt).toLocaleString("en-IN")}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="default"
+                onClick={() => handlePreIssueResponse(true)}
+                disabled={actionLoading}
+              >
+                {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Yes, issue it"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handlePreIssueResponse(false)}
+                disabled={actionLoading}
+              >
+                No, not now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // === IDENTIFIED PHASE (issued books view) ===
   if (phase === "identified" && childInfo) {
     return (
@@ -465,12 +636,26 @@ export default function LibraryTerminalPage() {
               setPhase("search");
               setBarcodeAction("issue");
             }}
+            disabled={Boolean(issueBlockedUntil)}
             className="gap-2 flex-1 bg-[#1a3a8f] hover:bg-[#1a3a8f]/90 text-sm sm:text-base"
           >
             <BookUp className="h-4 w-4 sm:h-5 sm:w-5" />
             Issue a Book
           </Button>
         </div>
+
+        {issueBlockedUntil && (
+          <Card className="border-amber-300 bg-amber-50">
+            <CardContent className="p-3 sm:p-4 text-sm">
+              <p className="font-medium text-amber-800">
+                You cannot issue a book right now.
+              </p>
+              <p className="text-amber-700 mt-1">
+                Try again after {new Date(issueBlockedUntil).toLocaleString("en-IN")}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Barcode scanner for returns */}
         {issuedBooks.length > 0 && (

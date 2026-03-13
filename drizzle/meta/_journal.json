@@ -15,6 +15,13 @@
       "when": 1773224023156,
       "tag": "0001_dazzling_ironclad",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773390000000,
+      "tag": "0002_yellow_sync_guard",
+      "breakpoints": true
     }
   ]
 }

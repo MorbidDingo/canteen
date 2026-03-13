@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -29,6 +30,7 @@ import {
   Loader2,
   User,
   Pencil,
+  ArrowLeft,
 } from "lucide-react";
 
 type Child = {
@@ -42,6 +44,7 @@ type Child = {
 };
 
 export default function ChildrenPage() {
+  const router = useRouter();
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -138,6 +141,17 @@ export default function ChildrenPage() {
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 w-fit gap-1.5"
+        onClick={() => router.push("/settings")}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Settings
+      </Button>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

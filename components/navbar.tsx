@@ -21,31 +21,25 @@ import {
   Menu,
   X,
   BarChart3,
-  Users,
-  Wallet,
-  Shield,
   CalendarClock,
   BookOpen,
-  User,
+  Settings,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 
 const canteenLinks = [
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },
-  { href: "/cart", label: "Cart", icon: ShoppingCart },
   { href: "/orders", label: "My Orders", icon: ClipboardList },
-  { href: "/children", label: "Children", icon: Users },
-  { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/controls", label: "Controls", icon: Shield },
   { href: "/pre-orders", label: "Pre-Orders", icon: CalendarClock },
 ];
 
 const libraryLinks = [
-  { href: "/library-history", label: "Library", icon: BookOpen },
+  { href: "/library-history", label: "History", icon: BookOpen },
 ];
 
 const adminLinks = [
@@ -67,6 +61,18 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
+  const [cartBounce, setCartBounce] = useState(false);
+  const prevCartCount = useRef(cartCount);
+
+  // Animate cart icon when items are added
+  useEffect(() => {
+    if (cartCount > prevCartCount.current) {
+      setCartBounce(true);
+      const t = setTimeout(() => setCartBounce(false), 400);
+      return () => clearTimeout(t);
+    }
+    prevCartCount.current = cartCount;
+  }, [cartCount]);
 
   const role = session?.user?.role;
   const isParent = role === "PARENT" || (role && !["ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR"].includes(role));
@@ -103,9 +109,11 @@ export function Navbar() {
       .slice(0, 2);
   };
 
+  const isSettingsPage = ["/settings", "/children", "/wallet", "/controls"].includes(pathname);
+
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
@@ -169,23 +177,98 @@ export function Navbar() {
                   >
                     <Icon className="h-4 w-4" />
                     {label}
-                    {href === "/cart" && cartCount > 0 && (
-                      <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
-                        {cartCount}
-                      </Badge>
-                    )}
                   </Button>
                 </Link>
               ))}
+            {/* Desktop: Cart link with badge */}
+            {session && isParent && parentMode === "canteen" && (
+              <>
+              <Link href="/cart">
+                <Button
+                  variant={pathname === "/cart" ? "secondary" : "ghost"}
+                  size="sm"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Cart
+                  {cartCount > 0 && (
+                    <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
+                      {cartCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+                                </>
+            )}
+            {/* Desktop: Settings links */}
+            {session && isParent && (
+              <>
+              <Link href="/settings">
+                <Button
+                  variant={isSettingsPage ? "secondary" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "gap-2 relative",
+                    isSettingsPage && "font-semibold",
+                  )}
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Button>
+              </Link>
+              <Link href="/wallet">
+                <Button
+                  variant={isSettingsPage ? "secondary" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "gap-2 relative",
+                    isSettingsPage && "font-semibold",
+                  )}
+                >
+                  <Wallet className="h-4 w-4" />
+                  Wallet
+                </Button>
+                </Link>
+                </>
+            )}
+                
           </nav>
+          
 
-          {/* Right side: auth */}
+          {/* Right side: cart + auth */}
           <div className="flex items-center gap-2">
+            {/* Mobile cart icon — canteen only */}
+            {session && isParent && parentMode === "canteen" && (
+              <>
+              <Link
+                href="/cart"
+                className="md:hidden relative inline-flex h-8 w-8 items-center justify-center rounded-full"
+              >
+                <ShoppingCart className={cn("h-5 w-5", cartBounce && "animate-bounce")} />
+                {cartCount > 0 && (
+                  <span
+                    className={cn(
+                      "absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] font-bold bg-primary text-primary-foreground rounded-full flex items-center justify-center transition-transform",
+                      cartBounce && "scale-125",
+                    )}
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
+
+              <Link
+                href="/wallet"
+                className="md:hidden relative inline-flex h-8 w-8 items-center justify-center rounded-full"
+              >
+                <Wallet className={cn("h-5 w-5", cartBounce && "animate-bounce")} />
+                                </Link>
+                </>
+            )}
             {isPending ? (
               <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
             ) : session ? (
               <>
-                {/* Admin keeps the avatar dropdown */}
+                {/* Admin keeps the avatar dropdown + hamburger */}
                 {isAdmin && (
                   <>
                     <DropdownMenu>
@@ -203,7 +286,7 @@ export function Navbar() {
                           <p className="text-sm font-medium">{session.user?.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {session.user?.email}
-                          </p>
+                            </p>
                         </div>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
@@ -244,29 +327,13 @@ export function Navbar() {
                   </>
                 )}
 
-                {/* Parent: hamburger contains user info + signout */}
-                {isParent && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden"
-                    onClick={() => setMobileOpen(!mobileOpen)}
-                  >
-                    {mobileOpen ? (
-                      <X className="h-5 w-5" />
-                    ) : (
-                      <Menu className="h-5 w-5" />
-                    )}
-                  </Button>
-                )}
-
-                {/* Desktop parent: just a small avatar with signout dropdown */}
+                {/* Parent mobile: circle with initials (replaces hamburger) */}
                 {isParent && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-full hidden md:inline-flex">
+                      <Button variant="ghost" size="icon" className="rounded-full">
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">
+                          <AvatarFallback className="text-xs font-semibold">
                             {getInitials(session.user?.name)}
                           </AvatarFallback>
                         </Avatar>
@@ -314,63 +381,6 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile slide-down nav (inside hamburger for parents) */}
-        {mobileOpen && session && isParent && (
-          <nav className="border-t md:hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="container mx-auto flex flex-col gap-1 px-4 py-2">
-              {/* User info */}
-              <div className="flex items-center gap-3 px-2 py-2 mb-1">
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(session.user?.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">{session.user?.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{session.user?.email}</p>
-                </div>
-              </div>
-              <div className="border-b mb-1" />
-
-              {/* Nav links for current mode */}
-              {links.map(({ href, label, icon: Icon }) => (
-                <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
-                  <Button
-                    variant={pathname === href ? "secondary" : "ghost"}
-                    className={cn(
-                      "w-full justify-start gap-2",
-                      pathname === href && "font-semibold",
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </Button>
-                </Link>
-              ))}
-
-              <div className="border-b my-1" />
-              {/* Sign out */}
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-                onClick={() => {
-                  setMobileOpen(false);
-                  signOut({
-                    fetchOptions: {
-                      onSuccess: () => {
-                        window.location.href = "/login";
-                      },
-                    },
-                  });
-                }}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </Button>
-            </div>
-          </nav>
-        )}
-
         {/* Admin mobile nav (existing behavior) */}
         {mobileOpen && session && isAdmin && (
           <nav className="border-t md:hidden animate-in fade-in slide-in-from-top-2 duration-200">
@@ -394,41 +404,64 @@ export function Navbar() {
         )}
       </header>
 
-      {/* Mobile bottom tab bar for parents — Canteen / Library toggle */}
+      {/* Mobile floating bottom nav for parents */}
       {session && isParent && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex">
+        <nav className="fixed bottom-2 left-4 right-4 z-50 md:hidden">
+          <div className="relative overflow-hidden rounded-[28px] border border-white/45 bg-white/45 px-2 py-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl supports-backdrop-filter:bg-white/20 dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10">
+            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/80" />
+            <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-black/5 dark:bg-white/10" />
+            <div className="pointer-events-none absolute -left-6 bottom-1 h-14 w-24 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
+            <div className="pointer-events-none absolute right-4 top-1 h-10 w-20 rounded-full bg-sky-200/35 blur-2xl dark:bg-sky-300/10" />
+            <div className="relative flex items-center justify-around gap-1">
+            {/* Canteen */}
             <Link
               href="/menu"
               className={cn(
-                "flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors",
-                parentMode === "canteen"
-                  ? "text-primary"
-                  : "text-muted-foreground",
+                "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
+                parentMode === "canteen" && !isSettingsPage
+                  ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
+                  : "text-slate-600 dark:text-slate-300",
               )}
             >
               <UtensilsCrossed className="h-5 w-5" />
-              <span className="text-[11px] font-medium">Canteen</span>
+              <span className="text-[10px] font-medium">Canteen</span>
             </Link>
+
+            {/* Library */}
             <Link
               href="/library-history"
               className={cn(
-                "flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors relative",
+                "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
                 parentMode === "library"
-                  ? "text-primary"
-                  : "text-muted-foreground",
+                  ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
+                  : "text-slate-600 dark:text-slate-300",
               )}
             >
               <BookOpen className="h-5 w-5" />
-              <span className="text-[11px] font-medium">Library</span>
+              <span className="text-[10px] font-medium">Library</span>
               {overdueCount > 0 && (
-                <Badge variant="destructive" className="absolute top-1 right-1/4 h-4 min-w-4 px-1 text-[9px] flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] font-bold bg-red-500 text-white rounded-full flex items-center justify-center">
                   {overdueCount}
-                </Badge>
+                </span>
               )}
             </Link>
+
+            {/* Settings (Children, Wallet, Controls) */}
+            <Link
+              href="/settings"
+              className={cn(
+                "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
+                isSettingsPage
+                  ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
+                  : "text-slate-600 dark:text-slate-300",
+              )}
+            >
+              <Settings className="h-5 w-5" />
+              <span className="text-[10px] font-medium">Settings</span>
+            </Link>
+            </div>
           </div>
-        </div>
+        </nav>
       )}
     </>
   );

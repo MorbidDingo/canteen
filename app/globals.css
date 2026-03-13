@@ -204,6 +204,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
+  padding-bottom: 65px;
 }
 
 /* Better touch targets */
@@ -240,6 +241,27 @@ html {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+@keyframes banner-glitter {
+  0% {
+    transform: translateX(-180%) rotate(12deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(260%) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+.animate-banner-glitter {
+  animation: banner-glitter 2.8s ease-in-out infinite;
 }
 
 button:hover {

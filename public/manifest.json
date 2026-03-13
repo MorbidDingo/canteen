@@ -1,0 +1,16 @@
+{
+  "name": "Venus Cafe",
+  "short_name": "VenusCafe",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "description": "Offline-first kiosk and library experience for Venus Cafe",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

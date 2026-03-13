@@ -119,6 +119,12 @@ export const parentControl = pgTable("parent_control", {
   perOrderLimit: doublePrecision("per_order_limit"),
   blockedCategories: text("blocked_categories").default("[]"),
   blockedItemIds: text("blocked_item_ids").default("[]"),
+  blockedBookCategories: text("blocked_book_categories").default("[]"),
+  blockedBookAuthors: text("blocked_book_authors").default("[]"),
+  blockedBookIds: text("blocked_book_ids").default("[]"),
+  preIssueBookId: text("pre_issue_book_id"),
+  preIssueExpiresAt: timestamp("pre_issue_expires_at"),
+  preIssueDeclinedUntil: timestamp("pre_issue_declined_until"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -133,7 +139,12 @@ export const preOrder = pgTable("pre_order", {
   parentId: text("parent_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  mode: text("mode", { enum: ["ONE_DAY", "SUBSCRIPTION"] })
+    .notNull()
+    .default("ONE_DAY"),
   scheduledDate: text("scheduled_date").notNull(),
+  subscriptionUntil: text("subscription_until"),
+  lastFulfilledDate: text("last_fulfilled_date"),
   status: text("status", { enum: ["PENDING", "FULFILLED", "EXPIRED", "CANCELLED"] })
     .notNull()
     .default("PENDING"),
@@ -307,6 +318,19 @@ export const auditLog = pgTable("audit_log", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const offlineSyncAction = pgTable("offline_sync_action", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  actionId: text("action_id").notNull().unique(),
+  actionType: text("action_type", {
+    enum: ["KIOSK_ORDER", "LIBRARY_ISSUE", "LIBRARY_RETURN"],
+  }).notNull(),
+  status: text("status", { enum: ["SUCCESS", "FAILED"] }).notNull().default("SUCCESS"),
+  response: text("response"),
+  processedAt: timestamp("processed_at").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
 
 export const auditLogRelations = relations(auditLog, ({ one }) => ({

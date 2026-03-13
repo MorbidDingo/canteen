@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { UtensilsCrossed, Loader2 } from "lucide-react";
-import { MenuClient } from "@/components/menu-client";
+import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
+import { Button } from "@/components/ui/button";
 
 interface MenuItem {
   id: string;
@@ -67,6 +69,19 @@ export default function MenuPage() {
         <p className="text-muted-foreground">
           Browse our menu and add items to your cart
         </p>
+      </div>
+
+      <div className="md:hidden mb-4 rounded-lg border p-1 inline-flex gap-1">
+        <Link href="/menu">
+          <Button type="button" variant="secondary" size="sm">
+            Menu
+          </Button>
+        </Link>
+        <Link href="/pre-orders">
+          <Button type="button" variant="ghost" size="sm">
+            Pre-Order
+          </Button>
+        </Link>
       </div>
 
       {items.length === 0 ? (
