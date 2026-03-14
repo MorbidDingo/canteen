@@ -47,14 +47,6 @@ export default function MenuPage() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-6">
-        <div className="mb-6 animate-fade-in">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Menu
-          </h1>
-          <p className="text-muted-foreground">
-            Browse our menu and add items to your cart
-          </p>
-        </div>
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>

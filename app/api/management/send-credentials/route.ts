@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth-server";
 import nodemailer from "nodemailer";
+import { runParallelForEach } from "@/lib/bulk-upload-engine";
+
+const DEFAULT_GMAIL_CONCURRENCY = 3;
+const DEFAULT_SMTP_CONCURRENCY = 6;
 
 // POST — send login credentials to parents
 export async function POST(request: NextRequest) {
@@ -12,6 +16,11 @@ export async function POST(request: NextRequest) {
   const transporter =
     process.env.SMTP_USER && process.env.SMTP_PASS
       ? nodemailer.createTransport({
+          pool: true,
+          maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 6),
+          maxMessages: Number(process.env.SMTP_MAX_MESSAGES || 100),
+          rateDelta: Number(process.env.SMTP_RATE_DELTA_MS || 1000),
+          rateLimit: Number(process.env.SMTP_RATE_LIMIT || 20),
           host: process.env.SMTP_HOST || "smtp.gmail.com",
           port: Number(process.env.SMTP_PORT || 587),
           secure: process.env.SMTP_SECURE === "true",
@@ -40,9 +49,15 @@ export async function POST(request: NextRequest) {
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    const results: { email: string; success: boolean; error?: string }[] = [];
+    const results: { email: string; success: boolean; error?: string }[] = new Array(credentials.length);
+    const host = (process.env.SMTP_HOST || "smtp.gmail.com").toLowerCase();
+    const isGmailHost = host.includes("gmail");
+    const sendConcurrency = Math.max(
+      1,
+      Number(process.env.BULK_EMAIL_CONCURRENCY || (isGmailHost ? DEFAULT_GMAIL_CONCURRENCY : DEFAULT_SMTP_CONCURRENCY)),
+    );
 
-    for (const cred of credentials) {
+    await runParallelForEach(credentials, sendConcurrency, async (cred, index) => {
       try {
         await transporter.sendMail({
           from:
@@ -67,21 +82,21 @@ export async function POST(request: NextRequest) {
             </div>
           `,
         });
-        results.push({ email: cred.email, success: true });
+        results[index] = { email: cred.email, success: true };
       } catch (err) {
         console.error(`Failed to send credentials to ${cred.email}:`, err);
-        results.push({
+        results[index] = {
           email: cred.email,
           success: false,
           error: err instanceof Error ? err.message : "Send failed",
-        });
+        };
       }
-    }
+    });
 
     const sent = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
 
-    return NextResponse.json({ sent, failed, results });
+    return NextResponse.json({ sent, failed, concurrency: sendConcurrency, providerHost: host, results });
   } catch (error) {
     console.error("Send credentials error:", error);
     return NextResponse.json({ error: "Failed to send credentials" }, { status: 500 });

@@ -27,6 +27,12 @@ interface SummaryData {
     paidAmount: number;
     unpaidAmount: number;
   };
+  preOrders?: {
+    oneDayCount: number;
+    subscriptionCount: number;
+    totalPlannedItems: number;
+    topDemandItems: { menuItemId: string; name: string; quantity: number }[];
+  };
 }
 
 export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl?: string }) {
@@ -128,7 +134,7 @@ export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl
   return (
     <div className="space-y-3 mb-6 animate-in fade-in slide-in-from-top-2 duration-500">
       {/* Main stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {stats.map(({ label, value, icon: Icon, color, bgColor }) => (
           <Card key={label} className="overflow-hidden">
             <CardContent className="py-3 px-4">
@@ -146,6 +152,48 @@ export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl
             </CardContent>
           </Card>
         ))}
+
+        <Card className="overflow-hidden">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg p-2 bg-[#1a3a8f]/10">
+                <ShoppingCart className="h-4 w-4 text-[#1a3a8f]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Pre-Orders Today</p>
+                <p className="text-sm font-bold truncate">{summary.preOrders?.oneDayCount ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg p-2 bg-[#2eab57]/10">
+                <Clock className="h-4 w-4 text-[#2eab57]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Subscriptions Active</p>
+                <p className="text-sm font-bold truncate">{summary.preOrders?.subscriptionCount ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardContent className="py-3 px-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg p-2 bg-[#f58220]/10">
+                <ChefHat className="h-4 w-4 text-[#f58220]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">Planned Prep Qty</p>
+                <p className="text-sm font-bold truncate">{summary.preOrders?.totalPlannedItems ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Status breakdown — compact row */}

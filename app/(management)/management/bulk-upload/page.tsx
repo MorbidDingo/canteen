@@ -21,6 +21,8 @@ import {
   Send,
   Download,
 } from "lucide-react";
+import { BulkUploadLogPanel } from "@/components/bulk-upload-log-panel";
+import { BulkUploadStatusPanel, type UploadStage } from "@/components/bulk-upload-status-panel";
 
 interface UploadResult {
   row: number;
@@ -45,14 +47,77 @@ interface UploadSummary {
 export default function BulkUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [statusText, setStatusText] = useState("Waiting for file");
+  const [showAllResults, setShowAllResults] = useState(false);
   const [results, setResults] = useState<UploadResult[] | null>(null);
   const [summary, setSummary] = useState<UploadSummary | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     { row: number; error: string }[] | null
   >(null);
+  const [liveLogs, setLiveLogs] = useState<
+    { row: number; status: "created" | "skipped" | "error"; message: string; processed: number; total: number }[]
+  >([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadInFlightRef = useRef(false);
+
+  const stageOrder = [
+    { key: "upload", label: "Upload" },
+    { key: "parsing", label: "Parse" },
+    { key: "validating", label: "Validate" },
+    { key: "preloading", label: "Preload" },
+    { key: "creating-parents", label: "Parents" },
+    { key: "creating-students", label: "Students" },
+    { key: "finalizing", label: "Finalize" },
+  ] as const;
+
+  const [stages, setStages] = useState<UploadStage[]>(
+    stageOrder.map((s, idx) => ({
+      key: s.key,
+      label: s.label,
+      state: idx === 0 ? "active" : "pending",
+      progress: idx === 0 ? 0 : 0,
+    })),
+  );
+
+  function advanceStage(stageKey: string, message?: string, progress?: number) {
+    setStages((prev) => {
+      const targetIndex = prev.findIndex((s) => s.key === stageKey);
+      if (targetIndex < 0) return prev;
+      return prev.map((s, idx) => {
+        if (idx < targetIndex) return { ...s, state: "done", progress: 100 };
+        if (idx === targetIndex) {
+          const nextProgress = progress == null ? Math.max(s.progress ?? 0, 5) : Math.max(0, Math.min(100, progress));
+          return { ...s, state: nextProgress >= 100 ? "done" : "active", progress: nextProgress };
+        }
+        return { ...s, state: "pending", progress: 0 };
+      });
+    });
+    if (message) setStatusText(message);
+  }
+
+  function getNewParentCredentials() {
+    if (!results) return [] as { email: string; password: string; parentName: string }[];
+
+    const seen = new Set<string>();
+    return results
+      .filter((r) => r.status === "created" && r.isNewParent && r.parentEmail && r.password)
+      .filter((r) => {
+        if (seen.has(r.parentEmail!)) return false;
+        seen.add(r.parentEmail!);
+        return true;
+      })
+      .map((r) => ({
+        email: r.parentEmail!,
+        password: r.password!,
+        parentName: r.parentName,
+      }));
+  }
 
   async function handleUpload() {
+    if (uploadInFlightRef.current) return;
+
     const file = fileRef.current?.files?.[0];
     if (!file) {
       toast.error("Please select a file");
@@ -65,64 +130,122 @@ export default function BulkUploadPage() {
       return;
     }
 
+    uploadInFlightRef.current = true;
     setUploading(true);
     setResults(null);
     setSummary(null);
     setValidationErrors(null);
+    setShowAllResults(false);
+    setLiveLogs([]);
+    setUploadPercent(0);
+    setStatusText("Uploading file");
+    setStages(stageOrder.map((s, idx) => ({ key: s.key, label: s.label, state: idx === 0 ? "active" : "pending", progress: 0 })));
+
+    toast.info(`Uploading ${file.name}...`);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      await new Promise<void>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append("file", file);
 
-      const res = await fetch("/api/management/bulk-upload", {
-        method: "POST",
-        body: formData,
+        const xhr = new XMLHttpRequest();
+        let responseCursor = 0;
+        let buffer = "";
+
+        xhr.open("POST", "/api/management/bulk-upload?mode=stream", true);
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const pct = Math.round((event.loaded / event.total) * 100);
+          setUploadPercent(pct);
+          setStages((prev) =>
+            prev.map((s, idx) =>
+              idx === 0 ? { ...s, state: pct >= 100 ? "done" : "active", progress: pct } : s,
+            ),
+          );
+          if (pct >= 100) {
+            setStatusText("Upload complete, starting processing");
+            advanceStage("parsing", undefined, 5);
+          }
+        };
+
+        const parseSseChunk = (chunkText: string) => {
+          buffer += chunkText;
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            const eventLine = chunk.split("\n").find((line) => line.startsWith("event:"));
+            const dataLine = chunk.split("\n").find((line) => line.startsWith("data:"));
+            if (!eventLine || !dataLine) continue;
+
+            const event = eventLine.replace("event:", "").trim();
+            const payload = JSON.parse(dataLine.replace("data:", "").trim());
+
+            if (event === "stage") {
+              advanceStage(payload.stage, payload.message, payload.progress);
+            }
+
+            if (event === "row") {
+              advanceStage("creating-students", "Processing row logs");
+              setLiveLogs((prev) => [
+                ...prev,
+                {
+                  row: payload.row,
+                  status: payload.status,
+                  message: payload.message,
+                  processed: payload.processed,
+                  total: payload.total,
+                },
+              ]);
+            }
+
+            if (event === "done") {
+              setStages((prev) => prev.map((s) => ({ ...s, state: "done" })));
+              setStatusText("Completed");
+              setSummary(payload.summary);
+              setResults(payload.results);
+              toast.success(`${payload.summary.created} created, ${payload.summary.skipped} skipped, ${payload.summary.errors} errors`);
+            }
+
+            if (event === "error") {
+              toast.error(payload.message || "Upload failed");
+            }
+          }
+        };
+
+        xhr.onprogress = () => {
+          const nextText = xhr.responseText.slice(responseCursor);
+          responseCursor = xhr.responseText.length;
+          if (nextText) parseSseChunk(nextText);
+        };
+
+        xhr.onload = () => {
+          const nextText = xhr.responseText.slice(responseCursor);
+          if (nextText) parseSseChunk(nextText);
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadPercent(100);
+            resolve();
+            return;
+          }
+
+          reject(new Error("Upload failed"));
+        };
+
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(formData);
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.errors) {
-          setValidationErrors(data.errors);
-          toast.error(`${data.errors.length} validation error(s) found`);
-        } else {
-          toast.error(data.error || "Upload failed");
-        }
-        return;
-      }
-
-      setSummary(data.summary);
-      setResults(data.results);
-      toast.success(
-        `${data.summary.created} created, ${data.summary.skipped} skipped, ${data.summary.errors} errors`,
-      );
     } catch {
       toast.error("Failed to upload file");
     } finally {
+      uploadInFlightRef.current = false;
       setUploading(false);
     }
   }
 
   async function handleSendCredentials() {
-    if (!results) return;
-
-    const newParents = results.filter(
-      (r) => r.status === "created" && r.isNewParent && r.parentEmail && r.password,
-    );
-
-    // Deduplicate by email
-    const seen = new Set<string>();
-    const credentials = newParents
-      .filter((r) => {
-        if (seen.has(r.parentEmail!)) return false;
-        seen.add(r.parentEmail!);
-        return true;
-      })
-      .map((r) => ({
-        email: r.parentEmail!,
-        password: r.password!,
-        parentName: r.parentName,
-      }));
+    const credentials = getNewParentCredentials();
 
     if (credentials.length === 0) {
       toast.info("No new parent credentials to send");
@@ -152,6 +275,29 @@ export default function BulkUploadPage() {
     }
   }
 
+  function handleDownloadCredentials() {
+    const credentials = getNewParentCredentials();
+    if (credentials.length === 0) {
+      toast.info("No new parent credentials to download");
+      return;
+    }
+
+    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const header = ["parentName", "email", "password"];
+    const lines = [
+      header.join(","),
+      ...credentials.map((c) => [escapeCell(c.parentName), escapeCell(c.email), escapeCell(c.password)].join(",")),
+    ];
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `parent_credentials_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function handleDownloadTemplate() {
     const header = "student,parent,email,gr,class,section";
     const sampleRow = "John Doe,Jane Doe,jane@example.com,GR001,5,A";
@@ -172,6 +318,7 @@ export default function BulkUploadPage() {
           .map((r) => r.parentEmail),
       ).size
     : 0;
+  const visibleResults = results ? (showAllResults ? results : results.slice(0, 50)) : [];
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8 space-y-6">
@@ -197,6 +344,7 @@ export default function BulkUploadPage() {
                 ref={fileRef}
                 type="file"
                 accept=".xlsx,.xls,.csv"
+                onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name ?? "")}
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#1a3a8f]/10 file:text-[#1a3a8f] hover:file:bg-[#1a3a8f]/20 cursor-pointer"
               />
             </div>
@@ -211,7 +359,7 @@ export default function BulkUploadPage() {
               </Button>
               <Button
                 onClick={handleUpload}
-                disabled={uploading}
+                disabled={uploading || !selectedFileName}
                 className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
               >
                 {uploading ? (
@@ -224,13 +372,24 @@ export default function BulkUploadPage() {
             </div>
           </div>
 
+          {selectedFileName ? (
+            <p className="text-xs text-muted-foreground">Selected file: {selectedFileName}</p>
+          ) : null}
+
           <p className="text-xs text-muted-foreground">
             If an email is provided and no parent exists with that email, a new
             parent account is created with a random password. Students with
-            duplicate GR numbers are skipped. Max 500 rows.
+            duplicate GR numbers are skipped. Supports 2000+ rows.
           </p>
         </CardContent>
       </Card>
+
+      {uploading || liveLogs.length > 0 ? (
+        <>
+          <BulkUploadStatusPanel uploadPercent={uploadPercent} stages={stages} statusText={statusText} />
+          <BulkUploadLogPanel logs={liveLogs} />
+        </>
+      ) : null}
 
       {/* Validation Errors */}
       {validationErrors && validationErrors.length > 0 && (
@@ -302,18 +461,28 @@ export default function BulkUploadPage() {
                 Send login credentials via email to the new parents
               </p>
             </div>
-            <Button
-              onClick={handleSendCredentials}
-              disabled={sending}
-              className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
-            >
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              ) : (
-                <Send className="h-4 w-4 mr-1" />
-              )}
-              {sending ? "Sending..." : "Send Credentials"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleSendCredentials}
+                disabled={sending || uploading}
+                className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
+              >
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Send className="h-4 w-4 mr-1" />
+                )}
+                {sending ? "Sending..." : "Send Credentials"}
+              </Button>
+              <Button
+                onClick={handleDownloadCredentials}
+                variant="outline"
+                disabled={uploading || sending}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Download Credentials
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -323,8 +492,18 @@ export default function BulkUploadPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">Upload Results</CardTitle>
+            <CardDescription>
+              Showing {visibleResults.length} of {results.length} results.
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            {results.length > 50 ? (
+              <div className="mb-3">
+                <Button variant="outline" size="sm" onClick={() => setShowAllResults((v) => !v)}>
+                  {showAllResults ? "Show less" : `Show all ${results.length} results`}
+                </Button>
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -338,7 +517,7 @@ export default function BulkUploadPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((r, i) => (
+                  {visibleResults.map((r, i) => (
                     <tr key={i} className="border-b last:border-0">
                       <td className="py-2 px-2 text-muted-foreground">
                         {r.row}

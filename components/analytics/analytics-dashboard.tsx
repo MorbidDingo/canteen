@@ -96,6 +96,9 @@ interface OverallSummary {
   cancelledOrders: number;
   paidTotal: number;
   unpaidTotal: number;
+  oneDayPreOrdersToday?: number;
+  subscriptionsToday?: number;
+  plannedPrepItemsToday?: number;
   days: number;
 }
 
@@ -177,7 +180,7 @@ interface DiscountRecord {
 function MiniBarChart({ data, max }: { data: number[]; max: number }) {
   const barMax = max || 1;
   return (
-    <div className="flex items-end gap-[2px] h-8">
+    <div className="flex h-8 items-end gap-0.5">
       {data.map((val, i) => (
         <div
           key={i}
@@ -391,7 +394,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
         </div>
         <div className="flex items-center gap-2">
           <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-35">
               <Calendar className="h-4 w-4 mr-1.5" />
               <SelectValue />
             </SelectTrigger>
@@ -421,8 +424,8 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
       ) : overall ? (
         <div className="space-y-6">
           {/* ─── Summary Cards ─────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in">
-            <Card className="bg-gradient-to-br from-indigo-500/5 to-transparent border-indigo-200/50">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 animate-fade-in">
+            <Card className="bg-linear-to-br from-indigo-500/5 to-transparent border-indigo-200/50">
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <ShoppingCart className="h-3.5 w-3.5" />
@@ -435,7 +438,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-violet-500/5 to-transparent border-violet-200/50">
+            <Card className="bg-linear-to-br from-violet-500/5 to-transparent border-violet-200/50">
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <IndianRupee className="h-3.5 w-3.5" />
@@ -450,7 +453,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-emerald-500/5 to-transparent border-emerald-200/50">
+            <Card className="bg-linear-to-br from-emerald-500/5 to-transparent border-emerald-200/50">
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
@@ -462,7 +465,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-amber-500/5 to-transparent border-amber-200/50">
+            <Card className="bg-linear-to-br from-amber-500/5 to-transparent border-amber-200/50">
               <CardContent className="pt-4 pb-3 px-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <XCircle className="h-3.5 w-3.5 text-amber-500" />
@@ -470,6 +473,33 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
                 </div>
                 <p className="text-2xl font-bold text-amber-600">
                   ₹{overall.unpaidTotal.toLocaleString("en-IN")}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-linear-to-br from-sky-500/5 to-transparent border-sky-200/50">
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+                  <Calendar className="h-3.5 w-3.5 text-sky-600" />
+                  Pre-Orders Today
+                </div>
+                <p className="text-2xl font-bold text-sky-700">
+                  {overall.oneDayPreOrdersToday ?? 0}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-linear-to-br from-teal-500/5 to-transparent border-teal-200/50">
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+                  <Users className="h-3.5 w-3.5 text-teal-600" />
+                  Subscriptions Today
+                </div>
+                <p className="text-2xl font-bold text-teal-700">
+                  {overall.subscriptionsToday ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Prep qty {overall.plannedPrepItemsToday ?? 0}
                 </p>
               </CardContent>
             </Card>
@@ -579,7 +609,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <CardTitle className="text-base">Item Daily Sales</CardTitle>
                     <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-50">
                         <SelectValue placeholder="Select item..." />
                       </SelectTrigger>
                       <SelectContent>
@@ -682,7 +712,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
                 </div>
                 <div className="flex items-center gap-2">
                   <Select value={recFilter} onValueChange={setRecFilter}>
-                    <SelectTrigger className="w-[130px]">
+                    <SelectTrigger className="w-32.5">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -797,7 +827,7 @@ export default function AnalyticsDashboard({ readOnly = false }: { readOnly?: bo
                                   {d.mode}
                                 </Badge>
                               </td>
-                              <td className="py-2 pr-3 text-xs text-muted-foreground max-w-[200px] truncate">
+                              <td className="max-w-50 truncate py-2 pr-3 text-xs text-muted-foreground">
                                 {d.reason || "—"}
                               </td>
                               <td className="py-2 pr-3 text-center">

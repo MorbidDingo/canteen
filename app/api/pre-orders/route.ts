@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { preOrder, preOrderItem, child, menuItem, parentControl, discount } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
+import { broadcast } from "@/lib/sse";
 
 const MIN_PREORDER_VALUE = 60;
 const MIN_SUBSCRIPTION_DAYS = 3;
@@ -252,6 +253,8 @@ export async function POST(request: Request) {
         quantity: item.quantity,
       }))
     );
+
+    broadcast("orders-updated");
 
     return NextResponse.json({ success: true, id: created.id });
   } catch {

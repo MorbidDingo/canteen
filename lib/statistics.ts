@@ -1,6 +1,73 @@
 import { db } from "@/lib/db";
-import { order, orderItem, menuItem, user } from "@/lib/db/schema";
-import { gte, eq, sql } from "drizzle-orm";
+import { order, orderItem, menuItem, user, preOrder, preOrderItem } from "@/lib/db/schema";
+import { gte, eq, and, lte, or, isNull, ne, inArray } from "drizzle-orm";
+
+async function getTodayPreOrderDemand() {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const activeToday = await db
+    .select({ id: preOrder.id, mode: preOrder.mode })
+    .from(preOrder)
+    .where(
+      and(
+        eq(preOrder.status, "PENDING"),
+        or(
+          and(eq(preOrder.mode, "ONE_DAY"), eq(preOrder.scheduledDate, today)),
+          and(
+            eq(preOrder.mode, "SUBSCRIPTION"),
+            lte(preOrder.scheduledDate, today),
+            or(isNull(preOrder.subscriptionUntil), gte(preOrder.subscriptionUntil, today)),
+            or(isNull(preOrder.lastFulfilledDate), ne(preOrder.lastFulfilledDate, today)),
+          ),
+        ),
+      ),
+    );
+
+  if (activeToday.length === 0) {
+    return {
+      oneDayCount: 0,
+      subscriptionCount: 0,
+      totalPlannedItems: 0,
+      demandByItem: [] as Array<{ menuItemId: string; name: string; quantity: number }>,
+    };
+  }
+
+  const preOrderIds = activeToday.map((row) => row.id);
+  const modeById = new Map(activeToday.map((row) => [row.id, row.mode]));
+
+  const items = await db
+    .select({
+      preOrderId: preOrderItem.preOrderId,
+      menuItemId: preOrderItem.menuItemId,
+      quantity: preOrderItem.quantity,
+      name: menuItem.name,
+    })
+    .from(preOrderItem)
+    .innerJoin(menuItem, eq(menuItem.id, preOrderItem.menuItemId))
+    .where(inArray(preOrderItem.preOrderId, preOrderIds));
+
+  const demandMap = new Map<string, { menuItemId: string; name: string; quantity: number }>();
+  for (const item of items) {
+    const current = demandMap.get(item.menuItemId) ?? {
+      menuItemId: item.menuItemId,
+      name: item.name,
+      quantity: 0,
+    };
+    current.quantity += item.quantity;
+    demandMap.set(item.menuItemId, current);
+  }
+
+  const oneDayCount = activeToday.filter((row) => modeById.get(row.id) === "ONE_DAY").length;
+  const subscriptionCount = activeToday.filter((row) => modeById.get(row.id) === "SUBSCRIPTION").length;
+  const demandByItem = Array.from(demandMap.values()).sort((a, b) => b.quantity - a.quantity);
+
+  return {
+    oneDayCount,
+    subscriptionCount,
+    totalPlannedItems: demandByItem.reduce((sum, row) => sum + row.quantity, 0),
+    demandByItem,
+  };
+}
 
 export async function getStatistics(days: number) {
   const now = new Date();
@@ -129,6 +196,8 @@ export async function getStatistics(days: number) {
 
   // ─── 3. Overall summary ──────────────────────────────
   const activeOrders = allOrders.filter((o) => o.status !== "CANCELLED");
+  const preOrderDemand = await getTodayPreOrderDemand();
+
   const overallSummary = {
     totalOrders: allOrders.length,
     totalRevenue: Math.round(activeOrders.reduce((s, o) => s + o.totalAmount, 0) * 100) / 100,
@@ -139,6 +208,9 @@ export async function getStatistics(days: number) {
     cancelledOrders: allOrders.filter((o) => o.status === "CANCELLED").length,
     paidTotal: Math.round(activeOrders.filter((o) => o.paymentStatus === "PAID").reduce((s, o) => s + o.totalAmount, 0) * 100) / 100,
     unpaidTotal: Math.round(activeOrders.filter((o) => o.paymentStatus === "UNPAID").reduce((s, o) => s + o.totalAmount, 0) * 100) / 100,
+    oneDayPreOrdersToday: preOrderDemand.oneDayCount,
+    subscriptionsToday: preOrderDemand.subscriptionCount,
+    plannedPrepItemsToday: preOrderDemand.totalPlannedItems,
     days,
   };
 
@@ -202,6 +274,7 @@ export async function getSummary() {
   const unpaidCount = orders.filter((o) => o.paymentStatus === "UNPAID" && o.status !== "CANCELLED").length;
   const paidAmount = orders.filter((o) => o.paymentStatus === "PAID" && o.status !== "CANCELLED").reduce((sum, o) => sum + o.totalAmount, 0);
   const unpaidAmount = orders.filter((o) => o.paymentStatus === "UNPAID" && o.status !== "CANCELLED").reduce((sum, o) => sum + o.totalAmount, 0);
+  const preOrderDemand = await getTodayPreOrderDemand();
 
   return {
     summary: {
@@ -209,6 +282,12 @@ export async function getSummary() {
       totalRevenue,
       byStatus,
       payment: { paidCount, unpaidCount, paidAmount, unpaidAmount },
+      preOrders: {
+        oneDayCount: preOrderDemand.oneDayCount,
+        subscriptionCount: preOrderDemand.subscriptionCount,
+        totalPlannedItems: preOrderDemand.totalPlannedItems,
+        topDemandItems: preOrderDemand.demandByItem.slice(0, 5),
+      },
     },
   };
 }

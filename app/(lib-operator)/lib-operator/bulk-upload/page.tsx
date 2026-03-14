@@ -23,6 +23,8 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { BulkUploadLogPanel } from "@/components/bulk-upload-log-panel";
+import { BulkUploadStatusPanel, type UploadStage } from "@/components/bulk-upload-status-panel";
 
 interface UploadResult {
   row: number;
@@ -44,12 +46,49 @@ interface UploadSummary {
 
 export default function LibOperatorBulkUploadPage() {
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
+  const [statusText, setStatusText] = useState("Waiting for file");
+  const [showAllResults, setShowAllResults] = useState(false);
   const [results, setResults] = useState<UploadResult[] | null>(null);
   const [summary, setSummary] = useState<UploadSummary | null>(null);
   const [validationErrors, setValidationErrors] = useState<
     { row: number; error: string }[] | null
   >(null);
+  const [liveLogs, setLiveLogs] = useState<
+    { row: number; status: "created" | "skipped" | "error"; message: string; processed: number; total: number }[]
+  >([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const stageOrder = [
+    { key: "upload", label: "Upload" },
+    { key: "parsing", label: "Parse" },
+    { key: "validating", label: "Validate" },
+    { key: "preloading", label: "Preload" },
+    { key: "matching-books", label: "Match" },
+    { key: "creating-copies", label: "Create" },
+    { key: "recounting", label: "Recount" },
+    { key: "finalizing", label: "Finalize" },
+  ] as const;
+
+  const [stages, setStages] = useState<UploadStage[]>(
+    stageOrder.map((s, idx) => ({ key: s.key, label: s.label, state: idx === 0 ? "active" : "pending", progress: 0 })),
+  );
+
+  function advanceStage(stageKey: string, message?: string, progress?: number) {
+    setStages((prev) => {
+      const targetIndex = prev.findIndex((s) => s.key === stageKey);
+      if (targetIndex < 0) return prev;
+      return prev.map((s, idx) => {
+        if (idx < targetIndex) return { ...s, state: "done", progress: 100 };
+        if (idx === targetIndex) {
+          const nextProgress = progress == null ? Math.max(s.progress ?? 0, 5) : Math.max(0, Math.min(100, progress));
+          return { ...s, state: nextProgress >= 100 ? "done" : "active", progress: nextProgress };
+        }
+        return { ...s, state: "pending", progress: 0 };
+      });
+    });
+    if (message) setStatusText(message);
+  }
 
   async function handleUpload() {
     const file = fileRef.current?.files?.[0];
@@ -68,39 +107,105 @@ export default function LibOperatorBulkUploadPage() {
     setResults(null);
     setSummary(null);
     setValidationErrors(null);
+    setShowAllResults(false);
+    setLiveLogs([]);
+    setUploadPercent(0);
+    setStatusText("Uploading file");
+    setStages(stageOrder.map((s, idx) => ({ key: s.key, label: s.label, state: idx === 0 ? "active" : "pending", progress: 0 })));
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      await new Promise<void>((resolve, reject) => {
+        const formData = new FormData();
+        formData.append("file", file);
 
-      const res = await fetch("/api/management/library/bulk-upload", {
-        method: "POST",
-        body: formData,
+        const xhr = new XMLHttpRequest();
+        let responseCursor = 0;
+        let buffer = "";
+        xhr.open("POST", "/api/management/library/bulk-upload?mode=stream", true);
+
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          const pct = Math.round((event.loaded / event.total) * 100);
+          setUploadPercent(pct);
+          setStages((prev) =>
+            prev.map((s, idx) =>
+              idx === 0 ? { ...s, state: pct >= 100 ? "done" : "active", progress: pct } : s,
+            ),
+          );
+          if (pct >= 100) {
+            setStatusText("Upload complete, starting processing");
+            advanceStage("parsing", undefined, 5);
+          }
+        };
+
+        const parseSseChunk = (chunkText: string) => {
+          buffer += chunkText;
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() || "";
+
+          for (const chunk of chunks) {
+            const eventLine = chunk.split("\n").find((line) => line.startsWith("event:"));
+            const dataLine = chunk.split("\n").find((line) => line.startsWith("data:"));
+            if (!eventLine || !dataLine) continue;
+
+            const event = eventLine.replace("event:", "").trim();
+            const payload = JSON.parse(dataLine.replace("data:", "").trim());
+
+            if (event === "stage") advanceStage(payload.stage, payload.message, payload.progress);
+
+            if (event === "row") {
+              advanceStage("creating-copies", "Processing row logs");
+              setLiveLogs((prev) => [
+                ...prev,
+                {
+                  row: payload.row,
+                  status: payload.status,
+                  message: payload.message,
+                  processed: payload.processed,
+                  total: payload.total,
+                },
+              ]);
+            }
+
+            if (event === "done") {
+              setStages((prev) => prev.map((s) => ({ ...s, state: "done" })));
+              setStatusText("Completed");
+              setResults(payload.results);
+              setSummary(payload.summary);
+              toast.success(`Upload complete: ${payload.summary.copiesAdded} copies added, ${payload.summary.booksCreated} books created`);
+            }
+
+            if (event === "error") toast.error(payload.message || "Upload failed");
+          }
+        };
+
+        xhr.onprogress = () => {
+          const nextText = xhr.responseText.slice(responseCursor);
+          responseCursor = xhr.responseText.length;
+          if (nextText) parseSseChunk(nextText);
+        };
+
+        xhr.onload = () => {
+          const nextText = xhr.responseText.slice(responseCursor);
+          if (nextText) parseSseChunk(nextText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            setUploadPercent(100);
+            resolve();
+            return;
+          }
+          reject(new Error("Upload failed"));
+        };
+
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(formData);
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.errors) {
-          setValidationErrors(data.errors);
-          toast.error("Validation errors found");
-        } else {
-          toast.error(data.error || "Upload failed");
-        }
-        return;
-      }
-
-      setResults(data.results);
-      setSummary(data.summary);
-      toast.success(
-        `Upload complete: ${data.summary.copiesAdded} copies added, ${data.summary.booksCreated} books created`,
-      );
     } catch {
       toast.error("Upload failed");
     } finally {
       setUploading(false);
     }
   }
+  const visibleResults = results ? (showAllResults ? results : results.slice(0, 50)) : [];
 
   function downloadTemplate() {
     const header =
@@ -134,7 +239,7 @@ export default function LibOperatorBulkUploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
+    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
       {/* Header */}
       <div className="border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
@@ -200,6 +305,13 @@ export default function LibOperatorBulkUploadPage() {
             </Button>
           </CardContent>
         </Card>
+
+        {uploading || liveLogs.length > 0 ? (
+          <>
+            <BulkUploadStatusPanel uploadPercent={uploadPercent} stages={stages} statusText={statusText} />
+            <BulkUploadLogPanel logs={liveLogs} />
+          </>
+        ) : null}
 
         {/* Validation errors */}
         {validationErrors && validationErrors.length > 0 && (
@@ -272,9 +384,19 @@ export default function LibOperatorBulkUploadPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Upload Results</CardTitle>
+              <CardDescription>
+                Showing {visibleResults.length} of {results.length} results.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[500px] overflow-y-auto">
+              {results.length > 50 ? (
+                <div className="mb-3">
+                  <Button variant="outline" size="sm" onClick={() => setShowAllResults((v) => !v)}>
+                    {showAllResults ? "Show less" : `Show all ${results.length} results`}
+                  </Button>
+                </div>
+              ) : null}
+              <div className="max-h-125 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b sticky top-0 bg-background">
                     <tr>
@@ -286,7 +408,7 @@ export default function LibOperatorBulkUploadPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {results.map((r, i) => (
+                    {visibleResults.map((r, i) => (
                       <tr key={i}>
                         <td className="py-2 pr-3 font-mono">{r.row}</td>
                         <td className="py-2 pr-3">

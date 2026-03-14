@@ -62,6 +62,7 @@ type OrderResult = {
 };
 
 export default function KioskPage() {
+  const MAX_SAME_CARD_TAPS = 2;
   const [phase, setPhase] = useState<KioskPhase>("tap");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<MenuCategory | "ALL">(
@@ -75,6 +76,8 @@ export default function KioskPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRfid, setActiveRfid] = useState("");
   const [activeChildName, setActiveChildName] = useState<string | null>(null);
+  const [lastTappedCard, setLastTappedCard] = useState("");
+  const [sameCardTapCount, setSameCardTapCount] = useState(0);
 
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -209,9 +212,37 @@ export default function KioskPage() {
     setActiveChildName(null);
   };
 
+  const isInsufficientBalanceReason = (reason?: string | null) => {
+    if (!reason) return false;
+    const normalized = reason.toLowerCase();
+    return normalized.includes("insufficient") && normalized.includes("balance");
+  };
+
+  const resetToTapWithMessage = (message: string) => {
+    setCart([]);
+    setResult(null);
+    setPhase("tap");
+    setActiveCategory("ALL");
+    setSearchQuery("");
+    setActiveRfid("");
+    setActiveChildName(null);
+    toast.error(message);
+  };
+
   const handleCardTap = async (rfidCardId: string) => {
     const card = rfidCardId.trim();
     if (!card) return;
+
+    const nextTapCount = lastTappedCard === card ? sameCardTapCount + 1 : 1;
+    setLastTappedCard(card);
+    setSameCardTapCount(nextTapCount);
+
+    if (nextTapCount > MAX_SAME_CARD_TAPS) {
+      resetToTapWithMessage(
+        "This card has been tapped too many times. Please contact admin or operator.",
+      );
+      return;
+    }
 
     setOrderLoading(true);
     try {
@@ -223,6 +254,10 @@ export default function KioskPage() {
       const data = await res.json();
 
       if (!data.success) {
+        if (isInsufficientBalanceReason(data.reason)) {
+          resetToTapWithMessage(data.reason || "Insufficient balance. Please use another card.");
+          return;
+        }
         setResult({ success: false, reason: data.reason || "Card check failed" });
         setPhase("result");
         return;
@@ -303,6 +338,12 @@ export default function KioskPage() {
           toast.warning("Order placed, but receipt printer is disconnected.");
         }
       }
+
+      if (!data.success && isInsufficientBalanceReason(data.reason)) {
+        resetToTapWithMessage(data.reason || "Insufficient balance. Please use another card.");
+        return;
+      }
+
       setResult(data);
       setPhase("result");
     } catch {
