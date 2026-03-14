@@ -7,7 +7,7 @@ async function createUserWithRole(
   email: string,
   password: string,
   name: string,
-  role: "PARENT" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR"
+  role: "PARENT" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR" | "ATTENDANCE"
 ) {
   const existing = await db
     .select()
@@ -73,6 +73,13 @@ async function seed() {
     "Parent@123",
     "Demo Parent",
     "PARENT"
+  );
+
+  const attendance = await createUserWithRole(
+    "attendance@schoolcafe.com",
+    "Attendance@123",
+    "Attendance Officer",
+    "ATTENDANCE"
   );
 
   // ─── Create Test Children + Wallets ───────────────────
@@ -317,6 +324,7 @@ async function seed() {
   console.log("  Operator:     operator@schoolcafe.com / Operator@123");
   console.log("  Management:   management@schoolcafe.com / Management@123");
   console.log("  Lib Operator: librarian@schoolcafe.com / Librarian@123");
+  console.log("  Attendance:   attendance@schoolcafe.com / Attendance@123");
   console.log("  Parent:       parent@schoolcafe.com / Parent@123");
   console.log("  Children:     Arjun Sharma (CARD001), Priya Sharma (CARD002)");
 }

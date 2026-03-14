@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { GATE_TAP_COOLDOWN_MS } from "@/lib/constants";
+import { broadcast } from "@/lib/sse";
+import { isMissingRelationError } from "@/lib/db-errors";
+import { sanitizeImageUrl } from "@/lib/image-url";
 
 /**
  * POST /api/gate/tap
@@ -12,12 +15,16 @@ import { GATE_TAP_COOLDOWN_MS } from "@/lib/constants";
  *
  * Body: { rfidCardId: string, gateId?: string }
  *
- * Logic:
+ * Improved Logic:
  * 1. Look up child by rfidCardId
- * 2. Enforce a 3-second cooldown per card
- * 3. Toggle direction (last was ENTRY → now EXIT, else ENTRY)
- * 4. Insert gate_log record
- * 5. Return child photo + name + direction for guard verification
+ * 2. Fetch current presence status
+ * 3. Enforce cooldown (3 second)
+ * 4. Validate direction based on presence status
+ *    - If OUTSIDE → must be ENTRY
+ *    - If INSIDE → must be EXIT
+ * 5. Detect anomalies (e.g., duplicate attempt without mode change)
+ * 6. Update presence status & gate log
+ * 7. Return result with warnings if needed
  */
 export async function POST(request: Request) {
   try {
@@ -35,8 +42,9 @@ export async function POST(request: Request) {
     }
 
     const trimmedCardId = rfidCardId.trim();
+    const now = new Date();
 
-    // 1. Look up child by RFID card
+    // 1. Look up child by RFID card with presence status
     const [student] = await db
       .select({
         id: child.id,
@@ -45,6 +53,8 @@ export async function POST(request: Request) {
         className: child.className,
         section: child.section,
         image: child.image,
+        presenceStatus: child.presenceStatus,
+        lastGateTapAt: child.lastGateTapAt,
       })
       .from(child)
       .where(eq(child.rfidCardId, trimmedCardId))
@@ -57,64 +67,143 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Check cooldown — fetch last gate log for this child
-    const [lastLog] = await db
-      .select({
-        id: gateLog.id,
-        direction: gateLog.direction,
-        tappedAt: gateLog.tappedAt,
-      })
-      .from(gateLog)
-      .where(eq(gateLog.childId, student.id))
-      .orderBy(desc(gateLog.tappedAt))
-      .limit(1);
-
-    if (lastLog) {
-      const elapsed = Date.now() - new Date(lastLog.tappedAt).getTime();
-      if (elapsed < GATE_TAP_COOLDOWN_MS) {
-        const waitMs = GATE_TAP_COOLDOWN_MS - elapsed;
-        return NextResponse.json(
-          {
-            error: "Too fast — please wait before tapping again",
-            retryAfterMs: waitMs,
-            student: {
-              name: student.name,
-              image: student.image,
-              grNumber: student.grNumber,
-              className: student.className,
-              section: student.section,
-            },
+    // 2. Check cooldown — prevent rapid re-taps
+    if (
+      student.lastGateTapAt &&
+      Date.now() - new Date(student.lastGateTapAt).getTime() <
+        GATE_TAP_COOLDOWN_MS
+    ) {
+      const elapsed = Date.now() - new Date(student.lastGateTapAt).getTime();
+      const waitMs = GATE_TAP_COOLDOWN_MS - elapsed;
+      return NextResponse.json(
+        {
+          error: "Too fast — please wait before tapping again",
+          retryAfterMs: Math.ceil(waitMs),
+          student: {
+            name: student.name,
+            image: student.image,
+            grNumber: student.grNumber,
+            className: student.className,
+            section: student.section,
           },
-          { status: 429 },
-        );
+        },
+        { status: 429 },
+      );
+    }
+
+    // 3. Determine expected direction based on presence status
+    const expectedDirection: "ENTRY" | "EXIT" =
+      student.presenceStatus === "OUTSIDE" ? "ENTRY" : "EXIT";
+
+    // 4. Fetch last log to detect anomalies
+    let lastLog:
+      | {
+          direction: "ENTRY" | "EXIT";
+          tappedAt: Date;
+          isValid: boolean;
+        }
+      | undefined;
+    let gateLogAvailable = true;
+
+    try {
+      const [queriedLastLog] = await db
+        .select({
+          direction: gateLog.direction,
+          tappedAt: gateLog.tappedAt,
+          isValid: gateLog.isValid,
+        })
+        .from(gateLog)
+        .where(eq(gateLog.childId, student.id))
+        .orderBy(desc(gateLog.tappedAt))
+        .limit(1);
+      lastLog = queriedLastLog as typeof lastLog;
+    } catch (err) {
+      if (isMissingRelationError(err, "gate_log")) {
+        gateLogAvailable = false;
+        console.error("gate_log table missing. Please run DB migrations on this environment.");
+      } else {
+        throw err;
       }
     }
 
-    // 3. Determine direction: toggle from last log
-    const direction: "ENTRY" | "EXIT" =
-      lastLog?.direction === "ENTRY" ? "EXIT" : "ENTRY";
+    // 5. Detect anomalies
+    let anomalyReason: string | null = null;
 
-    // 4. Insert gate log
-    const now = new Date();
-    await db.insert(gateLog).values({
-      childId: student.id,
-      direction,
-      gateId: gateId?.trim() || null,
-      tappedAt: now,
-    });
+    // Anomaly: If last log was marked invalid, still proceed but flag it
+    if (lastLog && !lastLog.isValid) {
+      anomalyReason = `Last tap was invalid (${lastLog.direction}), recovering with ${expectedDirection}`;
+    }
 
-    // 5. Return student info + direction for guard
-    return NextResponse.json({
+    // Anomaly: Direction doesn't match presence status
+    if (lastLog && lastLog.direction === expectedDirection) {
+      // This means student is trying to do the same action twice (e.g., ENTRY twice without EXIT)
+      anomalyReason = `Duplicate ${expectedDirection} detected — last tap was ${lastLog.direction} at ${new Date(lastLog.tappedAt).toLocaleTimeString()}`;
+    }
+
+    // 6. Insert gate log with anomaly flag
+    if (gateLogAvailable) {
+      await db.insert(gateLog).values({
+        childId: student.id,
+        direction: expectedDirection,
+        gateId: gateId?.trim() || null,
+        tappedAt: now,
+        isValid: !anomalyReason, // Mark as invalid if anomaly detected
+        anomalyReason,
+      });
+    }
+
+    // 7. Update child's presence status & last tap time
+    const newPresenceStatus =
+      expectedDirection === "ENTRY" ? "INSIDE" : "OUTSIDE";
+    await db
+      .update(child)
+      .set({
+        presenceStatus: newPresenceStatus,
+        lastGateTapAt: now,
+        updatedAt: now,
+      })
+      .where(eq(child.id, student.id));
+
+    // 8. Return result
+    const response: Record<string, unknown> = {
       student: {
         id: student.id,
         name: student.name,
         grNumber: student.grNumber,
         className: student.className,
         section: student.section,
-        image: student.image,
+        image: sanitizeImageUrl(student.image),
       },
-      direction,
+      direction: expectedDirection,
+      presenceStatus: newPresenceStatus,
       tappedAt: now.toISOString(),
+    };
+
+    // Push live updates to attendance screens without refetching full records.
+    broadcast("gate-tap", {
+      id: `${student.id}-${now.getTime()}`,
+      childId: student.id,
+      name: student.name,
+      grNumber: student.grNumber,
+      direction: expectedDirection,
+      presenceStatus: newPresenceStatus,
+      tappedAt: now.toISOString(),
+      image: sanitizeImageUrl(student.image),
+    });
+
+    if (!gateLogAvailable) {
+      response.warning = "Tap processed, but attendance logs are unavailable. Run DB migrations (gate_log missing).";
+      response.statusCode = 202;
+    }
+
+    // Include warning if anomaly detected
+    if (anomalyReason) {
+      response.warning = anomalyReason;
+      response.statusCode = 202; // Accepted with caution
+    }
+
+    return NextResponse.json(response, {
+      status: anomalyReason ? 202 : 200,
     });
   } catch (error) {
     console.error("Gate tap error:", error);

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 import { db } from "@/lib/db";
 import { child } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -25,6 +24,11 @@ export async function POST(
   const { id } = await params;
 
   try {
+    const cfg = configureCloudinary();
+    if (!cfg.ok) {
+      return NextResponse.json({ error: cfg.error }, { status: 500 });
+    }
+
     // Verify student exists
     const [student] = await db
       .select({ id: child.id, name: child.name })
@@ -70,21 +74,37 @@ export async function POST(
       );
     }
 
-    // Create uploads directory
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-
-    // Generate unique filename
-    const ext = file.name.split(".").pop() || "jpg";
-    const sanitizedExt = ext.replace(/[^a-zA-Z0-9]/g, "").slice(0, 5);
-    const filename = `student-${crypto.randomUUID()}.${sanitizedExt}`;
-    const filepath = path.join(uploadsDir, filename);
-
-    // Write file
+    // Upload to Cloudinary and store secure CDN URL
     const bytes = await file.arrayBuffer();
-    await writeFile(filepath, Buffer.from(bytes));
+    const buffer = Buffer.from(bytes);
 
-    const imageUrl = `/uploads/${filename}`;
+    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: `canteen/student-photos/${id}`,
+          public_id: `student-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+          resource_type: "image",
+          quality: "auto",
+        },
+        (error, uploadResult) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          if (!uploadResult?.secure_url) {
+            reject(new Error("Cloudinary did not return a secure URL"));
+            return;
+          }
+
+          resolve({ secure_url: uploadResult.secure_url });
+        },
+      );
+
+      uploadStream.end(buffer);
+    });
+
+    const imageUrl = result.secure_url;
 
     // Update child record with image
     await db

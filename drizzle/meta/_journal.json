@@ -22,6 +22,20 @@
       "when": 1773390000000,
       "tag": "0002_yellow_sync_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773506327099,
+      "tag": "0003_skinny_goblin_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773506796915,
+      "tag": "0004_zippy_the_leader",
+      "breakpoints": true
     }
   ]
 }

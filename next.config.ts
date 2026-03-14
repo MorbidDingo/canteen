@@ -6,7 +6,12 @@ const nextConfig: NextConfig = {
     "razorpay",
   ],
   images: {
-    remotePatterns: [],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+    ],
     localPatterns: [
       {
         pathname: "/uploads/**",

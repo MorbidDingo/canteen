@@ -13,7 +13,7 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at").notNull(),
 
   // App-specific fields
-  role: text("role", { enum: ["PARENT", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR"] })
+  role: text("role", { enum: ["PARENT", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR", "ATTENDANCE"] })
     .notNull()
     .default("PARENT"),
   phone: text("phone"),
@@ -75,6 +75,10 @@ export const child = pgTable("child", {
   section: text("section"),
   rfidCardId: text("rfid_card_id").unique(),
   image: text("image"),
+  presenceStatus: text("presence_status", { enum: ["INSIDE", "OUTSIDE"] })
+    .notNull()
+    .default("OUTSIDE"),
+  lastGateTapAt: timestamp("last_gate_tap_at"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -348,6 +352,8 @@ export const gateLog = pgTable("gate_log", {
   direction: text("direction", { enum: ["ENTRY", "EXIT"] }).notNull(),
   gateId: text("gate_id"),
   tappedAt: timestamp("tapped_at").notNull().$defaultFn(() => new Date()),
+  isValid: boolean("is_valid").notNull().default(true), // false if anomaly detected
+  anomalyReason: text("anomaly_reason"), // reason if isValid is false
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -393,6 +399,79 @@ export const bookCopy = pgTable("book_copy", {
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
+
+// ─── Bulk Photo Upload Tracking ───────────────────────────
+
+export const bulkPhotoUpload = pgTable("bulk_photo_upload", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  uploadedBy: text("uploaded_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  fileName: text("file_name").notNull(),
+  fileSize: integer("file_size").notNull(), // in bytes
+  totalFiles: integer("total_files").notNull(), // expected number of photos
+  processedFiles: integer("processed_files").notNull().default(0),
+  failedFiles: integer("failed_files").notNull().default(0),
+  status: text("status", {
+    enum: ["UPLOADED", "VALIDATING", "PROCESSING", "COMPLETED", "FAILED"],
+  })
+    .notNull()
+    .default("UPLOADED"),
+  currentStep: text("current_step", {
+    enum: [
+      "FILE_RECEIVED",
+      "FILE_VALIDATION",
+      "STRUCTURE_CHECK",
+      "PHOTO_PROCESSING",
+      "DATABASE_UPDATE",
+      "COMPLETED",
+      "FAILED",
+    ],
+  })
+    .notNull()
+    .default("FILE_RECEIVED"),
+  errorMessage: text("error_message"),
+  metadata: text("metadata"), // JSON object for custom data
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const photoUploadBatch = pgTable("photo_upload_batch", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bulkUploadId: text("bulk_upload_id")
+    .notNull()
+    .references(() => bulkPhotoUpload.id, { onDelete: "cascade" }),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  photoUrl: text("photo_url").notNull(), // stored photo path
+  originalFileName: text("original_file_name"),
+  fileSize: integer("file_size"), // in bytes
+  uploadStatus: text("upload_status", { enum: ["PENDING", "SUCCESS", "FAILED"] })
+    .notNull()
+    .default("PENDING"),
+  errorReason: text("error_reason"),
+  processingStartedAt: timestamp("processing_started_at"),
+  processingCompletedAt: timestamp("processing_completed_at"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Relations ───────────────────────────────────────────
+
+export const bulkPhotoUploadRelations = relations(bulkPhotoUpload, ({ one, many }) => ({
+  uploader: one(user, { fields: [bulkPhotoUpload.uploadedBy], references: [user.id] }),
+  batches: many(photoUploadBatch),
+}));
+
+export const photoUploadBatchRelations = relations(photoUploadBatch, ({ one }) => ({
+  bulkUpload: one(bulkPhotoUpload, {
+    fields: [photoUploadBatch.bulkUploadId],
+    references: [bulkPhotoUpload.id],
+  }),
+  child: one(child, { fields: [photoUploadBatch.childId], references: [child.id] }),
+}));
 
 // ─── Library: Book Issuance (issue/return ledger) ────────
 

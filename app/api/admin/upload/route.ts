@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 
 // POST — upload a food item image
 export async function POST(request: NextRequest) {
   try {
+    const cfg = configureCloudinary();
+    if (!cfg.ok) {
+      return NextResponse.json({ error: cfg.error }, { status: 500 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
 
@@ -33,21 +37,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create uploads directory
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadsDir, { recursive: true });
-
-    // Generate unique filename
-    const ext = file.name.split(".").pop() || "jpg";
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const filepath = path.join(uploadsDir, filename);
-
-    // Write file to disk
+    // Upload to Cloudinary and return CDN URL
     const bytes = await file.arrayBuffer();
-    await writeFile(filepath, Buffer.from(bytes));
+    const buffer = Buffer.from(bytes);
 
-    // Return the public URL
-    const imageUrl = `/uploads/${filename}`;
+    const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "canteen/menu-items/admin",
+          public_id: `menu-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+          resource_type: "image",
+          quality: "auto",
+        },
+        (error, uploadResult) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          if (!uploadResult?.secure_url) {
+            reject(new Error("Cloudinary did not return a secure URL"));
+            return;
+          }
+
+          resolve({ secure_url: uploadResult.secure_url });
+        },
+      );
+
+      uploadStream.end(buffer);
+    });
+
+    const imageUrl = result.secure_url;
 
     return NextResponse.json({ imageUrl }, { status: 201 });
   } catch (error) {

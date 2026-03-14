@@ -1,11 +1,11 @@
 import { addClient, removeClient } from "@/lib/sse";
-import type { AppEvent } from "@/lib/sse";
+import type { AppEventMessage } from "@/lib/sse";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const encoder = new TextEncoder();
-  let listener: ((event: AppEvent) => void) | null = null;
+  let listener: ((event: AppEventMessage) => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
@@ -14,10 +14,10 @@ export async function GET() {
       controller.enqueue(encoder.encode(": connected\n\n"));
 
       // Push broadcast events to this SSE client
-      listener = (event: AppEvent) => {
+      listener = (event: AppEventMessage) => {
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: event })}\n\n`),
+            encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
           );
         } catch {
           // Client gone — cleanup will happen in cancel()

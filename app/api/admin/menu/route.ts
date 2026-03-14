@@ -5,6 +5,7 @@ import { menuItem, discount } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { sanitizeImageUrl } from "@/lib/image-url";
 
 // GET — list all menu items (including unavailable ones for admin)
 export async function GET() {
@@ -41,7 +42,7 @@ export async function GET() {
         discountedPrice = applied;
         discountInfo = { id: d.id, type: d.type, value: d.value, mode: d.mode };
       }
-      return { ...item, discountedPrice, discountInfo };
+      return { ...item, imageUrl: sanitizeImageUrl(item.imageUrl), discountedPrice, discountInfo };
     });
 
     return NextResponse.json({ items: enriched });

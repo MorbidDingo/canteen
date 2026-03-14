@@ -4,6 +4,7 @@ import { child, user, wallet, parentControl } from "@/lib/db/schema";
 import { eq, or, ilike, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { sanitizeImageUrl } from "@/lib/image-url";
 
 // GET — list/search students
 export async function GET(request: NextRequest) {
@@ -65,7 +66,12 @@ export async function GET(request: NextRequest) {
       .limit(50);
   }
 
-  return NextResponse.json({ students });
+  return NextResponse.json({
+    students: students.map((student) => ({
+      ...student,
+      image: sanitizeImageUrl(student.image),
+    })),
+  });
 }
 
 // POST — create a new student

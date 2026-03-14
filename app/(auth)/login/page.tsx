@@ -25,6 +25,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  async function resolveRoleWithRetry() {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const session = await authClient.getSession();
+      const role = session?.data?.user?.role;
+      if (role) return role;
+      await new Promise((resolve) => setTimeout(resolve, 180));
+    }
+    return null;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -48,8 +58,7 @@ export default function LoginPage() {
     toast.success("Signed in successfully!");
 
     // Check user role and redirect accordingly
-    const session = await authClient.getSession();
-    const role = session?.data?.user?.role;
+    const role = await resolveRoleWithRetry();
     switch (role) {
       case "ADMIN":
         router.push("/admin/orders");
@@ -62,6 +71,9 @@ export default function LoginPage() {
         break;
       case "LIB_OPERATOR":
         router.push("/lib-operator/dashboard");
+        break;
+      case "ATTENDANCE":
+        router.push("/attendance/attendance");
         break;
       default:
         router.push("/menu");

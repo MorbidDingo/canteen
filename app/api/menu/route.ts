@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { menuItem, discount } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { sanitizeImageUrl } from "@/lib/image-url";
 
 function applyDiscount(price: number, type: string, value: number): number {
   if (type === "PERCENTAGE") return Math.round((price * (1 - value / 100)) * 100) / 100;
@@ -38,7 +39,7 @@ export async function GET() {
         discountedPrice = applyDiscount(item.price, d.type, d.value);
         discountInfo = { type: d.type, value: d.value, mode: d.mode };
       }
-      return { ...item, discountedPrice, discountInfo };
+      return { ...item, imageUrl: sanitizeImageUrl(item.imageUrl), discountedPrice, discountInfo };
     });
 
     return NextResponse.json({ items: enriched });
