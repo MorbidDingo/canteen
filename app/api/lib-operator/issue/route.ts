@@ -10,6 +10,7 @@ import {
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
@@ -212,6 +213,20 @@ export async function POST(request: NextRequest) {
       .where(eq(book.id, resolvedBook.id));
 
     broadcast("library-updated");
+
+    notifyParentForChild({
+      childId: studentChild.id,
+      type: "LIBRARY_ISSUE",
+      title: "Book issued",
+      message: `"${resolvedBook.title}" (${resolvedCopy.accessionNumber}) has been issued to ${studentChild.name}. Due: ${dueDate.toLocaleDateString()}.`,
+      metadata: {
+        issuanceId,
+        bookTitle: resolvedBook.title,
+        author: resolvedBook.author,
+        accessionNumber: resolvedCopy.accessionNumber,
+        dueDate: dueDate.toISOString(),
+      },
+    }).catch(() => {});
 
     await logAudit({
       userId: session.user.id,

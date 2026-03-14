@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 const fallbackSchema = z.object({
   orderId: z.string().min(1),
@@ -66,6 +67,13 @@ export async function POST(request: NextRequest) {
         .set({ status: "CANCELLED", updatedAt: new Date() })
         .where(eq(order.id, orderId));
       broadcast("orders-updated");
+      notifyParentForChild({
+        childId: childId,
+        type: "KIOSK_ORDER_CANCELLED",
+        title: "Order cancelled",
+        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — child account not found for this payment.`,
+        metadata: { orderId, reason: "child_not_found" },
+      }).catch(() => {});
       return NextResponse.json({ fallback: "cancelled", reason: "Child not found" });
     }
 
@@ -83,12 +91,17 @@ export async function POST(request: NextRequest) {
         .set({ status: "CANCELLED", updatedAt: new Date() })
         .where(eq(order.id, orderId));
       broadcast("orders-updated");
-      return NextResponse.json({
-        fallback: "cancelled",
-        reason: walletRow
-          ? `Insufficient wallet balance (₹${walletRow.balance.toFixed(0)} available, ₹${existingOrder.totalAmount.toFixed(0)} needed)`
-          : "No wallet found",
-      });
+      const reason = walletRow
+        ? `Insufficient wallet balance (₹${walletRow.balance.toFixed(0)} available, ₹${existingOrder.totalAmount.toFixed(0)} needed)`
+        : "No wallet found";
+      notifyParentForChild({
+        childId,
+        type: "KIOSK_ORDER_CANCELLED",
+        title: "Order cancelled",
+        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — ${reason.toLowerCase()}.`,
+        metadata: { orderId, reason: "insufficient_balance" },
+      }).catch(() => {});
+      return NextResponse.json({ fallback: "cancelled", reason });
     }
 
     // Wallet has enough — pay and decrement units in a transaction
@@ -135,6 +148,14 @@ export async function POST(request: NextRequest) {
 
     broadcast("orders-updated");
     broadcast("menu-updated");
+
+    notifyParentForChild({
+      childId,
+      type: "KIOSK_ORDER_GIVEN",
+      title: "Wallet payment confirmed",
+      message: `₹${existingOrder.totalAmount} was charged from wallet for order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} (payment fallback).`,
+      metadata: { orderId, paymentMethod: "WALLET_FALLBACK" },
+    }).catch(() => {});
 
     return NextResponse.json({ fallback: "paid", method: "WALLET" });
   } catch (error) {

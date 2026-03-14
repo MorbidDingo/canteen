@@ -4,6 +4,7 @@ import { preOrder, preOrderItem, child, menuItem, parentControl, discount } from
 import { eq, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 const MIN_PREORDER_VALUE = 60;
 const MIN_SUBSCRIPTION_DAYS = 3;
@@ -255,6 +256,15 @@ export async function POST(request: Request) {
     );
 
     broadcast("orders-updated");
+
+    const itemNames = selectedRows.map((r) => r.name).join(", ");
+    notifyParentForChild({
+      childId: body.childId,
+      type: "KIOSK_PREORDER_TAKEN",
+      title: "Pre-order created",
+      message: `A subscription pre-order (${itemNames}) has been set from ${body.scheduledDate} to ${body.subscriptionUntil}.`,
+      metadata: { preOrderId: created.id, scheduledDate: body.scheduledDate, subscriptionUntil: body.subscriptionUntil },
+    }).catch(() => {});
 
     return NextResponse.json({ success: true, id: created.id });
   } catch {

@@ -6,6 +6,7 @@ import { eq, desc, inArray, and } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 const orderItemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -206,6 +207,23 @@ export async function POST(request: NextRequest) {
       broadcast("menu-updated");
     }
     broadcast("orders-updated");
+
+    // Notify parent for wallet-paid orders (online payment notification happens in /api/payments/verify)
+    if (paymentMethod === "WALLET" && childId) {
+      const itemNames = orderItems
+        .map((item) => {
+          const mi = menuItemMap.get(item.menuItemId);
+          return mi ? mi.name : "item";
+        })
+        .join(", ");
+      notifyParentForChild({
+        childId,
+        type: "KIOSK_ORDER_GIVEN",
+        title: "Order placed",
+        message: `Order #${newOrder.tokenCode || newOrder.id.slice(0, 6)} for ₹${totalAmount} placed via wallet — ${itemNames}.`,
+        metadata: { orderId: newOrder.id, paymentMethod: "WALLET", totalAmount },
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ order: newOrder }, { status: 201 });
   } catch (error) {

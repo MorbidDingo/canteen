@@ -12,6 +12,7 @@ import {
 import { eq, and, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
@@ -216,6 +217,20 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     broadcast("library-updated");
+
+    notifyParentForChild({
+      childId: issuance.childId,
+      type: "LIBRARY_RETURN",
+      title: "Book returned",
+      message: `"${bookInfo[0]?.title ?? "A book"}" (${resolvedCopy.accessionNumber}) has been returned${fineAmount > 0 ? ` — fine of ₹${fineAmount} ${fineDeducted ? "deducted from wallet" : "applied"}` : ""}.`,
+      metadata: {
+        issuanceId: issuance.id,
+        bookTitle: bookInfo[0]?.title,
+        accessionNumber: resolvedCopy.accessionNumber,
+        fineAmount,
+        fineDeducted,
+      },
+    }).catch(() => {});
 
     await logAudit({
       userId: session.user.id,

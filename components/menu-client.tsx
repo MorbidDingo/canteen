@@ -40,6 +40,7 @@ import {
   Sparkles,
   Tag,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
   SNACKS: Cookie,
@@ -47,6 +48,57 @@ const categoryIcons: Record<MenuCategory, React.ElementType> = {
   DRINKS: Coffee,
   PACKED_FOOD: Package,
 };
+
+/* ── Image component with loading skeleton & error fallback ── */
+function MenuItemImage({
+  src,
+  alt,
+  category,
+}: {
+  src: string | null;
+  alt: string;
+  category: MenuCategory;
+}) {
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    src ? "loading" : "error",
+  );
+
+  // Reset status when src changes
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
+    setStatus(src ? "loading" : "error");
+  }
+
+  if (!src || status === "error") {
+    const Icon = categoryIcons[category] ?? UtensilsCrossed;
+    return (
+      <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/60">
+        <Icon className="h-10 w-10 text-muted-foreground/30" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {status === "loading" && (
+        <div className="absolute inset-0 animate-pulse bg-muted/60" />
+      )}
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        className={cn(
+          "object-cover transition-all duration-500 group-hover:scale-105",
+          status === "loading" ? "opacity-0" : "opacity-100",
+        )}
+        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+        onLoad={() => setStatus("ready")}
+        onError={() => setStatus("error")}
+      />
+    </>
+  );
+}
 
 interface MenuItem {
   id: string;
@@ -371,38 +423,27 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
               className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group"
-              style={{ animationDelay: `${index * 60}ms` }}
+              style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
             >
               {/* Image area with consistent aspect ratio */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
-                {item.imageUrl ? (
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.name}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/60">
-                    {(() => {
-                      const Icon = categoryIcons[item.category as MenuCategory];
-                      return <Icon className="h-10 w-10 text-muted-foreground/30" />;
-                    })()}
-                  </div>
-                )}
+                <MenuItemImage
+                  src={item.imageUrl}
+                  alt={item.name}
+                  category={item.category as MenuCategory}
+                />
                 {/* Category badge on image */}
-                <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80">
+                <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80 shadow-sm">
                   {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
                 </Badge>
                 {/* Discount badge on image */}
                 {item.discountedPrice != null && (
-                  <Badge className="absolute top-2 right-2 bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
+                  <Badge className="absolute top-2 right-2 bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5 shadow-sm">
                     <Percent className="h-2.5 w-2.5" />
                     {item.discountInfo?.type === "PERCENTAGE"
                       ? `${item.discountInfo.value}%`
@@ -423,7 +464,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
               <CardHeader className="px-3 pt-2.5 pb-1">
                 <CardTitle className="text-sm sm:text-base leading-snug line-clamp-1">{item.name}</CardTitle>
                 {item.description && (
-                  <CardDescription className="text-xs line-clamp-2 leading-relaxed">
+                  <CardDescription className="text-xs line-clamp-2 leading-relaxed min-h-[2lh]">
                     {item.description}
                   </CardDescription>
                 )}
@@ -433,7 +474,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                 <div className="flex items-center gap-2">
                   {item.discountedPrice != null ? (
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-base sm:text-lg font-bold">₹{item.discountedPrice}</span>
+                      <span className="text-base sm:text-lg font-bold text-emerald-700 dark:text-emerald-400">₹{item.discountedPrice}</span>
                       <span className="text-xs text-muted-foreground line-through">₹{item.price}</span>
                     </div>
                   ) : (
@@ -447,7 +488,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                 </div>
               </CardContent>
 
-              <CardFooter className="px-3 pb-3 pt-1">
+              <CardFooter className="px-3 pb-3 pt-1 mt-auto">
                 <AddToCartButton
                   menuItemId={item.id}
                   name={item.name}
