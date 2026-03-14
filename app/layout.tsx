@@ -111,7 +111,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <Navbar />
-        <main className="min-h-[calc(100vh-3.5rem)] pb-28 md:pb-0">{children}</main>
+        <main className="min-h-[calc(100vh-3.5rem)]">{children}</main>
         <PwaRegister />
         <SyncManager />
         <Toaster
