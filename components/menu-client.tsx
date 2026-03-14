@@ -63,6 +63,13 @@ function MenuItemImage({
     src ? "loading" : "error",
   );
 
+  // Reset status when src changes
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
+    setStatus(src ? "loading" : "error");
+  }
+
   if (!src || status === "error") {
     const Icon = categoryIcons[category] ?? UtensilsCrossed;
     return (

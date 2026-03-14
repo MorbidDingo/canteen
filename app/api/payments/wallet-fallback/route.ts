@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         childId: childId,
         type: "KIOSK_ORDER_CANCELLED",
         title: "Order cancelled",
-        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — child not linked to payment.`,
+        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — child account not found for this payment.`,
         metadata: { orderId, reason: "child_not_found" },
       }).catch(() => {});
       return NextResponse.json({ fallback: "cancelled", reason: "Child not found" });

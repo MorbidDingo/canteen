@@ -48,19 +48,17 @@ export async function POST(request: NextRequest) {
     broadcast("library-updated");
 
     // Notify parent that return was rejected
-    const copies = await db
-      .select({ accessionNumber: bookCopy.accessionNumber, bookId: bookCopy.bookId })
+    const bookDetails = await db
+      .select({ title: book.title, accessionNumber: bookCopy.accessionNumber })
       .from(bookCopy)
+      .innerJoin(book, eq(book.id, bookCopy.bookId))
       .where(eq(bookCopy.id, issuances[0].bookCopyId))
       .limit(1);
-    const books = copies.length > 0
-      ? await db.select({ title: book.title }).from(book).where(eq(book.id, copies[0].bookId)).limit(1)
-      : [];
     notifyParentForChild({
       childId: issuances[0].childId,
       type: "LIBRARY_RETURN",
       title: "Return rejected",
-      message: `The return of "${books[0]?.title ?? "a book"}" was rejected by the librarian. The book is still marked as issued.`,
+      message: `The return of "${bookDetails[0]?.title ?? "a book"}" was rejected by the librarian. The book is still marked as issued.`,
       metadata: { issuanceId, status: "RETURN_REJECTED" },
     }).catch(() => {});
 
