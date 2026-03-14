@@ -238,6 +238,7 @@ export const childRelations = relations(child, ({ one, many }) => ({
   orders: many(order),
   preOrders: many(preOrder),
   bookIssuances: many(bookIssuance),
+  gateLogs: many(gateLog),
 }));
 
 export const walletRelations = relations(wallet, ({ one, many }) => ({
@@ -335,6 +336,23 @@ export const offlineSyncAction = pgTable("offline_sync_action", {
 
 export const auditLogRelations = relations(auditLog, ({ one }) => ({
   user: one(user, { fields: [auditLog.userId], references: [user.id] }),
+}));
+
+// ─── Gate Log (entry/exit attendance) ────────────────────
+
+export const gateLog = pgTable("gate_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  direction: text("direction", { enum: ["ENTRY", "EXIT"] }).notNull(),
+  gateId: text("gate_id"),
+  tappedAt: timestamp("tapped_at").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const gateLogRelations = relations(gateLog, ({ one }) => ({
+  child: one(child, { fields: [gateLog.childId], references: [child.id] }),
 }));
 
 // ─── Library: Book (master record) ───────────────────────

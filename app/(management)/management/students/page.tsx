@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -29,6 +30,8 @@ import {
   CreditCard,
   Loader2,
   RefreshCw,
+  Camera,
+  ImageIcon,
 } from "lucide-react";
 
 interface Student {
@@ -38,6 +41,7 @@ interface Student {
   className: string | null;
   section: string | null;
   rfidCardId: string | null;
+  image: string | null;
   parentId: string;
   parentName: string;
   parentEmail: string;
@@ -70,6 +74,35 @@ export default function ManagementStudentsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [suggestedParents, setSuggestedParents] = useState<ParentOption[]>([]);
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+
+  const handlePhotoUpload = async (studentId: string, file: File) => {
+    setUploadingPhotoId(studentId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/management/students/${studentId}/photo`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to upload photo");
+      }
+      const data = await res.json();
+      // Update student in list with new image
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId ? { ...s, image: data.imageUrl } : s,
+        ),
+      );
+      toast.success("Student photo updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload photo");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  };
 
   const fetchStudents = useCallback(async (q?: string) => {
     try {
@@ -423,8 +456,19 @@ export default function ManagementStudentsPage() {
               style={{ animationDelay: `${index * 30}ms` }}
             >
               <CardContent className="flex items-center gap-3 py-3 px-4">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <GraduationCap className="h-5 w-5 text-primary" />
+                {/* Student avatar / photo */}
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden relative group">
+                  {student.image ? (
+                    <Image
+                      src={student.image}
+                      alt={student.name}
+                      width={40}
+                      height={40}
+                      className="object-cover w-full h-full rounded-full"
+                    />
+                  ) : (
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -438,6 +482,12 @@ export default function ManagementStudentsPage() {
                       <Badge variant="secondary" className="text-[10px] gap-1">
                         <CreditCard className="h-2.5 w-2.5" />
                         Card
+                      </Badge>
+                    )}
+                    {!student.image && (
+                      <Badge variant="outline" className="text-[10px] gap-1 text-orange-600 border-orange-300">
+                        <ImageIcon className="h-2.5 w-2.5" />
+                        No Photo
                       </Badge>
                     )}
                   </div>
@@ -454,6 +504,28 @@ export default function ManagementStudentsPage() {
                     </span>
                   </div>
                 </div>
+                {/* Photo upload button */}
+                <label
+                  className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-muted cursor-pointer shrink-0 transition-colors"
+                  title="Upload student photo"
+                >
+                  {uploadingPhotoId === student.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Camera className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    disabled={uploadingPhotoId === student.id}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoUpload(student.id, file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
                 <Button
                   variant="ghost"
                   size="icon"

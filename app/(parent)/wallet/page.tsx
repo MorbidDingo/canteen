@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -146,6 +146,65 @@ export default function WalletPage() {
   }, [selectedChildId, fetchTransactions]);
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
+
+  // Premium wallet card tilt/shimmer effect
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const handleMove = (clientX: number, clientY: number) => {
+      const rect = card.getBoundingClientRect();
+      const x = ((clientX - rect.left) / rect.width) * 100;
+      const y = ((clientY - rect.top) / rect.height) * 100;
+      const rotateX = ((y - 50) / 50) * -8;
+      const rotateY = ((x - 50) / 50) * 8;
+      card.style.transform = `perspective(600px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+      card.style.setProperty("--shimmer-x", `${x}%`);
+      card.style.setProperty("--shimmer-y", `${y}%`);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const handleLeave = () => {
+      card.style.transform = "perspective(600px) rotateX(0deg) rotateY(0deg)";
+      card.style.setProperty("--shimmer-x", "50%");
+      card.style.setProperty("--shimmer-y", "50%");
+    };
+
+    // DeviceOrientation for real device tilt
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      const gamma = e.gamma ?? 0; // left-right tilt (-90 to 90)
+      const beta = e.beta ?? 0;   // front-back tilt (-180 to 180)
+      const rotateY = (gamma / 90) * 12;
+      const rotateX = ((beta - 45) / 90) * -12; // offset beta assuming ~45° hold angle
+      card.style.transform = `perspective(600px) rotateX(${Math.max(-12, Math.min(12, rotateX))}deg) rotateY(${Math.max(-12, Math.min(12, rotateY))}deg)`;
+      const shimmerX = 50 + (gamma / 90) * 50;
+      const shimmerY = 50 + ((beta - 45) / 90) * 50;
+      card.style.setProperty("--shimmer-x", `${Math.max(0, Math.min(100, shimmerX))}%`);
+      card.style.setProperty("--shimmer-y", `${Math.max(0, Math.min(100, shimmerY))}%`);
+    };
+
+    card.addEventListener("mousemove", handleMouseMove);
+    card.addEventListener("mouseleave", handleLeave);
+    card.addEventListener("touchmove", handleTouchMove);
+    card.addEventListener("touchend", handleLeave);
+
+    if (typeof DeviceOrientationEvent !== "undefined") {
+      window.addEventListener("deviceorientation", handleOrientation);
+    }
+
+    return () => {
+      card.removeEventListener("mousemove", handleMouseMove);
+      card.removeEventListener("mouseleave", handleLeave);
+      card.removeEventListener("touchmove", handleTouchMove);
+      card.removeEventListener("touchend", handleLeave);
+      window.removeEventListener("deviceorientation", handleOrientation);
+    };
+  }, [selectedWallet]);
 
   const handleRazorpayTopUp = (
     razorpayOrderId: string,
@@ -362,19 +421,22 @@ export default function WalletPage() {
         </Select>
       )}
 
-      {/* Balance card */}
+      {/* Balance card — Premium Black with White Shimmer */}
       {selectedWallet && (
-        <Card className="glass-card bg-gradient-to-br from-primary to-emerald-500 text-primary-foreground border border-border">
-          <CardContent className="pt-6 pb-6 text-center">
-            <p className="text-sm opacity-80">
+        <div
+          ref={cardRef}
+          className="wallet-card-premium rounded-2xl border border-white/10 shadow-2xl transition-transform duration-200 ease-out will-change-transform"
+        >
+          <div className="relative z-10 px-6 pt-6 pb-6 text-center">
+            <p className="text-sm text-white/70">
               {selectedWallet.childName}&apos;s Balance
             </p>
-            <p className="text-4xl font-bold mt-1 flex items-center justify-center gap-1">
+            <p className="text-4xl font-bold mt-1 flex items-center justify-center gap-1 text-white">
               <IndianRupee className="h-8 w-8" />
               {selectedWallet.balance.toFixed(2)}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Top-up card */}
