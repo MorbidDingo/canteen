@@ -371,80 +371,83 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
-              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden"
+              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group"
               style={{ animationDelay: `${index * 60}ms` }}
             >
-              <div className="relative h-32 sm:h-36 overflow-hidden bg-linear-to-br from-muted/30 to-muted/80 mb-3">
+              {/* Image area with consistent aspect ratio */}
+              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
                 {item.imageUrl ? (
                   <Image
                     src={item.imageUrl}
                     alt={item.name}
                     fill
-                    className="object-cover"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center">
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted/30 to-muted/60">
                     {(() => {
                       const Icon = categoryIcons[item.category as MenuCategory];
-                      return <Icon className="h-10 w-10 text-muted-foreground/40" />;
+                      return <Icon className="h-10 w-10 text-muted-foreground/30" />;
                     })()}
                   </div>
                 )}
-              </div>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-base">{item.name}</CardTitle>
-                  <div className="flex gap-1.5 items-center shrink-0">
-                    {item.availableUnits === 0 && (
-                      <Badge variant="destructive" className="text-[10px]">
-                        Sold Out
-                      </Badge>
-                    )}
-                    {item.availableUnits != null && item.availableUnits > 0 && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        {item.availableUnits} left
-                      </Badge>
-                    )}
-                    {item.discountedPrice != null ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
-                          <Percent className="h-2.5 w-2.5" />
-                          {item.discountInfo?.type === "PERCENTAGE"
-                            ? `${item.discountInfo.value}% OFF`
-                            : `₹${item.discountInfo?.value} OFF`}
-                        </Badge>
-                        <Badge variant="outline" className="shrink-0 font-bold text-sm">
-                          <span className="line-through text-muted-foreground text-xs mr-1">₹{item.price}</span>
-                          ₹{item.discountedPrice}
-                        </Badge>
-                      </div>
-                    ) : (
-                      <Badge variant="outline" className="shrink-0 font-bold text-sm">
-                        ₹{item.price}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  {item.description ? (
-                    <CardDescription className="text-sm line-clamp-2">
-                      {item.description}
-                    </CardDescription>
-                  ) : (
-                    <CardDescription className="text-sm">&nbsp;</CardDescription>
-                  )}
-                  <Badge variant="secondary" className="text-[10px] shrink-0">
-                    {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
+                {/* Category badge on image */}
+                <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80">
+                  {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
+                </Badge>
+                {/* Discount badge on image */}
+                {item.discountedPrice != null && (
+                  <Badge className="absolute top-2 right-2 bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5">
+                    <Percent className="h-2.5 w-2.5" />
+                    {item.discountInfo?.type === "PERCENTAGE"
+                      ? `${item.discountInfo.value}%`
+                      : `₹${item.discountInfo?.value}`}
                   </Badge>
-                </div>
+                )}
+                {/* Sold out overlay */}
+                {item.availableUnits === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+                    <Badge variant="destructive" className="text-xs font-semibold px-3 py-1">
+                      Sold Out
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <CardHeader className="px-3 pt-2.5 pb-1">
+                <CardTitle className="text-sm sm:text-base leading-snug line-clamp-1">{item.name}</CardTitle>
+                {item.description && (
+                  <CardDescription className="text-xs line-clamp-2 leading-relaxed">
+                    {item.description}
+                  </CardDescription>
+                )}
               </CardHeader>
-              <CardContent className="flex-1" />
-              <CardFooter>
+
+              <CardContent className="flex-1 px-3 pb-1">
+                <div className="flex items-center gap-2">
+                  {item.discountedPrice != null ? (
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-base sm:text-lg font-bold">₹{item.discountedPrice}</span>
+                      <span className="text-xs text-muted-foreground line-through">₹{item.price}</span>
+                    </div>
+                  ) : (
+                    <span className="text-base sm:text-lg font-bold">₹{item.price}</span>
+                  )}
+                  {item.availableUnits != null && item.availableUnits > 0 && (
+                    <Badge variant="secondary" className="text-[10px] ml-auto">
+                      {item.availableUnits} left
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+
+              <CardFooter className="px-3 pb-3 pt-1">
                 <AddToCartButton
                   menuItemId={item.id}
                   name={item.name}

@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { incrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   PLACED: ["PREPARING", "CANCELLED"],
@@ -129,6 +130,31 @@ export async function PATCH(
     }
 
     broadcast("orders-updated");
+
+    // Notify parent in real-time when order status changes
+    if (updatedOrder.childId) {
+      const statusLabels: Record<string, string> = {
+        PREPARING: "being prepared",
+        SERVED: "served",
+        CANCELLED: "cancelled",
+      };
+      const statusTypes: Record<string, "KIOSK_ORDER_PREPARING" | "KIOSK_ORDER_SERVED" | "KIOSK_ORDER_CANCELLED"> = {
+        PREPARING: "KIOSK_ORDER_PREPARING",
+        SERVED: "KIOSK_ORDER_SERVED",
+        CANCELLED: "KIOSK_ORDER_CANCELLED",
+      };
+      const label = statusLabels[newStatus];
+      const type = statusTypes[newStatus];
+      if (label && type) {
+        notifyParentForChild({
+          childId: updatedOrder.childId,
+          type,
+          title: `Order ${label}`,
+          message: `Order #${updatedOrder.tokenCode || updatedOrder.id.slice(0, 6)} is now ${label}.`,
+          metadata: { orderId: id, status: newStatus },
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ order: updatedOrder });
   } catch (error) {

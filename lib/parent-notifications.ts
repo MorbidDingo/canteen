@@ -6,6 +6,9 @@ import { broadcast } from "@/lib/sse";
 export type ParentNotificationType =
   | "KIOSK_ORDER_GIVEN"
   | "KIOSK_PREORDER_TAKEN"
+  | "KIOSK_ORDER_PREPARING"
+  | "KIOSK_ORDER_SERVED"
+  | "KIOSK_ORDER_CANCELLED"
   | "GATE_ENTRY"
   | "GATE_EXIT"
   | "LIBRARY_ISSUE"

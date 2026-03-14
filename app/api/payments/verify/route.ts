@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth-server";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
 import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 const verifyPaymentSchema = z.object({
   razorpay_order_id: z.string().min(1),
@@ -103,6 +104,17 @@ export async function POST(request: NextRequest) {
       broadcast("menu-updated");
     }
     broadcast("orders-updated");
+
+    // Notify parent in real-time about successful payment
+    if (existingOrder.childId) {
+      notifyParentForChild({
+        childId: existingOrder.childId,
+        type: "KIOSK_ORDER_GIVEN",
+        title: "Payment confirmed",
+        message: `Online payment of ₹${existingOrder.totalAmount} for order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was successful.`,
+        metadata: { orderId: orderId, paymentMethod: "ONLINE" },
+      }).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

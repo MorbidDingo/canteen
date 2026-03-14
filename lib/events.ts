@@ -7,6 +7,7 @@ export type AppEvent =
   | "orders-updated"
   | "menu-updated"
   | "library-updated"
+  | "gate-tap"
   | "parent-notification";
 
 // ─── Client-side event emitter (fires server broadcast) ──
