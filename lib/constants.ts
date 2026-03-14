@@ -309,3 +309,20 @@ export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
   max_fine_per_book: "100",
   allow_self_service_issue: "true",
 };
+
+// ─── Gate Direction ─────────────────────────────────────
+
+export const GATE_DIRECTION = {
+  ENTRY: "ENTRY",
+  EXIT: "EXIT",
+} as const;
+
+export type GateDirection = (typeof GATE_DIRECTION)[keyof typeof GATE_DIRECTION];
+
+export const GATE_DIRECTION_LABELS: Record<GateDirection, string> = {
+  ENTRY: "Entry",
+  EXIT: "Exit",
+};
+
+/** Cooldown in milliseconds between consecutive taps for the same card */
+export const GATE_TAP_COOLDOWN_MS = 3000;
