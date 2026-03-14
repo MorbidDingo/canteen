@@ -375,7 +375,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
-              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden"
+              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group"
               style={{ animationDelay: `${index * 60}ms` }}
             >
               {/* Image area with consistent aspect ratio */}

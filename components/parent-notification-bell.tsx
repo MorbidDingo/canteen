@@ -421,7 +421,7 @@ export function ParentNotificationBell({
               <ol className="text-left space-y-2 text-sm">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
-                  <span>Tap the <Share className="inline h-4 w-4 align-text-bottom" /> <strong>Share</strong> button in Safari</span>
+                  <span>Tap the <Share aria-hidden="true" className="inline h-4 w-4 align-text-bottom" /> <strong>Share</strong> button in Safari</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
