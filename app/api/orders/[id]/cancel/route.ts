@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { incrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 /**
  * PATCH /api/orders/[id]/cancel
@@ -92,6 +93,17 @@ export async function PATCH(
 
     broadcast("orders-updated");
     broadcast("menu-updated");
+
+    // Notify parent in real-time about the cancellation
+    if (existingOrder.childId) {
+      notifyParentForChild({
+        childId: existingOrder.childId,
+        type: "KIOSK_ORDER_CANCELLED",
+        title: "Order cancelled",
+        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} has been cancelled.${existingOrder.paymentStatus === "PAID" ? " A refund has been credited to the wallet." : ""}`,
+        metadata: { orderId: id, refunded: existingOrder.paymentStatus === "PAID" },
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
