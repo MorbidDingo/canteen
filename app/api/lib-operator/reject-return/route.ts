@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { bookIssuance } from "@/lib/db/schema";
+import { bookIssuance, bookCopy, book } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // POST /api/lib-operator/reject-return — reject a pending return (set back to ISSUED)
@@ -45,6 +46,23 @@ export async function POST(request: NextRequest) {
       .where(eq(bookIssuance.id, issuanceId));
 
     broadcast("library-updated");
+
+    // Notify parent that return was rejected
+    const copies = await db
+      .select({ accessionNumber: bookCopy.accessionNumber, bookId: bookCopy.bookId })
+      .from(bookCopy)
+      .where(eq(bookCopy.id, issuances[0].bookCopyId))
+      .limit(1);
+    const books = copies.length > 0
+      ? await db.select({ title: book.title }).from(book).where(eq(book.id, copies[0].bookId)).limit(1)
+      : [];
+    notifyParentForChild({
+      childId: issuances[0].childId,
+      type: "LIBRARY_RETURN",
+      title: "Return rejected",
+      message: `The return of "${books[0]?.title ?? "a book"}" was rejected by the librarian. The book is still marked as issued.`,
+      metadata: { issuanceId, status: "RETURN_REJECTED" },
+    }).catch(() => {});
 
     await logAudit({
       userId: session.user.id,
