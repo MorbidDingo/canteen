@@ -3,7 +3,11 @@
 import { useEffect, useRef, useCallback } from "react";
 
 // ─── Event Types ─────────────────────────────────────────
-export type AppEvent = "orders-updated" | "menu-updated" | "library-updated";
+export type AppEvent =
+  | "orders-updated"
+  | "menu-updated"
+  | "library-updated"
+  | "parent-notification";
 
 // ─── Client-side event emitter (fires server broadcast) ──
 /**
@@ -23,7 +27,7 @@ export async function emitEvent(event: AppEvent) {
 }
 
 // ─── SSE Connection (singleton) ──────────────────────────
-type SSECallback = () => void;
+type SSECallback = (payload?: unknown) => void;
 const sseListeners = new Map<AppEvent, Set<SSECallback>>();
 
 function getSSEListeners(event: AppEvent) {
@@ -48,7 +52,7 @@ function connectSSE() {
       const data = JSON.parse(e.data);
       const event = data.type as AppEvent;
       const fns = getSSEListeners(event);
-      fns.forEach((fn) => fn());
+      fns.forEach((fn) => fn(data.payload));
     } catch {
       // Ignore non-JSON messages (heartbeats, comments)
     }
@@ -83,12 +87,12 @@ function disconnectSSE() {
  * across all hooks) and calls `onEvent` whenever the specified event
  * is broadcast by the server.
  */
-export function useSSE(event: AppEvent, onEvent: () => void) {
+export function useSSE(event: AppEvent, onEvent: (payload?: unknown) => void) {
   const callbackRef = useRef(onEvent);
   callbackRef.current = onEvent;
 
   useEffect(() => {
-    const handler = () => callbackRef.current();
+    const handler = (payload?: unknown) => callbackRef.current(payload);
     const fns = getSSEListeners(event);
     fns.add(handler);
 

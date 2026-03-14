@@ -2,7 +2,13 @@ import { broadcast } from "@/lib/sse";
 import type { AppEvent } from "@/lib/sse";
 import { NextRequest, NextResponse } from "next/server";
 
-const VALID_EVENTS: AppEvent[] = ["orders-updated", "menu-updated", "library-updated", "gate-tap"];
+const VALID_EVENTS: AppEvent[] = [
+  "orders-updated",
+  "menu-updated",
+  "library-updated",
+  "gate-tap",
+  "parent-notification",
+];
 
 export async function POST(request: NextRequest) {
   try {

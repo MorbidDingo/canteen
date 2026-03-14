@@ -6,6 +6,7 @@ import { GATE_TAP_COOLDOWN_MS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { isMissingRelationError } from "@/lib/db-errors";
 import { sanitizeImageUrl } from "@/lib/image-url";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 /**
  * POST /api/gate/tap
@@ -189,6 +190,22 @@ export async function POST(request: Request) {
       presenceStatus: newPresenceStatus,
       tappedAt: now.toISOString(),
       image: sanitizeImageUrl(student.image),
+    });
+
+    await notifyParentForChild({
+      childId: student.id,
+      type: expectedDirection === "ENTRY" ? "GATE_ENTRY" : "GATE_EXIT",
+      title:
+        expectedDirection === "ENTRY"
+          ? `${student.name} entered the gate`
+          : `${student.name} exited the gate`,
+      message: `${student.name} ${expectedDirection === "ENTRY" ? "entered" : "exited"} campus at ${now.toLocaleTimeString()}.`,
+      metadata: {
+        direction: expectedDirection,
+        gateId: gateId?.trim() || null,
+        tappedAt: now.toISOString(),
+        grNumber: student.grNumber,
+      },
     });
 
     if (!gateLogAvailable) {

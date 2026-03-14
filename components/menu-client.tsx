@@ -375,10 +375,10 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
-              className="flex flex-col card-interactive animate-fade-in-up"
+              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden"
               style={{ animationDelay: `${index * 60}ms` }}
             >
-              <div className="relative h-32 sm:h-36 rounded-t-lg overflow-hidden bg-linear-to-br from-muted/30 to-muted/80">
+              <div className="relative h-32 sm:h-36 overflow-hidden bg-linear-to-br from-muted/30 to-muted/80 mb-3">
                 {item.imageUrl ? (
                   <Image
                     src={item.imageUrl}

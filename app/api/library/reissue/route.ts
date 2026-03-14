@@ -11,6 +11,7 @@ import { eq, and } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 async function getSetting(key: string): Promise<string> {
   const rows = await db
@@ -138,6 +139,21 @@ export async function POST(request: NextRequest) {
     }
 
     broadcast("library-updated");
+
+    await notifyParentForChild({
+      childId: studentChild.id,
+      type: "LIBRARY_REISSUE",
+      title: `${studentChild.name} reissued a library book`,
+      message: `Reissued: ${bookTitle} (${copies[0]?.accessionNumber}).`,
+      metadata: {
+        issuanceId: issuance.id,
+        bookTitle,
+        bookAuthor,
+        accessionNumber: copies[0]?.accessionNumber,
+        reissueCount: issuance.reissueCount + 1,
+        newDueDate: newDueDate.toISOString(),
+      },
+    });
 
     await logAudit({
       userId: studentChild.id,

@@ -12,6 +12,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 async function getSetting(key: string): Promise<string> {
   const rows = await db
@@ -272,22 +273,61 @@ export async function POST(request: NextRequest) {
     const blockedBookIds = safeParseJSON(control?.blockedBookIds ?? null);
 
     if (blockedBookIds.includes(resolvedBook.id)) {
+      const reason = `Blocked book attempt: ${resolvedBook.title} is blocked by parent controls.`;
+      await notifyParentForChild({
+        childId: studentChild.id,
+        type: "BLOCKED_BOOK_ATTEMPT",
+        title: `${studentChild.name} had a blocked book attempt`,
+        message: reason,
+        metadata: {
+          bookId: resolvedBook.id,
+          title: resolvedBook.title,
+          author: resolvedBook.author,
+          category: resolvedBook.category,
+        },
+      });
       return NextResponse.json(
-        { success: false, reason: "This book is blocked by parent controls." },
+        { success: false, reason },
         { status: 200 }
       );
     }
 
     if (blockedBookCategories.includes(resolvedBook.category)) {
+      const reason = `Blocked book attempt: ${resolvedBook.title} category (${resolvedBook.category}) is blocked by parent controls.`;
+      await notifyParentForChild({
+        childId: studentChild.id,
+        type: "BLOCKED_BOOK_ATTEMPT",
+        title: `${studentChild.name} had a blocked book attempt`,
+        message: reason,
+        metadata: {
+          bookId: resolvedBook.id,
+          title: resolvedBook.title,
+          author: resolvedBook.author,
+          category: resolvedBook.category,
+        },
+      });
       return NextResponse.json(
-        { success: false, reason: "This book category is blocked by parent controls." },
+        { success: false, reason },
         { status: 200 }
       );
     }
 
     if (blockedBookAuthors.includes((resolvedBook.author || "").trim().toLowerCase())) {
+      const reason = `Blocked book attempt: ${resolvedBook.title} by ${resolvedBook.author} is blocked by parent controls.`;
+      await notifyParentForChild({
+        childId: studentChild.id,
+        type: "BLOCKED_BOOK_ATTEMPT",
+        title: `${studentChild.name} had a blocked book attempt`,
+        message: reason,
+        metadata: {
+          bookId: resolvedBook.id,
+          title: resolvedBook.title,
+          author: resolvedBook.author,
+          category: resolvedBook.category,
+        },
+      });
       return NextResponse.json(
-        { success: false, reason: "This author is blocked by parent controls." },
+        { success: false, reason },
         { status: 200 }
       );
     }
@@ -369,6 +409,21 @@ export async function POST(request: NextRequest) {
 
     // ── 10. Broadcast SSE ─────────────────────────────
     broadcast("library-updated");
+
+    await notifyParentForChild({
+      childId: studentChild.id,
+      type: "LIBRARY_ISSUE",
+      title: `${studentChild.name} issued a library book`,
+      message: `Issued: ${resolvedBook.title} (${resolvedCopy.accessionNumber}).`,
+      metadata: {
+        issuanceId,
+        bookId: resolvedBook.id,
+        bookTitle: resolvedBook.title,
+        bookAuthor: resolvedBook.author,
+        accessionNumber: resolvedCopy.accessionNumber,
+        dueDate: dueDate.toISOString(),
+      },
+    });
 
     await logAudit({
       userId: studentChild.id,

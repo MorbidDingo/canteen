@@ -16,6 +16,7 @@ import { eq, and, gte, sql, asc } from "drizzle-orm";
 import { generateTokenCode } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 type IncomingItem = { menuItemId: string; quantity: number };
 
@@ -42,6 +43,10 @@ function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function formatItemSummary(items: { name: string; quantity: number }[]) {
+  return items.map((item) => `${item.name} x${item.quantity}`).join(", ");
+}
+
 async function placeOrderFromItems(
   rfidCardId: string,
   items: IncomingItem[],
@@ -65,6 +70,20 @@ async function placeOrderFromItems(
   }
 
   const studentChild = children[0];
+
+  async function notifyBlockedAttempt(reason: string) {
+    await notifyParentForChild({
+      childId: studentChild.id,
+      type: "BLOCKED_FOOD_ATTEMPT",
+      title: `${studentChild.name} had a blocked food attempt`,
+      message: reason,
+      metadata: {
+        rfidCardId,
+        attemptedItems: items,
+        source: sourceLabel,
+      },
+    });
+  }
 
   const wallets = await db
     .select()
@@ -117,9 +136,11 @@ async function placeOrderFromItems(
     if (blockedCategories.length > 0) {
       for (const m of menuItems) {
         if (blockedCategories.includes(m.category)) {
+          const reason = `Blocked food attempt: ${m.name} (${m.category}) is blocked by parent controls.`;
+          await notifyBlockedAttempt(reason);
           return {
             success: false,
-            reason: `"${m.category}" category is blocked by your parent.`,
+            reason,
           };
         }
       }
@@ -129,9 +150,11 @@ async function placeOrderFromItems(
     if (blockedItemIds.length > 0) {
       for (const m of menuItems) {
         if (blockedItemIds.includes(m.id)) {
+          const reason = `Blocked food attempt: ${m.name} is blocked by parent controls.`;
+          await notifyBlockedAttempt(reason);
           return {
             success: false,
-            reason: `"${m.name}" is blocked by your parent.`,
+            reason,
           };
         }
       }
@@ -185,9 +208,11 @@ async function placeOrderFromItems(
   }
 
   if (control?.perOrderLimit && total > control.perOrderLimit) {
+    const reason = `Blocked food attempt: per-order limit exceeded (limit Rs${control.perOrderLimit}, attempted Rs${total.toFixed(0)}).`;
+    await notifyBlockedAttempt(reason);
     return {
       success: false,
-      reason: `Exceeds per-order limit of Rs${control.perOrderLimit}. Your order is Rs${total.toFixed(0)}.`,
+      reason,
     };
   }
 
@@ -208,9 +233,11 @@ async function placeOrderFromItems(
 
     const spentToday = todaySpending[0]?.total || 0;
     if (spentToday + total > control.dailySpendLimit) {
+      const reason = `Blocked food attempt: daily limit reached (spent Rs${spentToday.toFixed(0)} of Rs${control.dailySpendLimit}, attempted Rs${total.toFixed(0)}).`;
+      await notifyBlockedAttempt(reason);
       return {
         success: false,
-        reason: `Daily limit reached. Spent Rs${spentToday.toFixed(0)} of Rs${control.dailySpendLimit} limit today.`,
+        reason,
       };
     }
   }
@@ -268,6 +295,30 @@ async function placeOrderFromItems(
 
   broadcast("orders-updated");
   broadcast("menu-updated");
+
+  const compactItems = orderItemsData.map((oi) => ({
+    menuItemId: oi.menuItemId,
+    name: oi.name,
+    quantity: oi.quantity,
+  }));
+  const isPreOrderSource = sourceLabel !== "Kiosk order";
+  await notifyParentForChild({
+    childId: studentChild.id,
+    type: isPreOrderSource ? "KIOSK_PREORDER_TAKEN" : "KIOSK_ORDER_GIVEN",
+    title: isPreOrderSource
+      ? `${studentChild.name} took pre-ordered food`
+      : `${studentChild.name} ordered from kiosk`,
+    message: isPreOrderSource
+      ? `Taken from kiosk: ${formatItemSummary(compactItems)}.`
+      : `Ordered at kiosk: ${formatItemSummary(compactItems)}.`,
+    metadata: {
+      tokenCode,
+      total,
+      source: sourceLabel,
+      items: compactItems,
+      balanceAfter: newBalance,
+    },
+  });
 
   return {
     success: true,

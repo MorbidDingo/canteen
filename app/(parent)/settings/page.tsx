@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronRight, Shield, Users, Wallet } from "lucide-react";
+import { Bell, ChevronRight, Shield, Users, Wallet } from "lucide-react";
 
 const settingItems = [
   {
@@ -22,6 +22,12 @@ const settingItems = [
     label: "Controls",
     description: "Set limits and blocked categories",
     icon: Shield,
+  },
+  {
+    href: "/notifications",
+    label: "Notifications",
+    description: "Search and review activity alerts",
+    icon: Bell,
   },
 ];
 

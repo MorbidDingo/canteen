@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import Image from "next/image";
+import { ParentNotificationBell } from "@/components/parent-notification-bell";
 
 type ParentMode = "canteen" | "library";
 
@@ -46,7 +47,7 @@ export default function ParentLayout({
   const prevCartCount = useRef(cartCount);
 
   const parentMode = getParentMode(pathname);
-  const isSettingsPage = ["/settings", "/children", "/wallet", "/controls"].includes(pathname);
+  const isSettingsPage = ["/settings", "/children", "/wallet", "/controls", "/notifications"].includes(pathname);
 
   // Animate cart icon when items are added
   useEffect(() => {
@@ -95,6 +96,8 @@ export default function ParentLayout({
 
           {/* Right: cart + wallet + avatar */}
           <div className="flex items-center gap-2">
+            <ParentNotificationBell parentId={session?.user?.id} />
+
             {parentMode === "canteen" && (
               <>
                 <Link

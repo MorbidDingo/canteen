@@ -225,6 +225,7 @@ export const userRelations = relations(user, ({ many }) => ({
   orders: many(order),
   children: many(child),
   preOrders: many(preOrder),
+  parentNotifications: many(parentNotification),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -243,6 +244,7 @@ export const childRelations = relations(child, ({ one, many }) => ({
   preOrders: many(preOrder),
   bookIssuances: many(bookIssuance),
   gateLogs: many(gateLog),
+  parentNotifications: many(parentNotification),
 }));
 
 export const walletRelations = relations(wallet, ({ one, many }) => ({
@@ -354,6 +356,24 @@ export const gateLog = pgTable("gate_log", {
   tappedAt: timestamp("tapped_at").notNull().$defaultFn(() => new Date()),
   isValid: boolean("is_valid").notNull().default(true), // false if anomaly detected
   anomalyReason: text("anomaly_reason"), // reason if isValid is false
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Parent Notifications ───────────────────────────────
+
+export const parentNotification = pgTable("parent_notification", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  parentId: text("parent_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  metadata: text("metadata"),
+  readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -528,4 +548,9 @@ export const bookIssuanceRelations = relations(bookIssuance, ({ one }) => ({
 
 export const librarySettingRelations = relations(librarySetting, ({ one }) => ({
   updater: one(user, { fields: [librarySetting.updatedBy], references: [user.id] }),
+}));
+
+export const parentNotificationRelations = relations(parentNotification, ({ one }) => ({
+  parent: one(user, { fields: [parentNotification.parentId], references: [user.id] }),
+  child: one(child, { fields: [parentNotification.childId], references: [child.id] }),
 }));

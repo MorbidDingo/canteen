@@ -6,7 +6,8 @@ export type AppEvent =
   | "orders-updated"
   | "menu-updated"
   | "library-updated"
-  | "gate-tap";
+  | "gate-tap"
+  | "parent-notification";
 
 export type AppEventMessage = {
   type: AppEvent;

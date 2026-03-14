@@ -13,6 +13,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { notifyParentForChild } from "@/lib/parent-notifications";
 
 async function getSetting(key: string): Promise<string> {
   const rows = await db
@@ -168,6 +169,20 @@ export async function POST(request: NextRequest) {
 
       broadcast("library-updated");
 
+      await notifyParentForChild({
+        childId: studentChild.id,
+        type: "LIBRARY_RETURN",
+        title: `${studentChild.name} submitted a library return`,
+        message: `Return requested: ${bookInfo[0]?.title ?? "Book"} (${resolvedCopy.accessionNumber}).`,
+        metadata: {
+          issuanceId: issuance.id,
+          status: "RETURN_PENDING",
+          fineAmount,
+          bookTitle: bookInfo[0]?.title,
+          accessionNumber: resolvedCopy.accessionNumber,
+        },
+      });
+
       await logAudit({
         userId: studentChild.id,
         userRole: "STUDENT",
@@ -252,6 +267,21 @@ export async function POST(request: NextRequest) {
     }
 
     broadcast("library-updated");
+
+    await notifyParentForChild({
+      childId: studentChild.id,
+      type: "LIBRARY_RETURN",
+      title: `${studentChild.name} returned a library book`,
+      message: `Returned: ${bookInfo[0]?.title ?? "Book"} (${resolvedCopy.accessionNumber}).`,
+      metadata: {
+        issuanceId: issuance.id,
+        status: "RETURNED",
+        fineAmount,
+        fineDeducted,
+        bookTitle: bookInfo[0]?.title,
+        accessionNumber: resolvedCopy.accessionNumber,
+      },
+    });
 
     await logAudit({
       userId: studentChild.id,
