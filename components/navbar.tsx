@@ -91,8 +91,10 @@ export function Navbar() {
       .catch(() => {});
   }, [isParent]);
 
-  // Operator, Management, and Library Operator have their own layouts with built-in nav
+  // Operator, Management, Library Operator have their own layouts with built-in nav
+  // Parent users also have a dedicated layout with bottom tabs
   if (role === "OPERATOR" || role === "MANAGEMENT" || role === "LIB_OPERATOR") return null;
+  if (isParent) return null;
 
   // Kiosk has its own layout — no navbar
   if (pathname.startsWith("/kiosk") || pathname.startsWith("/library/")) return null;
