@@ -70,7 +70,7 @@ export function PwaRegister() {
             </DialogHeader>
             <div className="space-y-3 text-center text-sm text-muted-foreground">
               <p>
-                Add Venus Café to your Home Screen to receive instant
+                Add certe to your Home Screen to receive instant
                 notifications about orders, gate entries, and more.
               </p>
               <ol className="text-left space-y-2 text-sm">

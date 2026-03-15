@@ -21,7 +21,7 @@ type PrintReceiptInput = {
   isOffline: boolean;
 };
 
-const STORAGE_KEY = "venus-printer-transport";
+const STORAGE_KEY = "certe-printer-transport";
 const BT_SERVICE = "000018f0-0000-1000-8000-00805f9b34fb";
 const BT_CHARACTERISTIC = "00002af1-0000-1000-8000-00805f9b34fb";
 

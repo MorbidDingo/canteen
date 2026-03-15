@@ -1,12 +1,11 @@
-const STATIC_CACHE = "venus-static-v2";
-const API_CACHE = "venus-api-v2";
+const STATIC_CACHE = "certe-static-v2";
+const API_CACHE = "certe-api-v2";
 
 const APP_SHELL = [
   "/",
   "/offline",
   "/manifest.json",
   "/favicon.ico",
-  "/cropped-logo-venus-1-2.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -32,7 +31,7 @@ self.addEventListener("activate", (event) => {
 
 /* ── Push notification handler ────────────────────────── */
 self.addEventListener("push", (event) => {
-  let data = { title: "Venus Café", body: "You have a new notification." };
+  let data = { title: "certe", body: "You have a new notification." };
   try {
     if (event.data) {
       data = event.data.json();
@@ -42,11 +41,11 @@ self.addEventListener("push", (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "Venus Café", {
+    self.registration.showNotification(data.title || "certe", {
       body: data.body || data.message || "You have a new notification.",
-      icon: "/cropped-logo-venus-1-2.png",
+      icon: "/favicon.ico",
       badge: "/favicon.ico",
-      tag: data.tag || "venus-notification",
+      tag: data.tag || "certe-notification",
       data: data,
     }),
   );

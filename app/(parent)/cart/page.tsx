@@ -217,7 +217,7 @@ export default function CartPage() {
         key: keyId,
         amount,
         currency,
-        name: "Venus Café",
+        name: "certe",
         description: "Food order payment",
         order_id: razorpayOrderId,
         handler: async (response: RazorpayResponse) => {

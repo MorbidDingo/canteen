@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -90,14 +90,14 @@ const demoOrderSteps = [
 
 /* ─── Category color mapping ──────────────────────────────── */
 const categoryColors: Record<string, string> = {
-  MEALS: "bg-[#f58220]/15 text-[#f58220]",
+  MEALS: "bg-[#d4891a]/15 text-[#d4891a]",
   SNACKS: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
   DRINKS: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   PACKED_FOOD: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
 
 const notifColors: Record<string, string> = {
-  KIOSK: "bg-[#f58220]/15 text-[#f58220]",
+  KIOSK: "bg-[#d4891a]/15 text-[#d4891a]",
   GATE: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   LIBRARY: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
   BLOCKED: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
@@ -117,8 +117,8 @@ export default function Home() {
       {/* ── Hero Section ─────────────────────────────────── */}
       <section className="relative flex flex-col items-center justify-center px-4 pt-16 pb-20 sm:pt-24 sm:pb-28 overflow-hidden">
         {/* Subtle gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#f58220]/5 via-transparent to-transparent pointer-events-none" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[#f58220]/[0.04] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#d4891a]/5 via-transparent to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[#d4891a]/[0.04] rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-2xl text-center space-y-6">
           <motion.div
@@ -127,13 +127,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="flex justify-center"
           >
-            <Image
-              src="/cropped-logo-venus-1-2.png"
-              alt="Venus World Schools"
-              width={90}
-              height={90}
-              className="drop-shadow-md"
-            />
+            <CerteLogo size={90} />
           </motion.div>
 
           <motion.h1
@@ -142,8 +136,7 @@ export default function Home() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl font-bold tracking-tight sm:text-6xl"
           >
-            <span className="text-[#1a3a8f] dark:text-blue-400">Venus</span>{" "}
-            <span className="text-[#f58220]">Café</span>
+            <CerteWordmark className="text-4xl sm:text-6xl" />
           </motion.h1>
 
           <motion.p
@@ -165,7 +158,7 @@ export default function Home() {
             <Link href="/register">
               <Button
                 size="lg"
-                className="gap-2 w-full sm:w-auto bg-[#f58220] hover:bg-[#e0741a] text-white shadow-lg shadow-[#f58220]/20 hover:shadow-xl hover:shadow-[#f58220]/30 transition-all"
+                className="gap-2 w-full sm:w-auto bg-[#d4891a] hover:bg-[#b87314] text-white shadow-lg shadow-[#d4891a]/20 hover:shadow-xl hover:shadow-[#d4891a]/30 transition-all"
               >
                 Get Started
                 <ArrowRight className="h-4 w-4" />
@@ -192,7 +185,7 @@ export default function Home() {
           className="relative mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl w-full px-4"
         >
           {[
-            { icon: UtensilsCrossed, label: "Pre-order Meals", color: "#f58220" },
+            { icon: UtensilsCrossed, label: "Pre-order Meals", color: "#d4891a" },
             { icon: Wallet, label: "Cashless Payments", color: "#1a3a8f" },
             { icon: Shield, label: "Parental Controls", color: "#2eab57" },
           ].map((item) => (
@@ -216,15 +209,15 @@ export default function Home() {
       <section className="px-4 py-16 sm:py-24 max-w-5xl mx-auto w-full">
         <ScrollSection>
           <div className="text-center mb-12">
-            <Badge className="mb-3 bg-[#f58220]/10 text-[#f58220] border-[#f58220]/20 hover:bg-[#f58220]/10">
+            <Badge className="mb-3 bg-[#d4891a]/10 text-[#d4891a] border-[#d4891a]/20 hover:bg-[#d4891a]/10">
               How It Works
             </Badge>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
               A school day, simplified
             </h2>
             <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-              From morning drop-off to lunchtime — here&apos;s how Venus Café
-              keeps parents and schools connected.
+              From morning drop-off to lunchtime — here&apos;s how <CerteWordmark />
+              {" "}keeps parents and schools connected.
             </p>
           </div>
         </ScrollSection>
@@ -235,7 +228,7 @@ export default function Home() {
             <ScrollSection>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     1
                   </span>
                   <h3 className="text-xl font-semibold">Morning Arrival</h3>
@@ -263,7 +256,7 @@ export default function Home() {
                     </div>
                     <div className="bg-card rounded-xl p-4 shadow-sm border">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-[#f58220]/15 flex items-center justify-center text-[#f58220] font-bold text-lg">
+                        <div className="w-12 h-12 rounded-full bg-[#d4891a]/15 flex items-center justify-center text-[#d4891a] font-bold text-lg">
                           A
                         </div>
                         <div className="flex-1">
@@ -314,7 +307,7 @@ export default function Home() {
                         <div className="flex items-center gap-1.5">
                           {item.discount > 0 ? (
                             <>
-                              <span className="text-sm font-bold text-[#f58220]">
+                              <span className="text-sm font-bold text-[#d4891a]">
                                 ₹{Math.round(item.price * (1 - item.discount / 100))}
                               </span>
                               <span className="text-xs text-muted-foreground line-through">
@@ -337,7 +330,7 @@ export default function Home() {
             <ScrollSection className="order-1 md:order-2" delay={0.15}>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     2
                   </span>
                   <h3 className="text-xl font-semibold">Browse & Order</h3>
@@ -356,7 +349,7 @@ export default function Home() {
             <ScrollSection>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     3
                   </span>
                   <h3 className="text-xl font-semibold">Cashless Wallet</h3>
@@ -445,7 +438,7 @@ export default function Home() {
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">Order #1042</CardTitle>
-                    <Badge className="bg-[#f58220]/15 text-[#f58220] border-0 text-xs">
+                    <Badge className="bg-[#d4891a]/15 text-[#d4891a] border-0 text-xs">
                       Preparing
                     </Badge>
                   </div>
@@ -463,7 +456,7 @@ export default function Home() {
                     </div>
                     <div className="border-t pt-2 flex items-center justify-between font-semibold text-sm">
                       <span>Total</span>
-                      <span className="text-[#f58220]">₹92</span>
+                      <span className="text-[#d4891a]">₹92</span>
                     </div>
                   </div>
                   {/* Progress tracker */}
@@ -474,16 +467,16 @@ export default function Home() {
                           <div
                             className={`w-3 h-3 rounded-full shrink-0 ${
                               step.done
-                                ? "bg-[#f58220]"
+                                ? "bg-[#d4891a]"
                                 : step.active
-                                ? "bg-[#f58220]/40 ring-2 ring-[#f58220]/30"
+                                ? "bg-[#d4891a]/40 ring-2 ring-[#d4891a]/30"
                                 : "bg-muted"
                             }`}
                           />
                           {i < demoOrderSteps.length - 1 && (
                             <div
                               className={`h-0.5 flex-1 ${
-                                step.done ? "bg-[#f58220]" : "bg-muted"
+                                step.done ? "bg-[#d4891a]" : "bg-muted"
                               }`}
                             />
                           )}
@@ -506,7 +499,7 @@ export default function Home() {
             <ScrollSection className="order-1 md:order-2" delay={0.15}>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     4
                   </span>
                   <h3 className="text-xl font-semibold">Track Every Order</h3>
@@ -527,7 +520,7 @@ export default function Home() {
             <ScrollSection>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     5
                   </span>
                   <h3 className="text-xl font-semibold">You&apos;re in Control</h3>
@@ -554,13 +547,13 @@ export default function Home() {
                       <span className="text-sm text-muted-foreground">
                         Daily Limit
                       </span>
-                      <span className="text-sm font-bold text-[#f58220]">
+                      <span className="text-sm font-bold text-[#d4891a]">
                         ₹150
                       </span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-[#f58220] rounded-full"
+                        className="h-full bg-[#d4891a] rounded-full"
                         style={{ width: "36%" }}
                       />
                     </div>
@@ -600,9 +593,9 @@ export default function Home() {
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-[#f58220]" />
+                    <Bell className="h-4 w-4 text-[#d4891a]" />
                     <CardTitle className="text-base">Notifications</CardTitle>
-                    <Badge className="bg-[#f58220] text-white border-0 text-[10px] h-5 px-1.5 ml-auto">
+                    <Badge className="bg-[#d4891a] text-white border-0 text-[10px] h-5 px-1.5 ml-auto">
                       2 new
                     </Badge>
                   </div>
@@ -613,7 +606,7 @@ export default function Home() {
                       key={i}
                       className={`flex items-start gap-3 p-2.5 rounded-lg transition-colors ${
                         !n.read
-                          ? "bg-[#f58220]/[0.04] dark:bg-[#f58220]/[0.08]"
+                          ? "bg-[#d4891a]/[0.04] dark:bg-[#d4891a]/[0.08]"
                           : ""
                       }`}
                     >
@@ -628,7 +621,7 @@ export default function Home() {
                             {n.title}
                           </p>
                           {!n.read && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#f58220] shrink-0" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-[#d4891a] shrink-0" />
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
@@ -646,7 +639,7 @@ export default function Home() {
             <ScrollSection className="order-1 md:order-2" delay={0.15}>
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#f58220]/15 text-[#f58220] text-sm font-bold">
+                  <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[#d4891a]/15 text-[#d4891a] text-sm font-bold">
                     6
                   </span>
                   <h3 className="text-xl font-semibold">Stay Informed</h3>
@@ -686,7 +679,7 @@ export default function Home() {
                 icon: ChefHat,
                 title: "Self-Service Kiosk",
                 desc: "Students tap their RFID card, browse the menu, and order — all in under 30 seconds.",
-                color: "#f58220",
+                color: "#d4891a",
               },
               {
                 icon: Clock,
@@ -751,13 +744,13 @@ export default function Home() {
               Ready to get started?
             </h2>
             <p className="text-muted-foreground">
-              Join Venus Café and make school meals effortless for your family.
+              Join <CerteWordmark /> and make school meals effortless for your family.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link href="/register">
                 <Button
                   size="lg"
-                  className="gap-2 w-full sm:w-auto bg-[#f58220] hover:bg-[#e0741a] text-white shadow-lg shadow-[#f58220]/20 hover:shadow-xl hover:shadow-[#f58220]/30 transition-all"
+                  className="gap-2 w-full sm:w-auto bg-[#d4891a] hover:bg-[#b87314] text-white shadow-lg shadow-[#d4891a]/20 hover:shadow-xl hover:shadow-[#d4891a]/30 transition-all"
                 >
                   Create Account
                   <ArrowRight className="h-4 w-4" />
@@ -781,18 +774,10 @@ export default function Home() {
       <footer className="border-t px-4 py-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Image
-              src="/cropped-logo-venus-1-2.png"
-              alt="Venus World Schools"
-              width={24}
-              height={24}
-            />
-            <span>
-              <span className="text-[#1a3a8f] dark:text-blue-400 font-medium">Venus</span>{" "}
-              <span className="text-[#f58220] font-medium">Café</span>
-            </span>
+            <CerteLogo size={24} />
+            <CerteWordmark className="text-sm" />
           </div>
-          <p>© {new Date().getFullYear()} Venus World School</p>
+          <p>© {new Date().getFullYear()} certe</p>
         </div>
       </footer>
     </div>

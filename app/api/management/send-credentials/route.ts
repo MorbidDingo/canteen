@@ -63,19 +63,19 @@ export async function POST(request: NextRequest) {
           from:
             process.env.SMTP_FROM ||
             process.env.SMTP_USER ||
-            "noreply@venuscafe.com",
+            "noreply@certe.app",
           to: cred.email,
-          subject: "Your Venus Café Parent Account Credentials",
+          subject: "Your certe Parent Account Credentials",
           html: `
             <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-              <h2 style="color: #1a3a8f;">Welcome to Venus Café!</h2>
+              <h2 style="color: #d4891a;">Welcome to certe!</h2>
               <p>Hi ${cred.parentName},</p>
               <p>A parent account has been created for you. Use the credentials below to log in:</p>
               <div style="background: #f4f4f5; padding: 16px; border-radius: 8px; margin: 16px 0;">
                 <p style="margin: 4px 0;"><strong>Email:</strong> ${cred.email}</p>
                 <p style="margin: 4px 0;"><strong>Password:</strong> ${cred.password}</p>
               </div>
-              <a href="${appUrl}/login" style="display: inline-block; background: #1a3a8f; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+              <a href="${appUrl}/login" style="display: inline-block; background: #d4891a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
                 Log In Now
               </a>
               <p style="color: #666; font-size: 14px;">Please change your password after logging in for the first time.</p>

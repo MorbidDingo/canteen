@@ -24,7 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
-import Image from "next/image";
+import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
 
 type ParentMode = "canteen" | "library";
@@ -86,12 +86,8 @@ export default function ParentLayout({
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-            <Image
-              src="/cropped-logo-venus-1-2.png"
-              alt="Logo"
-              width={50}
-              height={50}
-            />
+            <CerteLogo size={36} />
+            <CerteWordmark className="text-lg" />
           </Link>
 
           {/* Right: cart + wallet + avatar */}

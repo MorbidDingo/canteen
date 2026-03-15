@@ -383,7 +383,7 @@ export default function WalletPage() {
       }
       new window.Razorpay({
         key: keyId, amount: amountPaise, currency: "INR",
-        name: "Venus Café", description: `Wallet top-up for ${childName}`,
+        name: "certe", description: `Wallet top-up for ${childName}`,
         order_id: razorpayOrderId,
         handler: async (resp) => {
           try {

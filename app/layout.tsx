@@ -20,28 +20,28 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://cafe-venus.onrender.com"),
 
   title: {
-    default: "Venus Café — School Canteen Pre-Order System",
-    template: "%s | Venus Café",
+    default: "certe — Identity Infrastructure & Campus Payments",
+    template: "%s | certe",
   },
 
   description:
-    "Venus Café allows parents and students of Venus World School to pre-order canteen meals, reduce queue time, and manage student food purchases digitally.",
+    "certe is your identity infrastructure and campus payments platform. Manage student meals, wallets, gate access, and library — all from one place.",
 
-  applicationName: "Venus Café",
+  applicationName: "certe",
 
   keywords: [
-    "Venus Café",
+    "certe",
+    "campus payments",
+    "identity infrastructure",
     "school canteen",
-    "canteen pre order",
-    "school cafeteria system",
     "student meal ordering",
     "school food ordering",
-    "Venus World School",
+    "campus management",
   ],
 
-  authors: [{ name: "Venus Café Team" }],
-  creator: "Venus Café",
-  publisher: "Venus World School",
+  authors: [{ name: "certe" }],
+  creator: "certe",
+  publisher: "certe",
 
   robots: {
     index: true,
@@ -60,35 +60,35 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "https://cafe-venus.onrender.com",
-    title: "Venus Café — School Canteen Pre-Order System",
+    title: "certe — Identity Infrastructure & Campus Payments",
     description:
-      "Pre-order meals from the Venus World School canteen. Skip queues and manage student meals easily.",
-    siteName: "Venus Café",
+      "Manage student meals, wallets, gate access, and library with certe — your all-in-one campus platform.",
+    siteName: "certe",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Venus Café Canteen Ordering System",
+        alt: "certe — Campus Payments Platform",
       },
     ],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "Venus Café — School Canteen Pre-Order System",
+    title: "certe — Identity Infrastructure & Campus Payments",
     description:
-      "Pre-order meals from Venus World School canteen and avoid queues.",
+      "Manage student meals, wallets, gate access, and library with certe.",
     images: ["/og-image.png"],
   },
 
   appleWebApp: {
     capable: true,
-    title: "Venus Café",
+    title: "certe",
     statusBarStyle: "default",
   },
 
-  category: "food",
+  category: "education",
 };
 
 export const viewport: Viewport = {
