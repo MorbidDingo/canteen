@@ -1,11 +1,14 @@
-const STATIC_CACHE = "certe-static-v2";
-const API_CACHE = "certe-api-v2";
+const STATIC_CACHE = "certe-static-v3";
+const API_CACHE = "certe-api-v3";
 
 const APP_SHELL = [
   "/",
   "/offline",
   "/manifest.json",
   "/favicon.ico",
+  "/kiosk",
+  "/library",
+  "/gate",
 ];
 
 self.addEventListener("install", (event) => {

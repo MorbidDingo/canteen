@@ -1,4 +1,4 @@
-export type OfflineActionType = "KIOSK_ORDER" | "LIBRARY_ISSUE" | "LIBRARY_RETURN";
+export type OfflineActionType = "KIOSK_ORDER" | "LIBRARY_ISSUE" | "LIBRARY_RETURN" | "GATE_TAP";
 
 export interface OfflineAction {
   id: string;
