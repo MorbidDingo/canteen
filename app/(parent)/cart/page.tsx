@@ -707,26 +707,28 @@ export default function CartPage() {
                         )}
 
                         {/* Balance card */}
-                        {selectedWallet && (
-                          <Card className="border-0 bg-gradient-to-br from-emerald-500 to-teal-600 text-white overflow-hidden">
-                            <CardContent className="py-3 flex items-center justify-between">
-                              <div>
-                                <p className="text-xs text-white/70">
-                                  {selectedWallet.childName}&apos;s Balance
-                                </p>
-                                <p className="text-xl font-bold flex items-center gap-0.5">
-                                  <IndianRupee className="h-4 w-4" />
-                                  {selectedWallet.balance.toFixed(2)}
-                                </p>
-                              </div>
-                              {!hasEnoughBalance && (
-                                <Badge className="bg-white/20 text-white border-0 text-[10px]">
-                                  Insufficient
-                                </Badge>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
+{selectedWallet && (
+  <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden shadow-xl">
+    <CardContent className="py-3 flex items-center justify-between">
+      <div>
+        <p className="text-xs text-orange-200/70 tracking-wide">
+          {selectedWallet.childName}&apos;s Balance
+        </p>
+
+        <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
+          <IndianRupee className="h-4 w-4 text-orange-400" />
+          {selectedWallet.balance.toFixed(2)}
+        </p>
+      </div>
+
+      {!hasEnoughBalance && (
+        <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px] font-medium">
+          Insufficient
+        </Badge>
+      )}
+    </CardContent>
+  </Card>
+)}  
 
                         {/* Slide-to-pay */}
                         {selectedWallet && (
