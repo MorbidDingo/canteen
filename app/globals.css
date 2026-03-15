@@ -315,3 +315,30 @@ button:hover {
   pointer-events: none;
   transition: opacity 0.3s ease;
 }
+
+.text-shimmer-silver {
+  background: linear-gradient(110deg, #8f969f 0%, #f2f5f8 30%, #a9b0b9 55%, #f4f7fa 75%, #8f969f 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3s ease-in-out infinite;
+}
+
+.text-shimmer-silver-soft {
+  background: linear-gradient(110deg, #7b828b 0%, #d9dee4 35%, #a1a8b1 70%, #7b828b 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3.5s ease-in-out infinite;
+}
+
+.text-shimmer-gold {
+  background: linear-gradient(110deg, #8f6f1d 0%, #f6d678 30%, #c79d3b 55%, #ffe7a9 75%, #8f6f1d 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3s ease-in-out infinite;
+}
