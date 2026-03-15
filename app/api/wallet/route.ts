@@ -15,6 +15,7 @@ export async function GET() {
     .select({
       childId: child.id,
       childName: child.name,
+      rfidCardId: child.rfidCardId,
       balance: wallet.balance,
     })
     .from(child)
@@ -25,6 +26,8 @@ export async function GET() {
     results.map((r) => ({
       childId: r.childId,
       childName: r.childName,
+      parentName: session.user.name,
+      rfidCardLast3: r.rfidCardId ? r.rfidCardId.slice(-3) : null,
       balance: r.balance ?? 0,
     }))
   );

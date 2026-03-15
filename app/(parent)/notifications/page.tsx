@@ -5,6 +5,7 @@ import { Bell, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useSSE } from "@/lib/events";
 
 type ParentNotification = {
   id: string;
@@ -77,6 +78,8 @@ export default function ParentNotificationsPage() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  useSSE("parent-notification", fetchNotifications);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.readAt).length,

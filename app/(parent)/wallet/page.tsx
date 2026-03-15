@@ -12,13 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Wallet as WalletIcon,
@@ -69,6 +62,8 @@ interface RazorpayInstance {
 type ChildWallet = {
   childId: string;
   childName: string;
+  parentName: string;
+  rfidCardLast3: string | null;
   balance: number;
 };
 
@@ -92,6 +87,7 @@ export default function WalletPage() {
   const [txLoading, setTxLoading] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [topUpLoading, setTopUpLoading] = useState(false);
+  const cardTrackRef = useRef<HTMLDivElement>(null);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -146,65 +142,36 @@ export default function WalletPage() {
   }, [selectedChildId, fetchTransactions]);
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
+  const selectedWalletIndex = wallets.findIndex((w) => w.childId === selectedChildId);
 
-  // Premium wallet card tilt/shimmer effect
-  const cardRef = useRef<HTMLDivElement>(null);
+  const handleCardScroll = useCallback(() => {
+    const track = cardTrackRef.current;
+    if (!track || wallets.length === 0) return;
+    const cardWidth = track.clientWidth;
+    if (cardWidth === 0) return;
+    const nextIndex = Math.round(track.scrollLeft / cardWidth);
+    const nextWallet = wallets[Math.max(0, Math.min(nextIndex, wallets.length - 1))];
+    if (nextWallet && nextWallet.childId !== selectedChildId) {
+      setSelectedChildId(nextWallet.childId);
+    }
+  }, [wallets, selectedChildId]);
+
+  const scrollToWallet = useCallback((walletIndex: number) => {
+    const track = cardTrackRef.current;
+    if (!track) return;
+    track.scrollTo({ left: track.clientWidth * walletIndex, behavior: "smooth" });
+  }, []);
 
   useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    const handleMove = (clientX: number, clientY: number) => {
-      const rect = card.getBoundingClientRect();
-      const x = ((clientX - rect.left) / rect.width) * 100;
-      const y = ((clientY - rect.top) / rect.height) * 100;
-      const rotateX = ((y - 50) / 50) * -8;
-      const rotateY = ((x - 50) / 50) * 8;
-      card.style.transform = `perspective(600px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-      card.style.setProperty("--shimmer-x", `${x}%`);
-      card.style.setProperty("--shimmer-y", `${y}%`);
-    };
-
-    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    };
-    const handleLeave = () => {
-      card.style.transform = "perspective(600px) rotateX(0deg) rotateY(0deg)";
-      card.style.setProperty("--shimmer-x", "50%");
-      card.style.setProperty("--shimmer-y", "50%");
-    };
-
-    // DeviceOrientation for real device tilt
-    const handleOrientation = (e: DeviceOrientationEvent) => {
-      const gamma = e.gamma ?? 0; // left-right tilt (-90 to 90)
-      const beta = e.beta ?? 0;   // front-back tilt (-180 to 180)
-      const rotateY = (gamma / 90) * 12;
-      const rotateX = ((beta - 45) / 90) * -12; // offset beta assuming ~45° hold angle
-      card.style.transform = `perspective(600px) rotateX(${Math.max(-12, Math.min(12, rotateX))}deg) rotateY(${Math.max(-12, Math.min(12, rotateY))}deg)`;
-      const shimmerX = 50 + (gamma / 90) * 50;
-      const shimmerY = 50 + ((beta - 45) / 90) * 50;
-      card.style.setProperty("--shimmer-x", `${Math.max(0, Math.min(100, shimmerX))}%`);
-      card.style.setProperty("--shimmer-y", `${Math.max(0, Math.min(100, shimmerY))}%`);
-    };
-
-    card.addEventListener("mousemove", handleMouseMove);
-    card.addEventListener("mouseleave", handleLeave);
-    card.addEventListener("touchmove", handleTouchMove);
-    card.addEventListener("touchend", handleLeave);
-
-    if (typeof DeviceOrientationEvent !== "undefined") {
-      window.addEventListener("deviceorientation", handleOrientation);
+    if (!selectedChildId && wallets.length > 0) {
+      setSelectedChildId(wallets[0].childId);
     }
+  }, [selectedChildId, wallets]);
 
-    return () => {
-      card.removeEventListener("mousemove", handleMouseMove);
-      card.removeEventListener("mouseleave", handleLeave);
-      card.removeEventListener("touchmove", handleTouchMove);
-      card.removeEventListener("touchend", handleLeave);
-      window.removeEventListener("deviceorientation", handleOrientation);
-    };
-  }, [selectedWallet]);
+  useEffect(() => {
+    if (!selectedChildId || wallets.length === 0 || selectedWalletIndex < 0) return;
+    scrollToWallet(selectedWalletIndex);
+  }, [selectedChildId, selectedWalletIndex, scrollToWallet, wallets.length]);
 
   const handleRazorpayTopUp = (
     razorpayOrderId: string,
@@ -405,39 +372,74 @@ export default function WalletPage() {
         </p>
       </div>
 
-      {/* Child selector */}
-      {wallets.length > 1 && (
-        <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select child" />
-          </SelectTrigger>
-          <SelectContent>
-            {wallets.map((w) => (
-              <SelectItem key={w.childId} value={w.childId}>
-                {w.childName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {/* Balance card — Premium Black with White Shimmer */}
-      {selectedWallet && (
+      {/* Swipeable premium wallet cards */}
+      <div className="relative">
+        {wallets.length > 1 && (
+          <>
+            <div className="absolute inset-x-4 top-2 h-full rounded-2xl border border-white/5 bg-zinc-900/70" />
+            <div className="absolute inset-x-8 top-4 h-full rounded-2xl border border-white/5 bg-zinc-950/80" />
+          </>
+        )}
         <div
-          ref={cardRef}
-          className="wallet-card-premium rounded-2xl border border-white/10 shadow-2xl transition-transform duration-200 ease-out will-change-transform"
+          ref={cardTrackRef}
+          className="relative z-10 flex overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          onScroll={handleCardScroll}
         >
-          <div className="relative z-10 px-6 pt-6 pb-6 text-center">
-            <p className="text-sm text-white/70">
-              {selectedWallet.childName}&apos;s Balance
-            </p>
-            <p className="text-4xl font-bold mt-1 flex items-center justify-center gap-1 text-white">
-              <IndianRupee className="h-8 w-8" />
-              {selectedWallet.balance.toFixed(2)}
-            </p>
-          </div>
+          {wallets.map((walletItem) => (
+            <div key={walletItem.childId} className="min-w-full snap-center px-1">
+              <div className="wallet-card-premium rounded-2xl border border-white/10 shadow-2xl">
+                <div className="relative z-10 px-6 py-6 space-y-7">
+                  <div>
+                    <p className="text-2xl font-semibold tracking-wide text-shimmer-silver">
+                      {walletItem.childName}
+                    </p>
+                    <p className="text-sm mt-1 text-shimmer-silver-soft">
+                      {walletItem.parentName}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/55">
+                      Balance
+                    </p>
+                    <p className="text-4xl font-bold flex items-center gap-1 text-shimmer-gold">
+                      <IndianRupee className="h-8 w-8" />
+                      {walletItem.balance.toFixed(2)}
+                    </p>
+                  </div>
+                  <p className="text-sm tracking-[0.3em] text-shimmer-silver">
+                    ••• ••• ••• {walletItem.rfidCardLast3 ?? "•••"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+        {wallets.length > 1 && (
+          <>
+            <p className="mt-2 text-xs text-muted-foreground text-center">
+              Swipe to shuffle between cards
+            </p>
+            <div className="mt-2 flex items-center justify-center gap-1.5">
+              {wallets.map((walletItem, index) => (
+                <button
+                  key={walletItem.childId}
+                  type="button"
+                  className={`h-1.5 rounded-full transition-all ${
+                    selectedChildId === walletItem.childId
+                      ? "w-6 bg-primary"
+                      : "w-2 bg-muted-foreground/40"
+                  }`}
+                  onClick={() => {
+                    setSelectedChildId(walletItem.childId);
+                    scrollToWallet(index);
+                  }}
+                  aria-label={`View ${walletItem.childName} wallet card`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Top-up card */}
       <Card>
