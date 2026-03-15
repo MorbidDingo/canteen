@@ -5,13 +5,14 @@ import { eq } from "drizzle-orm";
 
 type IncomingAction = {
   id: string;
-  type: "KIOSK_ORDER" | "LIBRARY_ISSUE" | "LIBRARY_RETURN";
+  type: "KIOSK_ORDER" | "LIBRARY_ISSUE" | "LIBRARY_RETURN" | "GATE_TAP";
   payload: Record<string, unknown>;
 };
 
 function getEndpoint(type: IncomingAction["type"]) {
   if (type === "KIOSK_ORDER") return "/api/kiosk/order";
   if (type === "LIBRARY_ISSUE") return "/api/library/issue";
+  if (type === "GATE_TAP") return "/api/gate/tap";
   return "/api/library/return";
 }
 

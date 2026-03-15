@@ -1,6 +1,11 @@
 // Server-side event emitter for SSE push notifications.
 // This runs only on the server — API routes call `broadcast()` after mutations,
 // and the SSE endpoint streams events to all connected clients.
+//
+// Uses globalThis to guarantee a single Set across all module instances in the
+// Node.js process.  Without this, Next.js production builds can create separate
+// module scopes for different route bundles, causing broadcast() to write into a
+// different Set than the one the SSE endpoint reads from.
 
 export type AppEvent =
   | "orders-updated"
@@ -16,7 +21,15 @@ export type AppEventMessage = {
 
 type Listener = (event: AppEventMessage) => void;
 
-const clients = new Set<Listener>();
+const globalForSSE = globalThis as unknown as {
+  __sseClients?: Set<Listener>;
+};
+
+if (!globalForSSE.__sseClients) {
+  globalForSSE.__sseClients = new Set<Listener>();
+}
+
+const clients: Set<Listener> = globalForSSE.__sseClients;
 
 /** Register an SSE client to receive events */
 export function addClient(listener: Listener) {

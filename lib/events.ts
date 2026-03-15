@@ -41,12 +41,45 @@ function getSSEListeners(event: AppEvent) {
 let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let refCount = 0;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY = 30_000;
+const BASE_RECONNECT_DELAY = 1_000;
+
+// ─── Polling fallback ────────────────────────────────────
+// When SSE fails repeatedly, we fire synthetic events on a
+// timer so that hooks calling useRealtimeData still refresh.
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(() => {
+    // Fire a synthetic refresh for every registered event type
+    for (const [event, fns] of sseListeners) {
+      if (fns.size > 0) {
+        fns.forEach((fn) => fn(undefined));
+      }
+      void event; // used in iteration
+    }
+  }, 10_000);
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
 
 function connectSSE() {
   if (typeof window === "undefined") return;
   if (eventSource) return;
 
   eventSource = new EventSource("/api/events");
+
+  eventSource.onopen = () => {
+    reconnectAttempts = 0;
+    stopPolling();
+  };
 
   eventSource.onmessage = (e) => {
     try {
@@ -60,12 +93,22 @@ function connectSSE() {
   };
 
   eventSource.onerror = () => {
-    // Connection lost — close and reconnect after a delay
+    // Connection lost — close and reconnect with exponential backoff
     eventSource?.close();
     eventSource = null;
 
     if (refCount > 0) {
-      reconnectTimer = setTimeout(connectSSE, 3_000);
+      const delay = Math.min(
+        BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+        MAX_RECONNECT_DELAY,
+      );
+      reconnectAttempts++;
+      reconnectTimer = setTimeout(connectSSE, delay);
+
+      // After several failed attempts, start polling as a fallback
+      if (reconnectAttempts >= 3) {
+        startPolling();
+      }
     }
   };
 }
@@ -79,6 +122,8 @@ function disconnectSSE() {
     eventSource.close();
     eventSource = null;
   }
+  stopPolling();
+  reconnectAttempts = 0;
 }
 
 // ─── Hooks ───────────────────────────────────────────────
@@ -121,7 +166,10 @@ export function useRealtimeData(
   event: AppEvent,
 ) {
   const fetchRef = useRef(fetchFn);
-  fetchRef.current = fetchFn;
+
+  useEffect(() => {
+    fetchRef.current = fetchFn;
+  });
 
   const stableFetch = useCallback(() => {
     fetchRef.current();

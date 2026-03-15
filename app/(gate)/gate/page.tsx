@@ -9,8 +9,10 @@ import {
   LogOut,
   CreditCard,
   Shield,
+  WifiOff,
 } from "lucide-react";
 import { GATE_DIRECTION_LABELS, type GateDirection } from "@/lib/constants";
+import { enqueueOfflineAction } from "@/lib/store/offline-db";
 
 type StudentInfo = {
   id: string;
@@ -35,11 +37,12 @@ type TapError = {
 const DISPLAY_DURATION_MS = 5000; // show result for 5 seconds then reset
 
 export default function GatePage() {
-  const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">(
+  const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error" | "offline-queued">(
     "idle",
   );
   const [result, setResult] = useState<TapResult>(null);
   const [error, setError] = useState<TapError>(null);
+  const [offlineId, setOfflineId] = useState<string | null>(null);
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -60,6 +63,7 @@ export default function GatePage() {
     setPhase("idle");
     setResult(null);
     setError(null);
+    setOfflineId(null);
     if (rfidInputRef.current) {
       rfidInputRef.current.value = "";
       rfidInputRef.current.focus();
@@ -97,8 +101,18 @@ export default function GatePage() {
           setPhase("result");
         }
       } catch {
-        setError({ error: "Network error — please check connection" });
-        setPhase("error");
+        // Network failure — queue the tap for offline sync
+        try {
+          const queued = await enqueueOfflineAction({
+            type: "GATE_TAP",
+            payload: { rfidCardId: rfidCardId.trim() },
+          });
+          setOfflineId(queued.id.slice(0, 6).toUpperCase());
+          setPhase("offline-queued");
+        } catch {
+          setError({ error: "Offline — tap could not be saved" });
+          setPhase("error");
+        }
       }
 
       // Clear RFID input
@@ -274,6 +288,26 @@ export default function GatePage() {
             <XCircle className="h-6 w-6" />
             {error.error}
           </div>
+        </div>
+      )}
+
+      {/* ── Offline Queued ───────────────────────────────── */}
+      {phase === "offline-queued" && (
+        <div className="flex flex-col items-center gap-6 animate-scale-in max-w-md w-full">
+          <div className="w-28 h-28 rounded-full bg-amber-500/15 flex items-center justify-center">
+            <WifiOff className="h-12 w-12 text-amber-500" />
+          </div>
+          <p className="text-xl font-semibold text-amber-600 dark:text-amber-400">
+            Saved Offline
+          </p>
+          {offlineId && (
+            <p className="text-sm text-muted-foreground">
+              Queue ID: {offlineId}
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground text-center">
+            This tap will be synced automatically when the network returns.
+          </p>
         </div>
       )}
 
