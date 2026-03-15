@@ -88,6 +88,8 @@ export default function WalletPage() {
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [topUpLoading, setTopUpLoading] = useState(false);
   const cardTrackRef = useRef<HTMLDivElement>(null);
+  const cardScrollRafRef = useRef<number | null>(null);
+  const selectedChildIdRef = useRef(selectedChildId);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -136,6 +138,10 @@ export default function WalletPage() {
   }, [fetchWallets]);
 
   useEffect(() => {
+    selectedChildIdRef.current = selectedChildId;
+  }, [selectedChildId]);
+
+  useEffect(() => {
     if (selectedChildId) {
       fetchTransactions(selectedChildId);
     }
@@ -147,14 +153,28 @@ export default function WalletPage() {
   const handleCardScroll = useCallback(() => {
     const track = cardTrackRef.current;
     if (!track || wallets.length === 0) return;
-    const cardWidth = track.clientWidth;
-    if (cardWidth === 0) return;
-    const nextIndex = Math.round(track.scrollLeft / cardWidth);
-    const nextWallet = wallets[Math.max(0, Math.min(nextIndex, wallets.length - 1))];
-    if (nextWallet && nextWallet.childId !== selectedChildId) {
-      setSelectedChildId(nextWallet.childId);
+    if (cardScrollRafRef.current !== null) {
+      return;
     }
-  }, [wallets, selectedChildId]);
+    cardScrollRafRef.current = window.requestAnimationFrame(() => {
+      cardScrollRafRef.current = null;
+      const cardWidth = track.clientWidth;
+      if (cardWidth === 0) return;
+      const nextIndex = Math.round(track.scrollLeft / cardWidth);
+      const nextWallet = wallets[Math.max(0, Math.min(nextIndex, wallets.length - 1))];
+      if (nextWallet && nextWallet.childId !== selectedChildIdRef.current) {
+        setSelectedChildId(nextWallet.childId);
+      }
+    });
+  }, [wallets]);
+
+  useEffect(() => {
+    return () => {
+      if (cardScrollRafRef.current !== null) {
+        cancelAnimationFrame(cardScrollRafRef.current);
+      }
+    };
+  }, []);
 
   const scrollToWallet = useCallback((walletIndex: number) => {
     const track = cardTrackRef.current;
@@ -417,7 +437,7 @@ export default function WalletPage() {
         {wallets.length > 1 && (
           <>
             <p className="mt-2 text-xs text-muted-foreground text-center">
-              Swipe to shuffle between cards
+              Swipe to switch between cards
             </p>
             <div className="mt-2 flex items-center justify-center gap-1.5">
               {wallets.map((walletItem, index) => (
