@@ -151,6 +151,9 @@ export default function WalletPage() {
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
   const selectedWalletIndex = wallets.findIndex((w) => w.childId === selectedChildId);
+  const canGoPrev = selectedWalletIndex > 0;
+  const canGoNext =
+    selectedWalletIndex >= 0 && selectedWalletIndex < wallets.length - 1;
 
   const handleCardScroll = useCallback(() => {
     const track = cardTrackRef.current;
@@ -459,13 +462,17 @@ export default function WalletPage() {
             <div className="mt-2 flex items-center justify-center gap-3 text-amber-300/85">
               <button
                 type="button"
-                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20"
+                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => {
+                  if (!canGoPrev) return;
                   const nextIndex = Math.max(0, selectedWalletIndex - 1);
-                  setSelectedChildId(wallets[nextIndex].childId);
+                  const nextWallet = wallets[nextIndex];
+                  if (!nextWallet) return;
+                  setSelectedChildId(nextWallet.childId);
                   scrollToWallet(nextIndex);
                 }}
                 aria-label="View previous wallet card"
+                disabled={!canGoPrev}
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
@@ -474,13 +481,17 @@ export default function WalletPage() {
               </p>
               <button
                 type="button"
-                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20"
+                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => {
+                  if (!canGoNext) return;
                   const nextIndex = Math.min(wallets.length - 1, selectedWalletIndex + 1);
-                  setSelectedChildId(wallets[nextIndex].childId);
+                  const nextWallet = wallets[nextIndex];
+                  if (!nextWallet) return;
+                  setSelectedChildId(nextWallet.childId);
                   scrollToWallet(nextIndex);
                 }}
                 aria-label="View next wallet card"
+                disabled={!canGoNext}
               >
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
