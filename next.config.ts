@@ -16,9 +16,6 @@ const nextConfig: NextConfig = {
       {
         pathname: "/uploads/**",
       },
-      {
-        pathname: "/cropped-logo-venus-1-2.png",
-      },
     ],
   },
   experimental: {

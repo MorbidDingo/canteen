@@ -29,10 +29,10 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }) => {
       const html = `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #1a3a8f;">Venus Café — Password Reset</h2>
+          <h2 style="color: #d4891a;">certe — Password Reset</h2>
           <p>Hi ${user.name},</p>
           <p>We received a request to reset your password. Click the button below to set a new password:</p>
-          <a href="${url}" style="display: inline-block; background: #1a3a8f; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
+          <a href="${url}" style="display: inline-block; background: #d4891a; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; margin: 16px 0;">
             Reset Password
           </a>
           <p style="color: #666; font-size: 14px;">This link expires in 1 hour. If you didn't request this, you can safely ignore this email.</p>
@@ -42,9 +42,9 @@ export const auth = betterAuth({
       if (transporter) {
         try {
           await transporter.sendMail({
-            from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@venuscafe.com",
+            from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@certe.app",
             to: user.email,
-            subject: "Reset your Venus Café password",
+            subject: "Reset your certe password",
             html,
           });
         } catch (err) {

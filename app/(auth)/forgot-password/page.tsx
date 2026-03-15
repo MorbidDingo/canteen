@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, ArrowLeft, Mail } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
+import { CerteLogo } from "@/components/certe-logo";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -52,12 +52,7 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-md animate-scale-in">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2">
-            <Image
-              src="/cropped-logo-venus-1-2.png"
-              alt="Venus World Schools"
-              width={60}
-              height={60}
-            />
+            <CerteLogo size={60} />
           </div>
           <CardTitle className="text-2xl">Forgot Password</CardTitle>
           <CardDescription>

@@ -1,11 +1,11 @@
 {
-  "name": "Venus Cafe",
-  "short_name": "VenusCafe",
+  "name": "certe",
+  "short_name": "certe",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "description": "Offline-first kiosk and library experience for Venus Cafe",
+  "theme_color": "#d4891a",
+  "description": "Identity infrastructure and campus payments by certe",
   "icons": [
     {
       "src": "/favicon.ico",

@@ -279,7 +279,7 @@ export default function GatePage() {
 
       {/* Footer note */}
       <p className="absolute bottom-4 text-xs text-muted-foreground/50">
-        Venus World School — Gate Verification System
+        certe — Gate Verification System
       </p>
     </div>
   );

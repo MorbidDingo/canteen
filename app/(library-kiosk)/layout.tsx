@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Venus Library — Kiosk",
+  title: "certe — Library Kiosk",
   description: "Student self-service library terminal",
 };
 

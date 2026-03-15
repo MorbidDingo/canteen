@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Image from "next/image";
+import { CerteLogo } from "@/components/certe-logo";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -480,13 +480,7 @@ export default function KioskPage() {
             </Badge>
           )}
 
-          <Image
-            src="/cropped-logo-venus-1-2.png"
-            alt="Venus World Schools"
-            width={52}
-            height={52}
-            className="shrink-0"
-          />
+          <CerteLogo size={48} />
           <Link href="/kiosk/offline">
             <Button variant="outline" size="sm">Offline Ops</Button>
           </Link>

@@ -15,7 +15,7 @@ type MenuCacheRecord = {
   cachedAt: string;
 };
 
-const DB_NAME = "venus-offline-db";
+const DB_NAME = "certe-offline-db";
 const DB_VERSION = 1;
 const ACTIONS_STORE = "offline_actions";
 const MENU_STORE = "menu_cache";

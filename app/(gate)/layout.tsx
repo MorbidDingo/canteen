@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Venus School — Gate",
+  title: "certe — Gate",
   description: "Student entry/exit gate verification",
 };
 

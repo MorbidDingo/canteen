@@ -15,9 +15,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { UtensilsCrossed, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
+import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { z } from "zod";
 
 const registerSchema = z
@@ -90,16 +90,11 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md animate-scale-in">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2">
-            <Image
-              src="/cropped-logo-venus-1-2.png"
-              alt="Venus World Schools"
-              width={60}
-              height={60}
-            />
+            <CerteLogo size={60} />
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>
-            Register to start ordering from Venus Café
+            Register to start using <CerteWordmark />
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
