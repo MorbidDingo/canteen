@@ -22,6 +22,8 @@ import {
   IndianRupee,
   Plus,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   WALLET_TRANSACTION_LABELS,
@@ -158,9 +160,12 @@ export default function WalletPage() {
     }
     cardScrollRafRef.current = window.requestAnimationFrame(() => {
       cardScrollRafRef.current = null;
-      const cardWidth = track.clientWidth;
+      const firstCard = track.firstElementChild as HTMLElement | null;
+      const cardWidth = firstCard?.clientWidth ?? track.clientWidth;
+      const cardGap = parseFloat(window.getComputedStyle(track).columnGap || "0");
+      const cardSpan = cardWidth + cardGap;
       if (cardWidth === 0) return;
-      const nextIndex = Math.round(track.scrollLeft / cardWidth);
+      const nextIndex = Math.round(track.scrollLeft / cardSpan);
       const nextWallet = wallets[Math.max(0, Math.min(nextIndex, wallets.length - 1))];
       if (nextWallet && nextWallet.childId !== selectedChildIdRef.current) {
         setSelectedChildId(nextWallet.childId);
@@ -179,7 +184,13 @@ export default function WalletPage() {
   const scrollToWallet = useCallback((walletIndex: number) => {
     const track = cardTrackRef.current;
     if (!track) return;
-    track.scrollTo({ left: track.clientWidth * walletIndex, behavior: "smooth" });
+    const firstCard = track.firstElementChild as HTMLElement | null;
+    const cardWidth = firstCard?.clientWidth ?? track.clientWidth;
+    const cardGap = parseFloat(window.getComputedStyle(track).columnGap || "0");
+    track.scrollTo({
+      left: (cardWidth + cardGap) * walletIndex,
+      behavior: "smooth",
+    });
   }, []);
 
   useEffect(() => {
@@ -392,28 +403,37 @@ export default function WalletPage() {
         </p>
       </div>
 
-      {/* Swipeable premium wallet cards */}
+      {/* Swipeable stacked premium wallet cards */}
       <div className="relative">
         {wallets.length > 1 && (
           <>
-            <div className="absolute inset-x-4 top-2 h-full rounded-2xl border border-white/5 bg-zinc-900/70" />
-            <div className="absolute inset-x-8 top-4 h-full rounded-2xl border border-white/5 bg-zinc-950/80" />
+            <div className="absolute inset-x-8 top-3 h-full rounded-2xl border border-amber-200/10 bg-zinc-950/70" />
+            <div className="absolute inset-x-4 top-1.5 h-full rounded-2xl border border-amber-100/10 bg-zinc-900/75" />
           </>
         )}
         <div
           ref={cardTrackRef}
-          className="relative z-10 flex overflow-x-auto snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="relative z-10 flex gap-3 overflow-x-auto px-2 snap-x snap-mandatory scroll-px-2 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           onScroll={handleCardScroll}
         >
-          {wallets.map((walletItem) => (
-            <div key={walletItem.childId} className="min-w-full snap-center px-1">
+          {wallets.map((walletItem, index) => (
+            <button
+              key={walletItem.childId}
+              type="button"
+              onClick={() => {
+                setSelectedChildId(walletItem.childId);
+                scrollToWallet(index);
+              }}
+              className="min-w-[88%] snap-center text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              aria-label={`Select ${walletItem.childName} wallet card`}
+            >
               <div className="wallet-card-premium rounded-2xl border border-white/10 shadow-2xl">
                 <div className="relative z-10 px-6 py-6 space-y-7">
                   <div>
-                    <p className="text-2xl font-semibold tracking-wide text-shimmer-silver">
+                    <p className="text-2xl font-semibold tracking-wide text-shimmer-silver text-engraved-silver">
                       {walletItem.childName}
                     </p>
-                    <p className="text-sm mt-1 text-shimmer-silver-soft">
+                    <p className="text-sm mt-1 text-shimmer-silver-soft text-engraved-silver-soft">
                       {walletItem.parentName}
                     </p>
                   </div>
@@ -421,24 +441,50 @@ export default function WalletPage() {
                     <p className="text-xs uppercase tracking-[0.2em] text-white/55">
                       Balance
                     </p>
-                    <p className="text-4xl font-bold flex items-center gap-1 text-shimmer-gold">
+                    <p className="text-4xl font-bold flex items-center gap-1 text-shimmer-gold text-engraved-gold">
                       <IndianRupee className="h-8 w-8" />
                       {walletItem.balance.toFixed(2)}
                     </p>
                   </div>
-                  <p className="text-sm tracking-[0.3em] text-shimmer-silver">
+                  <p className="text-sm tracking-[0.3em] text-shimmer-silver text-engraved-silver">
                     ••• ••• ••• {walletItem.rfidCardLast3 ?? "•••"}
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
         {wallets.length > 1 && (
           <>
-            <p className="mt-2 text-xs text-muted-foreground text-center">
-              Swipe to switch between cards
-            </p>
+            <div className="mt-2 flex items-center justify-center gap-3 text-amber-300/85">
+              <button
+                type="button"
+                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20"
+                onClick={() => {
+                  const nextIndex = Math.max(0, selectedWalletIndex - 1);
+                  setSelectedChildId(wallets[nextIndex].childId);
+                  scrollToWallet(nextIndex);
+                }}
+                aria-label="View previous wallet card"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <p className="text-[11px] tracking-[0.2em] text-center uppercase text-amber-100/80">
+                Swipe or tap the next card
+              </p>
+              <button
+                type="button"
+                className="rounded-full border border-amber-200/35 bg-amber-200/10 p-1.5 transition hover:bg-amber-200/20"
+                onClick={() => {
+                  const nextIndex = Math.min(wallets.length - 1, selectedWalletIndex + 1);
+                  setSelectedChildId(wallets[nextIndex].childId);
+                  scrollToWallet(nextIndex);
+                }}
+                aria-label="View next wallet card"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <div className="mt-2 flex items-center justify-center gap-1.5">
               {wallets.map((walletItem, index) => (
                 <button
