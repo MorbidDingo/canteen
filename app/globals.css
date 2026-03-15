@@ -204,7 +204,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
-  padding-bottom: 65px;
+  padding-bottom: 70px;
 }
 
 /* Better touch targets */
@@ -279,9 +279,13 @@ button:hover {
 }
 
 .wallet-card-premium {
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #0a0a0a 50%, #1a1a1a 75%, #0a0a0a 100%);
+  background: linear-gradient(145deg, #050505 0%, #191919 28%, #2b2210 52%, #181818 76%, #050505 100%);
   position: relative;
   overflow: hidden;
+  box-shadow:
+    0 26px 55px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 232, 184, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .wallet-card-premium::before {
@@ -309,11 +313,31 @@ button:hover {
   inset: 0;
   background: radial-gradient(
     ellipse at var(--shimmer-x, 50%) var(--shimmer-y, 50%),
-    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 220, 144, 0.12) 0%,
     transparent 60%
   );
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+.text-engraved-silver {
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.88),
+    0 0 18px rgba(226, 232, 240, 0.1);
+}
+
+.text-engraved-silver-soft {
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.72);
+}
+
+.text-engraved-gold {
+  text-shadow:
+    0 -1px 0 rgba(255, 245, 220, 0.24),
+    0 1px 2px rgba(0, 0, 0, 0.92),
+    0 0 20px rgba(246, 214, 120, 0.18);
 }
 
 .text-shimmer-silver {
