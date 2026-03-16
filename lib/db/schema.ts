@@ -178,6 +178,7 @@ export const menuItem = pgTable("menu_item", {
   imageUrl: text("image_url"),
   available: boolean("available").notNull().default(true),
   availableUnits: integer("available_units"), // null = unlimited, 0 = sold out
+  subscribable: boolean("subscribable").notNull().default(true), // whether item can be selected for subscriptions
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -226,6 +227,7 @@ export const userRelations = relations(user, ({ many }) => ({
   children: many(child),
   preOrders: many(preOrder),
   parentNotifications: many(parentNotification),
+  certeSubscriptions: many(certeSubscription),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -529,6 +531,36 @@ export const librarySetting = pgTable("library_setting", {
   updatedBy: text("updated_by").references(() => user.id),
 });
 
+// ─── App Settings (key-value config) ─────────────────────
+
+export const appSetting = pgTable("app_setting", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text("key").unique().notNull(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+  updatedBy: text("updated_by").references(() => user.id),
+});
+
+// ─── Certe+ Premium Subscription ─────────────────────────
+
+export const certeSubscription = pgTable("certe_subscription", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  parentId: text("parent_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["ACTIVE", "EXPIRED", "CANCELLED"] })
+    .notNull()
+    .default("ACTIVE"),
+  startDate: timestamp("start_date").notNull().$defaultFn(() => new Date()),
+  endDate: timestamp("end_date").notNull(),
+  amount: doublePrecision("amount").notNull().default(99),
+  paymentMethod: text("payment_method", { enum: ["WALLET", "RAZORPAY"] }).notNull(),
+  razorpayPaymentId: text("razorpay_payment_id"),
+  walletOverdraftUsed: doublePrecision("wallet_overdraft_used").notNull().default(0),
+  libraryPenaltiesUsed: integer("library_penalties_used").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
 // ─── Library Relations ───────────────────────────────────
 
 export const bookRelations = relations(book, ({ many }) => ({
@@ -548,6 +580,14 @@ export const bookIssuanceRelations = relations(bookIssuance, ({ one }) => ({
 
 export const librarySettingRelations = relations(librarySetting, ({ one }) => ({
   updater: one(user, { fields: [librarySetting.updatedBy], references: [user.id] }),
+}));
+
+export const appSettingRelations = relations(appSetting, ({ one }) => ({
+  updater: one(user, { fields: [appSetting.updatedBy], references: [user.id] }),
+}));
+
+export const certeSubscriptionRelations = relations(certeSubscription, ({ one }) => ({
+  parent: one(user, { fields: [certeSubscription.parentId], references: [user.id] }),
 }));
 
 export const parentNotificationRelations = relations(parentNotification, ({ one }) => ({

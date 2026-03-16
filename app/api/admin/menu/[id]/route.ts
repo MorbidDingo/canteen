@@ -15,6 +15,7 @@ const updateMenuItemSchema = z.object({
   available: z.boolean().optional(),
   availableUnits: z.number().int().min(0).nullable().optional(),
   resetUnits: z.boolean().optional(),
+  subscribable: z.boolean().optional(),
 });
 
 // PATCH — update a menu item

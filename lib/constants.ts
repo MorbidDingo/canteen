@@ -310,6 +310,22 @@ export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
   allow_self_service_issue: "true",
 };
 
+// ─── App Settings Defaults ───────────────────────────────
+
+export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
+  subscription_min_order_value: "60",
+  subscription_min_days: "3",
+  subscription_max_days: "180",
+};
+
+// ─── Certe+ Premium Subscription ─────────────────────────
+
+export const CERTE_PLUS = {
+  MONTHLY_PRICE: 99,
+  WALLET_OVERDRAFT_LIMIT: 200,
+  LIBRARY_PENALTY_ALLOWANCE: 5,
+} as const;
+
 // ─── Gate Direction ─────────────────────────────────────
 
 export const GATE_DIRECTION = {
