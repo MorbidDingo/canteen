@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -141,6 +141,7 @@ export default function PreOrdersPage() {
   const [subscribing, setSubscribing] = useState(false);
   const [selectedSubPlan, setSelectedSubPlan] = useState<string>("MONTHLY");
   const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [childId, setChildId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(todayDateInput());
@@ -219,6 +220,13 @@ export default function PreOrdersPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // Cleanup celebration timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (celebrationTimeoutRef.current) clearTimeout(celebrationTimeoutRef.current);
+    };
+  }, []);
 
   const menuLookup = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
 
@@ -590,7 +598,7 @@ export default function PreOrdersPage() {
                       return;
                     }
                     setShowCelebration(true);
-                    setTimeout(() => setShowCelebration(false), 2500);
+                    celebrationTimeoutRef.current = setTimeout(() => setShowCelebration(false), 2500);
                     setCertePlusActive(true);
                     toast.success("Certe+ activated! You can now create meal subscriptions.");
                   } catch {

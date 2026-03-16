@@ -22,7 +22,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
@@ -74,7 +74,7 @@ export default function ParentLayout({
   }, []);
 
   // Fetch Certe+ status
-  const fetchCertePlusStatus = useCallback(() => {
+  useEffect(() => {
     fetch("/api/certe-plus")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -82,10 +82,6 @@ export default function ParentLayout({
       })
       .catch(() => {});
   }, []);
-
-  useEffect(() => {
-    fetchCertePlusStatus();
-  }, [fetchCertePlusStatus]);
 
   // Dim content area below bottom nav while scrolling
   useEffect(() => {

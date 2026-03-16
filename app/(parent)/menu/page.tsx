@@ -82,7 +82,6 @@ export default function MenuPage() {
               type="button"
               variant="ghost"
               size="sm"
-              className="bg-gradient-to-r from-gray-900 to-black text-transparent bg-clip-text font-semibold border-0"
             >
               <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
                 <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
