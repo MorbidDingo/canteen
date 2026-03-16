@@ -46,6 +46,7 @@ import {
 import {
   MENU_CATEGORY_LABELS,
   PRE_ORDER_STATUS_LABELS,
+  CERTE_PLUS_PLAN_LIST,
   type MenuCategory,
   type PreOrderStatus,
 } from "@/lib/constants";
@@ -526,12 +527,7 @@ export default function PreOrdersPage() {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  { key: "WEEKLY", label: "Weekly", price: 79, duration: "7 days" },
-                  { key: "MONTHLY", label: "Monthly", price: 129, duration: "30 days" },
-                  { key: "THREE_MONTHS", label: "3 Months", price: 349, duration: "90 days" },
-                  { key: "SIX_MONTHS", label: "6 Months", price: 729, duration: "180 days" },
-                ] as const).map((plan) => (
+                {CERTE_PLUS_PLAN_LIST.map((plan) => (
                   <button
                     key={plan.key}
                     type="button"

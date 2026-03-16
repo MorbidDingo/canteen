@@ -322,11 +322,13 @@ export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
 // ─── Certe+ Premium Subscription ─────────────────────────
 
 export const CERTE_PLUS_PLANS = {
-  WEEKLY: { key: "WEEKLY", label: "Weekly", price: 79, days: 7 },
-  MONTHLY: { key: "MONTHLY", label: "Monthly", price: 129, days: 30 },
-  THREE_MONTHS: { key: "THREE_MONTHS", label: "3 Months", price: 349, days: 90 },
-  SIX_MONTHS: { key: "SIX_MONTHS", label: "6 Months", price: 729, days: 180 },
+  WEEKLY: { key: "WEEKLY", label: "Weekly", price: 79, days: 7, duration: "7 days" },
+  MONTHLY: { key: "MONTHLY", label: "Monthly", price: 129, days: 30, duration: "30 days" },
+  THREE_MONTHS: { key: "THREE_MONTHS", label: "3 Months", price: 349, days: 90, duration: "90 days" },
+  SIX_MONTHS: { key: "SIX_MONTHS", label: "6 Months", price: 729, days: 180, duration: "180 days" },
 } as const;
+
+export const CERTE_PLUS_PLAN_LIST = Object.values(CERTE_PLUS_PLANS);
 
 export type CertePlusPlan = keyof typeof CERTE_PLUS_PLANS;
 

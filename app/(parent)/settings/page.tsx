@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Bell, ChevronRight, Shield, Users, Wallet, Sparkles, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS } from "@/lib/constants";
 
 const settingItems = [
   {
@@ -56,13 +57,6 @@ type ChildInfo = {
   id: string;
   name: string;
 };
-
-const PLANS = [
-  { key: "WEEKLY", label: "Weekly", price: 79, duration: "7 days" },
-  { key: "MONTHLY", label: "Monthly", price: 129, duration: "30 days" },
-  { key: "THREE_MONTHS", label: "3 Months", price: 349, duration: "90 days" },
-  { key: "SIX_MONTHS", label: "6 Months", price: 729, duration: "180 days" },
-] as const;
 
 export default function SettingsPage() {
   const [certePlus, setCertePlus] = useState<CertePlusStatus | null>(null);
@@ -130,7 +124,7 @@ export default function SettingsPage() {
     }
   };
 
-  const currentPlanInfo = PLANS.find((p) => p.key === selectedPlan) ?? PLANS[1];
+  const currentPlanInfo = CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ?? CERTE_PLUS_PLANS.MONTHLY;
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-6 space-y-4">
@@ -187,7 +181,7 @@ export default function SettingsPage() {
 
               {/* Plan Selection */}
               <div className="grid grid-cols-2 gap-2">
-                {PLANS.map((plan) => (
+                {CERTE_PLUS_PLAN_LIST.map((plan) => (
                   <button
                     key={plan.key}
                     type="button"
@@ -233,7 +227,7 @@ export default function SettingsPage() {
                 {subscribing ? (
                   <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Subscribing...</>
                 ) : (
-                  <><Sparkles className="h-3.5 w-3.5 mr-1" /> Subscribe for ₹{currentPlanInfo.price}/{currentPlanInfo.label.toLowerCase()}</>
+                  <><Sparkles className="h-3.5 w-3.5 mr-1" /> Subscribe — ₹{currentPlanInfo.price} / {currentPlanInfo.label}</>
                 )}
               </Button>
               <p className="text-[10px] text-center text-muted-foreground">

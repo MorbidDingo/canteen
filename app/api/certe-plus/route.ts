@@ -182,9 +182,15 @@ export async function POST(request: NextRequest) {
         .from(wallet)
         .where(eq(wallet.childId, targetChildId));
 
-      if (!walletRow || walletRow.balance < amount) {
+      if (!walletRow) {
         return NextResponse.json({
-          error: `Insufficient wallet balance. Need ₹${amount}, available ₹${walletRow?.balance?.toFixed(2) ?? "0.00"}. Please top up your wallet first.`,
+          error: "No wallet found for this child. Please top up the wallet first.",
+        }, { status: 400 });
+      }
+
+      if (walletRow.balance < amount) {
+        return NextResponse.json({
+          error: `Insufficient wallet balance. Need ₹${amount}, available ₹${walletRow.balance.toFixed(2)}. Please top up your wallet first.`,
         }, { status: 400 });
       }
 
