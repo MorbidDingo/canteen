@@ -91,7 +91,7 @@ export default function AdminSettingsPage() {
               placeholder="60"
             />
             <p className="text-xs text-muted-foreground">
-              Parents must order at least this amount for subscriptions.
+              Parents must order at least this amount for subscriptions. Defaults to ₹60 if not set.
             </p>
           </div>
 

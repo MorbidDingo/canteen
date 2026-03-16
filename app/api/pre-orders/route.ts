@@ -5,7 +5,7 @@ import { eq, desc, and, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
-import { APP_SETTINGS_DEFAULTS } from "@/lib/constants";
+import { APP_SETTINGS_DEFAULTS, MAX_ACTIVE_PREORDERS } from "@/lib/constants";
 
 async function getAppSettings(): Promise<Record<string, string>> {
   const rows = await db.select().from(appSetting);
@@ -46,6 +46,35 @@ function dateDiffInDaysInclusive(startDate: string, endDate: string): number {
   const end = new Date(`${endDate}T00:00:00.000Z`);
   const diffMs = end.getTime() - start.getTime();
   return Math.floor(diffMs / (24 * 60 * 60 * 1000)) + 1;
+}
+
+/**
+ * Returns the next school day (Mon-Fri) from today.
+ * If today is Friday, returns Monday. If Saturday, returns Monday. Etc.
+ */
+function getNextSchoolDay(): string {
+  const dt = new Date();
+  dt.setDate(dt.getDate() + 1); // start from tomorrow
+  const day = dt.getDay(); // 0=Sun, 6=Sat
+  if (day === 0) dt.setDate(dt.getDate() + 1); // Sunday → Monday
+  if (day === 6) dt.setDate(dt.getDate() + 2); // Saturday → Monday
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Count active (PENDING) pre-orders for a parent.
+ */
+async function countActivePendingPreOrders(parentId: string): Promise<number> {
+  const rows = await db
+    .select({ id: preOrder.id })
+    .from(preOrder)
+    .where(
+      and(
+        eq(preOrder.parentId, parentId),
+        eq(preOrder.status, "PENDING"),
+      ),
+    );
+  return rows.length;
 }
 
 // GET /api/pre-orders — list pre-orders for the logged-in parent
@@ -127,6 +156,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Enforce max 2 active (PENDING) pre-orders per parent
+    const activePendingCount = await countActivePendingPreOrders(session.user.id);
+    if (activePendingCount >= MAX_ACTIVE_PREORDERS) {
+      return NextResponse.json(
+        { error: `You can have at most ${MAX_ACTIVE_PREORDERS} active pre-orders at a time. Cancel or wait for existing ones to complete.` },
+        { status: 409 }
+      );
+    }
+
     if (!body.subscriptionUntil) {
       return NextResponse.json(
         { error: "subscriptionUntil is required for subscription" },
@@ -147,7 +185,11 @@ export async function POST(request: Request) {
     const MIN_SUBSCRIPTION_DAYS = Number(settings.subscription_min_days) || 3;
     const MAX_SUBSCRIPTION_DAYS = Number(settings.subscription_max_days) || 180;
 
-    const durationDays = dateDiffInDaysInclusive(body.scheduledDate, body.subscriptionUntil);
+    // Enforce: subscription starts from the next school day (Mon-Fri)
+    const nextSchoolDay = getNextSchoolDay();
+    const effectiveStartDate = body.scheduledDate < nextSchoolDay ? nextSchoolDay : body.scheduledDate;
+
+    const durationDays = dateDiffInDaysInclusive(effectiveStartDate, body.subscriptionUntil);
     if (durationDays < MIN_SUBSCRIPTION_DAYS || durationDays > MAX_SUBSCRIPTION_DAYS) {
       return NextResponse.json(
         {
@@ -284,7 +326,7 @@ export async function POST(request: Request) {
         childId: body.childId,
         parentId: session.user.id,
         mode,
-        scheduledDate: body.scheduledDate,
+        scheduledDate: effectiveStartDate,
         subscriptionUntil: body.subscriptionUntil,
         status: "PENDING",
       })
@@ -305,8 +347,8 @@ export async function POST(request: Request) {
       childId: body.childId,
       type: "KIOSK_PREORDER_TAKEN",
       title: "Pre-order created",
-      message: `A subscription pre-order (${itemNames}) has been set from ${body.scheduledDate} to ${body.subscriptionUntil}.`,
-      metadata: { preOrderId: created.id, scheduledDate: body.scheduledDate, subscriptionUntil: body.subscriptionUntil },
+      message: `A subscription pre-order (${itemNames}) has been set from ${effectiveStartDate} to ${body.subscriptionUntil}.`,
+      metadata: { preOrderId: created.id, scheduledDate: effectiveStartDate, subscriptionUntil: body.subscriptionUntil },
     }).catch(() => {});
 
     return NextResponse.json({ success: true, id: created.id });
