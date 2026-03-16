@@ -199,7 +199,7 @@ export default function CartPage() {
     for (const item of items) {
       const childIdForItem = itemChildMap[item.menuItemId];
       if (!childIdForItem) {
-        throw new Error(`Please select a child for ${item.name}`);
+        throw new Error("Please assign each cart item to a child before placing your order.");
       }
       groups.set(childIdForItem, [...(groups.get(childIdForItem) || []), item]);
     }
@@ -379,14 +379,14 @@ export default function CartPage() {
 
     if (paymentMethod === "WALLET") return;
 
-    const groups = buildChildOrderGroups();
-    if (groups.size > 1) {
-      toast.error("For online checkout, please keep all items under one child.");
-      return;
-    }
-
     setLoading(true);
     try {
+      const groups = buildChildOrderGroups();
+      if (groups.size > 1) {
+        toast.error("Online checkout supports one child per order. To order for multiple children, please use Wallet checkout.");
+        return;
+      }
+
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -745,6 +745,11 @@ export default function CartPage() {
                     )}
                   </button>
                 </div>
+                {children.length > 1 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Online checkout currently supports one child per order. Use Wallet for multi-child checkout.
+                  </p>
+                )}
 
                 {/* Razorpay info panel */}
                 {paymentMethod === "ONLINE" && (

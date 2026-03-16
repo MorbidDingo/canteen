@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn, authClient } from "@/lib/auth-client";
@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const getDefaultRouteForRole = (role?: string | null) => {
+  const getDefaultRouteForRole = useCallback((role?: string | null) => {
     switch (role) {
       case "ADMIN":
         return "/admin/orders";
@@ -40,7 +40,7 @@ export default function LoginPage() {
       default:
         return "/menu";
     }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +53,7 @@ export default function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, getDefaultRouteForRole]);
 
   async function resolveRoleWithRetry() {
     for (let attempt = 0; attempt < 4; attempt++) {
