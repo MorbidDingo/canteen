@@ -33,6 +33,7 @@ export default function KioskOfflineOpsPage() {
       KIOSK_ORDER: 0,
       LIBRARY_ISSUE: 0,
       LIBRARY_RETURN: 0,
+      GATE_TAP: 0,
     };
     for (const action of actions) {
       counts[action.type] += 1;
@@ -140,6 +141,7 @@ export default function KioskOfflineOpsPage() {
           <Badge variant="secondary">Kiosk: {grouped.KIOSK_ORDER}</Badge>
           <Badge variant="secondary">Issue: {grouped.LIBRARY_ISSUE}</Badge>
           <Badge variant="secondary">Return: {grouped.LIBRARY_RETURN}</Badge>
+          <Badge variant="secondary">Gate: {grouped.GATE_TAP}</Badge>
           <div className="ml-auto flex gap-2">
             <Button onClick={syncNow} disabled={busy}>Sync Now</Button>
             <Button onClick={printTest} disabled={busy} variant="outline">Printer Test</Button>
