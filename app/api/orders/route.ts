@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
     const newOrder = await db.transaction(async (tx) => {
       // If WALLET payment, verify and debit wallet
       let walletRow = null;
+      let siblingChildIds: string[] = [];
       if (paymentMethod === "WALLET" && childId) {
         // Verify child belongs to parent
         const children = await tx
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
           .select({ id: child.id })
           .from(child)
           .where(eq(child.parentId, session.user.id));
-        const siblingChildIds = siblingChildRows.map((c) => c.id);
+        siblingChildIds = siblingChildRows.map((c) => c.id);
 
         const wallets = await tx
           .select()
