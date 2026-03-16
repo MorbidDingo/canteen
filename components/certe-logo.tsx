@@ -50,8 +50,9 @@ export function CerteLogo({ size = 40, className }: CerteLogoProps) {
 /**
  * The certe wordmark — lowercase "certe" with premium orange-gold styling.
  * Use this wherever the brand name should appear as styled text.
+ * When showPlus is true, a small "+" superscript is appended.
  */
-export function CerteWordmark({ className }: { className?: string }) {
+export function CerteWordmark({ className, showPlus }: { className?: string; showPlus?: boolean }) {
   return (
     <span
       className={cn(
@@ -60,6 +61,11 @@ export function CerteWordmark({ className }: { className?: string }) {
       )}
     >
       certe
+      {showPlus && (
+        <sup className="text-[0.55em] font-bold ml-[1px] bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent">
+          +
+        </sup>
+      )}
     </span>
   );
 }

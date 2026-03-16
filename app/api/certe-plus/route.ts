@@ -12,7 +12,16 @@ export async function GET() {
   try {
     const session = await getSession();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({
+        active: false,
+        subscription: null,
+        benefits: {
+          walletOverdraftLimit: 0,
+          libraryPenaltyAllowance: 0,
+          libraryPenaltiesUsed: 0,
+          walletOverdraftUsed: 0,
+        },
+      });
     }
 
     const now = new Date();

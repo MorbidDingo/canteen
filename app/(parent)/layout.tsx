@@ -43,6 +43,7 @@ export default function ParentLayout({
   const pathname = usePathname();
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
+  const [certePlusActive, setCertePlusActive] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
   const [navDimmed, setNavDimmed] = useState(false);
   const prevCartCount = useRef(cartCount);
@@ -50,6 +51,7 @@ export default function ParentLayout({
 
   const parentMode = getParentMode(pathname);
   const isSettingsPage = ["/settings", "/children", "/wallet", "/controls", "/notifications"].includes(pathname);
+  const isOrdersPage = pathname === "/orders" || pathname === "/pre-orders";
 
   // Animate cart icon when items are added
   useEffect(() => {
@@ -71,7 +73,17 @@ export default function ParentLayout({
       .catch(() => {});
   }, []);
 
-  // Dim bottom nav while scrolling
+  // Fetch Certe+ status
+  useEffect(() => {
+    fetch("/api/certe-plus")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setCertePlusActive(data.active === true);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Dim content area below bottom nav while scrolling
   useEffect(() => {
     const handleScroll = () => {
       setNavDimmed(true);
@@ -103,7 +115,7 @@ export default function ParentLayout({
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             <CerteLogo size={36} />
-            <CerteWordmark className="text-lg" />
+            <CerteWordmark className="text-lg" showPlus={certePlusActive} />
           </Link>
 
           {/* Right: cart + wallet + avatar */}
@@ -181,20 +193,27 @@ export default function ParentLayout({
       </header>
 
       {/* ── Page content ── */}
-      <div className="pb-24">{children}</div>
+      <div className="relative pb-24">
+        {children}
+        {/* Scroll dim overlay — dims content area near the bottom nav */}
+        <div
+          className={cn(
+            "pointer-events-none fixed bottom-0 left-0 right-0 h-24 z-40 transition-opacity duration-300",
+            navDimmed ? "opacity-100" : "opacity-0",
+          )}
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)" }}
+        />
+      </div>
 
       {/* ── iOS-like floating bottom tab bar ── */}
-      <nav className={cn(
-        "fixed bottom-3 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav",
-        navDimmed && "ios-bottom-nav-dimmed",
-      )}>
+      <nav className="fixed bottom-3 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
           {/* Canteen */}
           <Link
             href="/menu"
             className={cn(
               "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              parentMode === "canteen" && !isSettingsPage
+              parentMode === "canteen" && !isSettingsPage && !isOrdersPage
                 ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
                 : "text-muted-foreground hover:text-foreground/70",
             )}
