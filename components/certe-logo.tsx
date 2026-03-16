@@ -1,6 +1,11 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+/** Original logo dimensions used to preserve the aspect ratio. */
+const LOGO_WIDTH = 534;
+const LOGO_HEIGHT = 310;
+const LOGO_ASPECT_RATIO = LOGO_WIDTH / LOGO_HEIGHT;
+
 interface CerteLogoProps {
   size?: number;
   className?: string;
@@ -15,7 +20,7 @@ export function CerteLogo({ size = 40, className }: CerteLogoProps) {
     <Image
       src="/logo.png"
       alt="certe logo"
-      width={Math.round(size * (534 / 310))}
+      width={Math.round(size * LOGO_ASPECT_RATIO)}
       height={size}
       className={cn("shrink-0", className)}
       priority
