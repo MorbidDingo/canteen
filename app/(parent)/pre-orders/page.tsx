@@ -478,24 +478,6 @@ export default function PreOrdersPage() {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-4 sm:py-6 space-y-5 sm:space-y-6">
-      <div className="rounded-2xl border bg-gradient-to-r from-[#1a3a8f] to-[#2c5bd1] text-white p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-              <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
-              Pre-Orders
-            </h1>
-            <p className="text-xs sm:text-sm text-white/85 mt-1">
-              Build subscription meals from 3 days to 6 months. Wallet is charged when child taps kiosk.
-            </p>
-          </div>
-          <Badge className="bg-white/20 text-white border-0 gap-1">
-            <Sparkles className="h-3.5 w-3.5" />
-            Subscription
-          </Badge>
-        </div>
-      </div>
-
       <div className="md:hidden rounded-xl border p-1 inline-flex gap-1 bg-background">
         <Link href="/menu">
           <Button type="button" variant="ghost" size="sm" className="rounded-lg">
