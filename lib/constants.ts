@@ -319,6 +319,9 @@ export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
   subscription_max_days: "180",
 };
 
+/** Maximum number of active (PENDING) pre-orders a Certe+ subscriber can have */
+export const MAX_ACTIVE_PREORDERS = 2;
+
 // ─── Certe+ Premium Subscription ─────────────────────────
 
 export const CERTE_PLUS_PLANS = {

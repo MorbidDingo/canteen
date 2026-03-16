@@ -47,6 +47,7 @@ import {
   MENU_CATEGORY_LABELS,
   PRE_ORDER_STATUS_LABELS,
   CERTE_PLUS_PLAN_LIST,
+  MAX_ACTIVE_PREORDERS,
   type MenuCategory,
   type PreOrderStatus,
 } from "@/lib/constants";
@@ -100,8 +101,16 @@ const DEFAULT_MIN_PREORDER_VALUE = 60;
 const DEFAULT_MIN_SUBSCRIPTION_DAYS = 3;
 const DEFAULT_MAX_SUBSCRIPTION_DAYS = 180;
 
-function todayDateInput() {
-  return new Date().toISOString().slice(0, 10);
+/**
+ * Returns the next school day (Mon-Fri) from today.
+ */
+function getNextSchoolDay() {
+  const dt = new Date();
+  dt.setDate(dt.getDate() + 1); // start from tomorrow
+  const day = dt.getDay(); // 0=Sun, 6=Sat
+  if (day === 0) dt.setDate(dt.getDate() + 1); // Sunday → Monday
+  if (day === 6) dt.setDate(dt.getDate() + 2); // Saturday → Monday
+  return dt.toISOString().slice(0, 10);
 }
 
 function addDays(dateIso: string, daysToAdd: number) {
@@ -144,8 +153,8 @@ export default function PreOrdersPage() {
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [childId, setChildId] = useState("");
-  const [scheduledDate, setScheduledDate] = useState(todayDateInput());
-  const [subscriptionUntil, setSubscriptionUntil] = useState(addDays(todayDateInput(), 2));
+  const [scheduledDate, setScheduledDate] = useState(getNextSchoolDay());
+  const [subscriptionUntil, setSubscriptionUntil] = useState(addDays(getNextSchoolDay(), 6));
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
 
@@ -299,6 +308,12 @@ export default function PreOrdersPage() {
     controlFindings.blockedItems.length > 0 ||
     controlFindings.perOrderExceeded ||
     controlFindings.dailyLimitRisk;
+
+  const pendingPreOrderCount = useMemo(
+    () => preOrders.filter((po) => po.status === "PENDING").length,
+    [preOrders],
+  );
+  const atPreOrderLimit = pendingPreOrderCount >= MAX_ACTIVE_PREORDERS;
 
   const addDraftItem = (menuItemId: string) => {
     const menu = menuLookup.get(menuItemId);
@@ -630,6 +645,7 @@ export default function PreOrdersPage() {
             <CardTitle>Create Subscription</CardTitle>
             <CardDescription>
               Choose child, period and items. Minimum order value is ₹{subscriptionSettings.minOrderValue}.
+              Subscriptions start from the next school day (Mon–Fri). You can have up to {MAX_ACTIVE_PREORDERS} active pre-orders.
             </CardDescription>
           </CardHeader>
         <CardContent className="space-y-5">
@@ -651,9 +667,10 @@ export default function PreOrdersPage() {
             </div>
 
             <div>
-              <LabelText>Start Date</LabelText>
+              <LabelText>Start Date (next school day)</LabelText>
               <Input
                 type="date"
+                min={getNextSchoolDay()}
                 value={scheduledDate}
                 onChange={(e) => {
                   const nextStart = e.target.value;
@@ -828,18 +845,25 @@ export default function PreOrdersPage() {
             )}
           </div>
 
+          {atPreOrderLimit && (
+            <p className="text-sm text-amber-700 font-medium">
+              You have reached the maximum of {MAX_ACTIVE_PREORDERS} active pre-orders. Cancel or wait for existing ones to complete.
+            </p>
+          )}
+
           <Button
             onClick={handleCreate}
             disabled={
               creating ||
               controlFindings.belowMinValue ||
               controlFindings.invalidDuration ||
-              hasBlockingControls
+              hasBlockingControls ||
+              atPreOrderLimit
             }
             className="w-full h-11 text-base"
           >
             {creating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Create Pre-Order
+            Create Pre-Order ({pendingPreOrderCount}/{MAX_ACTIVE_PREORDERS})
           </Button>
           {hasBlockingControls ? (
             <p className="text-xs text-red-600">
