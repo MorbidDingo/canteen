@@ -193,12 +193,12 @@ export default function ParentLayout({
       </header>
 
       {/* ── Page content ── */}
-      <div className="relative pb-24">
+      <div className="relative pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
         {children}
         {/* Scroll dim overlay — dims content area near the bottom nav */}
         <div
           className={cn(
-            "pointer-events-none fixed bottom-0 left-0 right-0 h-24 z-40 transition-opacity duration-300",
+            "pointer-events-none fixed bottom-0 left-0 right-0 h-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 transition-opacity duration-300",
             navDimmed ? "opacity-100" : "opacity-0",
           )}
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)" }}

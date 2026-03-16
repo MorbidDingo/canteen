@@ -84,6 +84,8 @@ type ChildInfo = {
   name: string;
 };
 
+type ItemChildAllocations = Record<string, Record<string, number>>;
+
 type SlideState = "idle" | "sliding" | "paying" | "paid";
 
 export default function CartPage() {
@@ -105,7 +107,7 @@ export default function CartPage() {
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [children, setChildren] = useState<ChildInfo[]>([]);
-  const [itemChildMap, setItemChildMap] = useState<Record<string, string>>({});
+  const [itemChildAllocations, setItemChildAllocations] = useState<ItemChildAllocations>({});
 
   // Slide-to-pay state
   const [slideState, setSlideState] = useState<SlideState>("idle");
@@ -166,11 +168,30 @@ export default function CartPage() {
 
   useEffect(() => {
     if (children.length === 0) return;
-    setItemChildMap((prev) => {
+    setItemChildAllocations((prev) => {
       const next = { ...prev };
       for (const item of items) {
-        if (!next[item.menuItemId]) {
-          next[item.menuItemId] = children[0].id;
+        const existing = next[item.menuItemId] || {};
+        const filtered = Object.fromEntries(
+          Object.entries(existing).filter(([childId]) =>
+            children.some((child) => child.id === childId)
+          )
+        );
+        const assigned = Object.values(filtered).reduce((sum, qty) => sum + qty, 0);
+        const defaultChildId = Object.keys(filtered)[0] || children[0]?.id;
+
+        if (defaultChildId) {
+          if (assigned === 0) {
+            filtered[defaultChildId] = item.quantity;
+          } else if (assigned !== item.quantity) {
+            filtered[defaultChildId] = Math.max(
+              0,
+              (filtered[defaultChildId] || 0) + (item.quantity - assigned)
+            );
+          }
+          next[item.menuItemId] = filtered;
+        } else {
+          delete next[item.menuItemId];
         }
       }
       for (const key of Object.keys(next)) {
@@ -190,18 +211,92 @@ export default function CartPage() {
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
   const total = getTotal();
-  const hasEnoughBalance = selectedWallet
-    ? selectedWallet.balance >= total
-    : false;
+  const getAssignedQty = (menuItemId: string) =>
+    Object.values(itemChildAllocations[menuItemId] || {}).reduce(
+      (sum, qty) => sum + qty,
+      0
+    );
+
+  const getItemRemainingQty = (menuItemId: string, totalQty: number) =>
+    Math.max(0, totalQty - getAssignedQty(menuItemId));
+
+  const getAllocationSummary = (menuItemId: string) => {
+    const parts = Object.entries(itemChildAllocations[menuItemId] || {})
+      .filter(([, qty]) => qty > 0)
+      .map(([childId, qty]) => {
+        const childName = children.find((c) => c.id === childId)?.name || "Child";
+        return `${childName} × ${qty}`;
+      });
+
+    return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+  };
+
+  const updateChildAllocation = (
+    menuItemId: string,
+    childId: string,
+    nextQty: number
+  ) => {
+    const item = items.find((i) => i.menuItemId === menuItemId);
+    if (!item) return;
+    const clamped = Math.max(0, Math.min(item.quantity, nextQty));
+    setItemChildAllocations((prev) => ({
+      ...prev,
+      [menuItemId]: {
+        ...(prev[menuItemId] || {}),
+        [childId]: clamped,
+      },
+    }));
+  };
+
+  const getChildTotals = () => {
+    const totals = new Map<string, number>();
+    for (const item of items) {
+      const allocations = itemChildAllocations[item.menuItemId] || {};
+      const itemPrice = item.discountedPrice ?? item.price;
+      for (const [childId, qty] of Object.entries(allocations)) {
+        if (qty <= 0) continue;
+        totals.set(childId, (totals.get(childId) || 0) + itemPrice * qty);
+      }
+    }
+    return totals;
+  };
+
+  const childTotals = getChildTotals();
+  const hasMissingWalletForAssignedChild = [...childTotals.keys()].some(
+    (childId) => !wallets.some((w) => w.childId === childId)
+  );
+  const hasEnoughBalance =
+    childTotals.size > 0 &&
+    !hasMissingWalletForAssignedChild &&
+    [...childTotals.entries()].every(([childId, amount]) => {
+      const wallet = wallets.find((w) => w.childId === childId);
+      return !!wallet && wallet.balance >= amount;
+    });
 
   const buildChildOrderGroups = () => {
     const groups = new Map<string, typeof items>();
     for (const item of items) {
-      const childIdForItem = itemChildMap[item.menuItemId];
-      if (!childIdForItem) {
-        throw new Error("Please assign each cart item to a child before placing your order.");
+      const allocations = itemChildAllocations[item.menuItemId] || {};
+      const assignedQty = Object.values(allocations).reduce(
+        (sum, qty) => sum + qty,
+        0
+      );
+
+      if (assignedQty !== item.quantity) {
+        const remainingQty = Math.max(0, item.quantity - assignedQty);
+        const itemLabel = remainingQty === 1 ? "item" : "items";
+        throw new Error(
+          `Please allocate the remaining ${remainingQty} ${item.name} ${itemLabel} across children before placing your order.`
+        );
       }
-      groups.set(childIdForItem, [...(groups.get(childIdForItem) || []), item]);
+
+      for (const [childIdForItem, quantity] of Object.entries(allocations)) {
+        if (quantity <= 0) continue;
+        groups.set(childIdForItem, [
+          ...(groups.get(childIdForItem) || []),
+          { ...item, quantity },
+        ]);
+      }
     }
     return groups;
   };
@@ -584,25 +679,64 @@ export default function CartPage() {
                 </div>
 
                 {children.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">For Child</Label>
-                    <Select
-                      value={itemChildMap[item.menuItemId] || ""}
-                      onValueChange={(value) =>
-                        setItemChildMap((prev) => ({ ...prev, [item.menuItemId]: value }))
-                      }
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select child" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {children.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Split between children</Label>
+                    <div className="space-y-2 rounded-md border p-2.5">
+                      {children.map((c) => {
+                        const allocatedQty =
+                          itemChildAllocations[item.menuItemId]?.[c.id] || 0;
+                        const remainingQty = getItemRemainingQty(
+                          item.menuItemId,
+                          item.quantity
+                        );
+                        return (
+                          <div key={c.id} className="flex items-center justify-between gap-3">
+                            <span className="text-sm text-muted-foreground">{c.name}</span>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  updateChildAllocation(
+                                    item.menuItemId,
+                                    c.id,
+                                    allocatedQty - 1
+                                  )
+                                }
+                                disabled={allocatedQty <= 0}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-5 text-center text-sm font-medium">
+                                {allocatedQty}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  updateChildAllocation(
+                                    item.menuItemId,
+                                    c.id,
+                                    allocatedQty + 1
+                                  )
+                                }
+                                disabled={remainingQty <= 0}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {getItemRemainingQty(item.menuItemId, item.quantity) > 0 && (
+                      <p className="text-xs text-amber-600">
+                        Assign{" "}
+                        {getItemRemainingQty(item.menuItemId, item.quantity)} more to continue.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -658,13 +792,7 @@ export default function CartPage() {
                 >
                   <span className="text-muted-foreground">
                     {item.name} × {item.quantity}
-                    {itemChildMap[item.menuItemId] && (
-                      <span className="ml-1">
-                        (
-                        {children.find((c) => c.id === itemChildMap[item.menuItemId])?.name}
-                        )
-                      </span>
-                    )}
+                    {getAllocationSummary(item.menuItemId)}
                   </span>
                   <span>₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
                 </div>
@@ -803,28 +931,58 @@ export default function CartPage() {
                         )}
 
                         {/* Balance card */}
-{selectedWallet && (
-  <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden shadow-xl">
-    <CardContent className="py-3 flex items-center justify-between">
-      <div>
-        <p className="text-xs text-orange-200/70 tracking-wide">
-          {selectedWallet.childName}&apos;s Balance
-        </p>
+                        {selectedWallet && (
+                          <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden shadow-xl">
+                            <CardContent className="py-3 flex items-center justify-between">
+                              <div>
+                                <p className="text-xs text-orange-200/70 tracking-wide">
+                                  {selectedWallet.childName}&apos;s Balance
+                                </p>
 
-        <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
-          <IndianRupee className="h-4 w-4 text-orange-400" />
-          {selectedWallet.balance.toFixed(2)}
-        </p>
-      </div>
+                                <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
+                                  <IndianRupee className="h-4 w-4 text-orange-400" />
+                                  {selectedWallet.balance.toFixed(2)}
+                                </p>
+                              </div>
 
-      {!hasEnoughBalance && (
-        <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px] font-medium">
-          Insufficient
-        </Badge>
-      )}
-    </CardContent>
-  </Card>
-)}  
+                              {!hasEnoughBalance && (
+                                <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px] font-medium">
+                                  Insufficient
+                                </Badge>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {childTotals.size > 0 && (
+                          <Card className="border-dashed">
+                            <CardContent className="py-3 space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">
+                                Required per child wallet
+                              </p>
+                              {[...childTotals.entries()].map(([childId, amount]) => {
+                                const wallet = wallets.find((w) => w.childId === childId);
+                                return (
+                                  <div
+                                    key={childId}
+                                    className="flex items-center justify-between text-sm"
+                                  >
+                                    <span>{wallet?.childName || "Child"}</span>
+                                    <span
+                                      className={
+                                        wallet && wallet.balance >= amount
+                                          ? "text-emerald-600"
+                                          : "text-destructive"
+                                      }
+                                    >
+                                      Need ₹{amount.toFixed(2)} • Balance ₹{(wallet?.balance || 0).toFixed(2)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </CardContent>
+                          </Card>
+                        )}
 
                         {/* Slide-to-pay */}
                         {selectedWallet && (
