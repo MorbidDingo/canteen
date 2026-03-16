@@ -321,8 +321,17 @@ export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
 
 // ─── Certe+ Premium Subscription ─────────────────────────
 
+export const CERTE_PLUS_PLANS = {
+  WEEKLY: { key: "WEEKLY", label: "Weekly", price: 79, days: 7 },
+  MONTHLY: { key: "MONTHLY", label: "Monthly", price: 129, days: 30 },
+  THREE_MONTHS: { key: "THREE_MONTHS", label: "3 Months", price: 349, days: 90 },
+  SIX_MONTHS: { key: "SIX_MONTHS", label: "6 Months", price: 729, days: 180 },
+} as const;
+
+export type CertePlusPlan = keyof typeof CERTE_PLUS_PLANS;
+
 export const CERTE_PLUS = {
-  MONTHLY_PRICE: 99,
+  MONTHLY_PRICE: 129, // default plan price (monthly)
   WALLET_OVERDRAFT_LIMIT: 200,
   LIBRARY_PENALTY_ALLOWANCE: 5,
 } as const;

@@ -137,6 +137,9 @@ export default function PreOrdersPage() {
     maxDays: DEFAULT_MAX_SUBSCRIPTION_DAYS,
   });
 
+  const [subscribing, setSubscribing] = useState(false);
+  const [selectedSubPlan, setSelectedSubPlan] = useState<string>("MONTHLY");
+
   const [childId, setChildId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(todayDateInput());
   const [subscriptionUntil, setSubscriptionUntil] = useState(addDays(todayDateInput(), 2));
@@ -514,17 +517,79 @@ export default function PreOrdersPage() {
         </CardHeader>
         <CardContent className="space-y-5">
           {certePlusActive === false && (
-            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-center space-y-2">
-              <Sparkles className="h-6 w-6 text-amber-600 mx-auto" />
-              <p className="text-sm font-semibold text-amber-800">Certe+ Required</p>
-              <p className="text-xs text-amber-700">
-                Subscribe to Certe+ for ₹99/month to create subscriptions. Benefits include wallet overdraft protection, library penalty allowance, and more.
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
+              <div className="text-center space-y-1">
+                <Sparkles className="h-6 w-6 text-amber-600 mx-auto" />
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Certe+ Required</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Subscribe to Certe+ to create meal subscriptions.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { key: "WEEKLY", label: "Weekly", price: 79, duration: "7 days" },
+                  { key: "MONTHLY", label: "Monthly", price: 129, duration: "30 days" },
+                  { key: "THREE_MONTHS", label: "3 Months", price: 349, duration: "90 days" },
+                  { key: "SIX_MONTHS", label: "6 Months", price: 729, duration: "180 days" },
+                ] as const).map((plan) => (
+                  <button
+                    key={plan.key}
+                    type="button"
+                    onClick={() => setSelectedSubPlan(plan.key)}
+                    className={`rounded-lg border p-2 text-left transition-all ${
+                      selectedSubPlan === plan.key
+                        ? "border-amber-500 bg-amber-100/80 dark:bg-amber-900/30 ring-1 ring-amber-400"
+                        : "border-amber-200 dark:border-amber-800 bg-white/60 dark:bg-white/5 hover:border-amber-300"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">{plan.label}</p>
+                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">₹{plan.price}</p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-500">{plan.duration}</p>
+                  </button>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
+                disabled={subscribing || !childId}
+                onClick={async () => {
+                  setSubscribing(true);
+                  try {
+                    const res = await fetch("/api/certe-plus", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        paymentMethod: "WALLET",
+                        childId: childId || undefined,
+                        plan: selectedSubPlan,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                      toast.error(data.error || "Subscription failed");
+                      return;
+                    }
+                    toast.success("Certe+ activated! You can now create meal subscriptions.");
+                    setCertePlusActive(true);
+                  } catch {
+                    toast.error("Failed to subscribe");
+                  } finally {
+                    setSubscribing(false);
+                  }
+                }}
+              >
+                {subscribing ? (
+                  <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Subscribing...</>
+                ) : (
+                  <><Sparkles className="h-3.5 w-3.5 mr-1" /> Subscribe via Wallet</>
+                )}
+              </Button>
+              {!childId && (
+                <p className="text-[10px] text-center text-amber-600">Select a child above to subscribe.</p>
+              )}
+              <p className="text-[10px] text-center text-amber-600 dark:text-amber-500">
+                Payment deducted from your child&apos;s wallet. Or <Link href="/settings" className="underline font-medium">subscribe from settings</Link>.
               </p>
-              <Link href="/settings">
-                <Button size="sm" variant="outline" className="mt-2 border-amber-400 text-amber-700 hover:bg-amber-100">
-                  Subscribe Now
-                </Button>
-              </Link>
             </div>
           )}
 

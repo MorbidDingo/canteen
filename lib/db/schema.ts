@@ -548,12 +548,15 @@ export const certeSubscription = pgTable("certe_subscription", {
   parentId: text("parent_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  plan: text("plan", { enum: ["WEEKLY", "MONTHLY", "THREE_MONTHS", "SIX_MONTHS"] })
+    .notNull()
+    .default("MONTHLY"),
   status: text("status", { enum: ["ACTIVE", "EXPIRED", "CANCELLED"] })
     .notNull()
     .default("ACTIVE"),
   startDate: timestamp("start_date").notNull().$defaultFn(() => new Date()),
   endDate: timestamp("end_date").notNull(),
-  amount: doublePrecision("amount").notNull().default(99),
+  amount: doublePrecision("amount").notNull().default(129),
   paymentMethod: text("payment_method", { enum: ["WALLET", "RAZORPAY"] }).notNull(),
   razorpayPaymentId: text("razorpay_payment_id"),
   walletOverdraftUsed: doublePrecision("wallet_overdraft_used").notNull().default(0),

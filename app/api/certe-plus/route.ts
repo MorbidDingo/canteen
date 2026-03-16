@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { certeSubscription, wallet, walletTransaction, child } from "@/lib/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
-import { CERTE_PLUS } from "@/lib/constants";
+import { CERTE_PLUS, CERTE_PLUS_PLANS, type CertePlusPlan } from "@/lib/constants";
 import { getRazorpay } from "@/lib/razorpay";
 import crypto from "crypto";
 
@@ -46,6 +46,7 @@ export async function GET() {
       active: true,
       subscription: {
         id: active.id,
+        plan: active.plan,
         startDate: active.startDate,
         endDate: active.endDate,
         status: active.status,
@@ -74,7 +75,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { paymentMethod, childId, razorpay_payment_id, razorpay_order_id, razorpay_signature } = body;
+    const { paymentMethod, childId, plan: planKey, razorpay_payment_id, razorpay_order_id, razorpay_signature } = body;
+
+    // Validate plan
+    const selectedPlan = CERTE_PLUS_PLANS[planKey as CertePlusPlan];
+    if (!selectedPlan) {
+      return NextResponse.json({ error: "Invalid subscription plan. Choose WEEKLY, MONTHLY, THREE_MONTHS, or SIX_MONTHS." }, { status: 400 });
+    }
 
     // Check if already has active subscription
     const now = new Date();
@@ -94,9 +101,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "You already have an active Certe+ subscription" }, { status: 409 });
     }
 
-    const amount = CERTE_PLUS.MONTHLY_PRICE;
+    const amount = selectedPlan.price;
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1);
+    endDate.setDate(endDate.getDate() + selectedPlan.days);
 
     if (paymentMethod === "RAZORPAY") {
       // If no payment details, create a Razorpay order
@@ -106,7 +113,7 @@ export async function POST(request: NextRequest) {
           amount: amount * 100, // paise
           currency: "INR",
           receipt: `certe_plus_${session.user.id.slice(0, 8)}`,
-          notes: { parentId: session.user.id, type: "certe_plus" },
+          notes: { parentId: session.user.id, type: "certe_plus", plan: selectedPlan.key },
         });
 
         return NextResponse.json({
@@ -132,6 +139,7 @@ export async function POST(request: NextRequest) {
         .insert(certeSubscription)
         .values({
           parentId: session.user.id,
+          plan: selectedPlan.key,
           status: "ACTIVE",
           startDate: now,
           endDate,
@@ -145,15 +153,25 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentMethod === "WALLET") {
-      if (!childId) {
-        return NextResponse.json({ error: "childId required for wallet payment" }, { status: 400 });
+      // Find child wallet - use provided childId or first child
+      let targetChildId = childId;
+      if (!targetChildId) {
+        const children = await db
+          .select({ id: child.id })
+          .from(child)
+          .where(eq(child.parentId, session.user.id))
+          .limit(1);
+        if (children.length === 0) {
+          return NextResponse.json({ error: "No children found. Please add a child first." }, { status: 400 });
+        }
+        targetChildId = children[0].id;
       }
 
       // Verify child belongs to parent
       const [childRow] = await db
         .select()
         .from(child)
-        .where(and(eq(child.id, childId), eq(child.parentId, session.user.id)));
+        .where(and(eq(child.id, targetChildId), eq(child.parentId, session.user.id)));
 
       if (!childRow) {
         return NextResponse.json({ error: "Child not found" }, { status: 404 });
@@ -162,10 +180,12 @@ export async function POST(request: NextRequest) {
       const [walletRow] = await db
         .select()
         .from(wallet)
-        .where(eq(wallet.childId, childId));
+        .where(eq(wallet.childId, targetChildId));
 
       if (!walletRow || walletRow.balance < amount) {
-        return NextResponse.json({ error: "Insufficient wallet balance" }, { status: 400 });
+        return NextResponse.json({
+          error: `Insufficient wallet balance. Need ₹${amount}, available ₹${walletRow?.balance?.toFixed(2) ?? "0.00"}. Please top up your wallet first.`,
+        }, { status: 400 });
       }
 
       const newBalance = walletRow.balance - amount;
@@ -179,13 +199,14 @@ export async function POST(request: NextRequest) {
         type: "DEBIT",
         amount: -amount,
         balanceAfter: newBalance,
-        description: "Certe+ Monthly Subscription",
+        description: `Certe+ ${selectedPlan.label} Subscription`,
       });
 
       const [subscription] = await db
         .insert(certeSubscription)
         .values({
           parentId: session.user.id,
+          plan: selectedPlan.key,
           status: "ACTIVE",
           startDate: now,
           endDate,
@@ -197,7 +218,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, subscription });
     }
 
-    return NextResponse.json({ error: "Invalid payment method" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid payment method. Use WALLET or RAZORPAY." }, { status: 400 });
   } catch (error) {
     console.error("Certe+ subscribe error:", error);
     return NextResponse.json({ error: "Failed to process subscription" }, { status: 500 });
