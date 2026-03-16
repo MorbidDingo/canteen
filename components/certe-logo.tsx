@@ -29,10 +29,10 @@ export function CerteLogo({ size = 40, className }: CerteLogoProps) {
 }
 
 /**
- * The certe wordmark — lowercase "certe" with premium orange-gold styling.
+ * The certe wordmark — lowercase "erte" with premium orange-gold styling.
  * Use this wherever the brand name should appear as styled text.
- * When showPlus is true, the "c" is hidden (the hand logo symbolises C)
- * and a small "+" superscript is shown above the word.
+ * The icon already carries the "c" shape, so the text wordmark stays "erte".
+ * When showPlus is true, a small "+" superscript is shown above the word.
  */
 export function CerteWordmark({ className, showPlus }: { className?: string; showPlus?: boolean }) {
   return (
@@ -42,7 +42,7 @@ export function CerteWordmark({ className, showPlus }: { className?: string; sho
         className,
       )}
     >
-      {showPlus ? "erte" : "certe"}
+      erte
       {showPlus && (
         <sup className="text-[0.55em] font-bold ml-[1px] bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent">
           +

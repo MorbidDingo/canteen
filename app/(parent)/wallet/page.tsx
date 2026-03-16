@@ -473,8 +473,8 @@ export default function WalletPage() {
 
       {/* Names */}
       <div>
-        <p className="text-xl font-semibold tracking-wide wt-gold leading-tight">{w.childName}</p>
-        <p className="text-sm mt-0.5 wt-gold-sm">{w.parentName}</p>
+        <p className="text-xl font-semibold tracking-wide wt-gold leading-tight">{w.parentName || w.childName}</p>
+        <p className="text-sm mt-0.5 wt-gold-sm">Family Wallet</p>
       </div>
 
       {/* Balance */}
@@ -495,7 +495,7 @@ export default function WalletPage() {
           type="button"
           onClick={(e) => handlePlusClick(e, w.childId)}
           className="w-plus flex items-center justify-center h-8 w-8 rounded-full"
-          aria-label={`Add money to ${w.childName}'s wallet`}
+          aria-label="Add money to family wallet"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -522,7 +522,7 @@ export default function WalletPage() {
         <Card>
           <CardContent className="pt-8 pb-8 text-center">
             <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No wallets found. Add a child first to see their wallet.</p>
+            <p className="text-muted-foreground">No wallet found. Add a child first to activate family wallet.</p>
           </CardContent>
         </Card>
       </div>
@@ -687,7 +687,7 @@ export default function WalletPage() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-orange-800">
-                  Add money · {selectedWallet.childName}
+                  Add money · Family Wallet
                 </p>
                 <p className="text-xs mt-0.5 text-orange-700/70">
                   UPI · Card · Net Banking · Razorpay
@@ -754,7 +754,7 @@ export default function WalletPage() {
           <CardTitle className="text-base flex items-center gap-2 flex-wrap">
             Recent Transactions
             {selectedWallet && (
-              <span className="text-muted-foreground font-normal text-sm">— {selectedWallet.childName}</span>
+              <span className="text-muted-foreground font-normal text-sm">— Family Wallet</span>
             )}
           </CardTitle>
           <CardDescription>Last 50 transactions</CardDescription>

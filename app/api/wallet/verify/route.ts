@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { wallet, walletTransaction, child } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
 
@@ -78,10 +78,23 @@ export async function POST(request: NextRequest) {
     const topupAmount = amount / 100; // paise to rupees
     const newBalance = w.balance + topupAmount;
 
-    await db
-      .update(wallet)
-      .set({ balance: newBalance, updatedAt: new Date() })
-      .where(eq(wallet.id, w.id));
+    const siblingChildRows = await db
+      .select({ id: child.id })
+      .from(child)
+      .where(eq(child.parentId, session.user.id));
+    const siblingChildIds = siblingChildRows.map((c) => c.id);
+
+    if (siblingChildIds.length > 0) {
+      await db
+        .update(wallet)
+        .set({ balance: newBalance, updatedAt: new Date() })
+        .where(inArray(wallet.childId, siblingChildIds));
+    } else {
+      await db
+        .update(wallet)
+        .set({ balance: newBalance, updatedAt: new Date() })
+        .where(eq(wallet.id, w.id));
+    }
 
     await db.insert(walletTransaction).values({
       walletId: w.id,

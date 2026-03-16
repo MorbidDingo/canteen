@@ -13,7 +13,7 @@ import {
   preOrderItem,
   certeSubscription,
 } from "@/lib/db/schema";
-import { eq, and, gte, sql, asc } from "drizzle-orm";
+import { eq, and, gte, sql, asc, inArray } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
@@ -86,10 +86,17 @@ async function placeOrderFromItems(
     });
   }
 
+  const siblingRows = await db
+    .select({ id: child.id })
+    .from(child)
+    .where(eq(child.parentId, studentChild.parentId));
+  const siblingIds = siblingRows.map((s) => s.id);
+
   const wallets = await db
     .select()
     .from(wallet)
-    .where(eq(wallet.childId, studentChild.id))
+    .where(inArray(wallet.childId, siblingIds))
+    .orderBy(asc(wallet.createdAt))
     .limit(1);
 
   if (wallets.length === 0) {
@@ -317,7 +324,7 @@ async function placeOrderFromItems(
   await db
     .update(wallet)
     .set({ balance: newBalance, updatedAt: new Date() })
-    .where(eq(wallet.id, studentWallet.id));
+    .where(inArray(wallet.childId, siblingIds));
 
   await db.insert(walletTransaction).values({
     walletId: studentWallet.id,

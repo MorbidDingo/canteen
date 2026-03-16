@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth-client";
 import {
+  LayoutGrid,
   CreditCard,
   BarChart3,
   GraduationCap,
@@ -18,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const links = [
+  { href: "/management", label: "Home", icon: LayoutGrid },
   { href: "/management/cards", label: "Cards", icon: CreditCard },
   { href: "/management/students", label: "Students", icon: GraduationCap },
   { href: "/management/parents", label: "Parents", icon: Users },

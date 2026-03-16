@@ -79,6 +79,11 @@ type ChildWallet = {
   balance: number;
 };
 
+type ChildInfo = {
+  id: string;
+  name: string;
+};
+
 type SlideState = "idle" | "sliding" | "paying" | "paid";
 
 export default function CartPage() {
@@ -99,6 +104,8 @@ export default function CartPage() {
   const [wallets, setWallets] = useState<ChildWallet[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [walletsLoading, setWalletsLoading] = useState(false);
+  const [children, setChildren] = useState<ChildInfo[]>([]);
+  const [itemChildMap, setItemChildMap] = useState<Record<string, string>>({});
 
   // Slide-to-pay state
   const [slideState, setSlideState] = useState<SlideState>("idle");
@@ -143,6 +150,38 @@ export default function CartPage() {
     }
   }, [paymentMethod, fetchWallets]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/children");
+        if (!res.ok) return;
+        const data = await res.json();
+        const kids: ChildInfo[] = data.children || data || [];
+        setChildren(kids);
+      } catch {
+        // silently fail
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (children.length === 0) return;
+    setItemChildMap((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        if (!next[item.menuItemId]) {
+          next[item.menuItemId] = children[0].id;
+        }
+      }
+      for (const key of Object.keys(next)) {
+        if (!items.some((item) => item.menuItemId === key)) {
+          delete next[key];
+        }
+      }
+      return next;
+    });
+  }, [items, children]);
+
   // Reset slide state when payment method changes
   useEffect(() => {
     setSlideState("idle");
@@ -154,6 +193,18 @@ export default function CartPage() {
   const hasEnoughBalance = selectedWallet
     ? selectedWallet.balance >= total
     : false;
+
+  const buildChildOrderGroups = () => {
+    const groups = new Map<string, typeof items>();
+    for (const item of items) {
+      const childIdForItem = itemChildMap[item.menuItemId];
+      if (!childIdForItem) {
+        throw new Error(`Please select a child for ${item.name}`);
+      }
+      groups.set(childIdForItem, [...(groups.get(childIdForItem) || []), item]);
+    }
+    return groups;
+  };
 
   // ─── Slide-to-pay handlers ──────────────────────────
   const THUMB_SIZE = 52;
@@ -271,25 +322,28 @@ export default function CartPage() {
     }
 
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: items.map((item) => ({
-            menuItemId: item.menuItemId,
-            quantity: item.quantity,
-            instructions: [...item.instructions.toggles, item.instructions.text]
-              .filter(Boolean)
-              .join(", "),
-          })),
-          paymentMethod: "WALLET",
-          childId: selectedChildId,
-        }),
-      });
+      const groups = buildChildOrderGroups();
+      for (const [childId, groupItems] of groups.entries()) {
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: groupItems.map((item) => ({
+              menuItemId: item.menuItemId,
+              quantity: item.quantity,
+              instructions: [...item.instructions.toggles, item.instructions.text]
+                .filter(Boolean)
+                .join(", "),
+            })),
+            paymentMethod: "WALLET",
+            childId,
+          }),
+        });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to place order");
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to place order");
+        }
       }
 
       // Animate: paying → paid
@@ -325,6 +379,12 @@ export default function CartPage() {
 
     if (paymentMethod === "WALLET") return;
 
+    const groups = buildChildOrderGroups();
+    if (groups.size > 1) {
+      toast.error("For online checkout, please keep all items under one child.");
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
@@ -339,6 +399,7 @@ export default function CartPage() {
               .join(", "),
           })),
           paymentMethod: "ONLINE",
+          childId: [...groups.keys()][0],
         }),
       });
 
@@ -522,6 +583,29 @@ export default function CartPage() {
                   </span>
                 </div>
 
+                {children.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">For Child</Label>
+                    <Select
+                      value={itemChildMap[item.menuItemId] || ""}
+                      onValueChange={(value) =>
+                        setItemChildMap((prev) => ({ ...prev, [item.menuItemId]: value }))
+                      }
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Select child" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {children.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
                 {/* Instructions */}
                 <div className="space-y-2">
                   <Label className="text-sm">Special Instructions:</Label>
@@ -574,6 +658,13 @@ export default function CartPage() {
                 >
                   <span className="text-muted-foreground">
                     {item.name} × {item.quantity}
+                    {itemChildMap[item.menuItemId] && (
+                      <span className="ml-1">
+                        (
+                        {children.find((c) => c.id === itemChildMap[item.menuItemId])?.name}
+                        )
+                      </span>
+                    )}
                   </span>
                   <span>₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
                 </div>

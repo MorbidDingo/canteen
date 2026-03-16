@@ -67,9 +67,12 @@ export function Navbar() {
   // Animate cart icon when items are added
   useEffect(() => {
     if (cartCount > prevCartCount.current) {
-      setCartBounce(true);
-      const t = setTimeout(() => setCartBounce(false), 400);
-      return () => clearTimeout(t);
+      const start = setTimeout(() => setCartBounce(true), 0);
+      const stop = setTimeout(() => setCartBounce(false), 400);
+      return () => {
+        clearTimeout(start);
+        clearTimeout(stop);
+      };
     }
     prevCartCount.current = cartCount;
   }, [cartCount]);
@@ -77,6 +80,18 @@ export function Navbar() {
   const role = session?.user?.role;
   const isParent = role === "PARENT" || (role && !["ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR"].includes(role));
   const isAdmin = role === "ADMIN";
+  const isParentAreaPath = [
+    "/menu",
+    "/cart",
+    "/orders",
+    "/pre-orders",
+    "/library-history",
+    "/settings",
+    "/children",
+    "/wallet",
+    "/controls",
+    "/notifications",
+  ].some((p) => pathname.startsWith(p));
 
   const parentMode = getParentMode(pathname);
 
@@ -92,9 +107,10 @@ export function Navbar() {
   }, [isParent]);
 
   // Operator, Management, Library Operator have their own layouts with built-in nav
-  // Parent users also have a dedicated layout with bottom tabs
+  // Parent users (and parent area paths) also have a dedicated layout with bottom tabs
+  if (isPending && isParentAreaPath) return null;
   if (role === "OPERATOR" || role === "MANAGEMENT" || role === "LIB_OPERATOR") return null;
-  if (isParent) return null;
+  if (isParent || isParentAreaPath) return null;
 
   // Kiosk has its own layout — no navbar
   if (pathname.startsWith("/kiosk") || pathname.startsWith("/library/")) return null;

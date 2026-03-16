@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { wallet, walletTransaction } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { child, wallet, walletTransaction } from "@/lib/db/schema";
+import { asc, eq, inArray } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
 export async function POST(request: NextRequest) {
@@ -21,11 +21,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Maximum top-up is ₹5,000" }, { status: 400 });
   }
 
-  // Find the wallet
+  const [childRow] = await db
+    .select({ parentId: child.parentId })
+    .from(child)
+    .where(eq(child.id, childId))
+    .limit(1);
+
+  if (!childRow?.parentId) {
+    return NextResponse.json({ error: "Child not found" }, { status: 404 });
+  }
+
+  const siblingRows = await db
+    .select({ id: child.id })
+    .from(child)
+    .where(eq(child.parentId, childRow.parentId));
+  const siblingIds = siblingRows.map((s) => s.id);
+
+  // Find the family's primary wallet
   const wallets = await db
     .select()
     .from(wallet)
-    .where(eq(wallet.childId, childId))
+    .where(inArray(wallet.childId, siblingIds))
+    .orderBy(asc(wallet.createdAt))
     .limit(1);
 
   if (wallets.length === 0) {
@@ -35,11 +52,11 @@ export async function POST(request: NextRequest) {
   const w = wallets[0];
   const newBalance = w.balance + amount;
 
-  // Update balance + create transaction
+  // Update shared balance for all sibling wallets + create transaction
   await db
     .update(wallet)
     .set({ balance: newBalance, updatedAt: new Date() })
-    .where(eq(wallet.id, w.id));
+    .where(inArray(wallet.childId, siblingIds));
 
   await db.insert(walletTransaction).values({
     walletId: w.id,

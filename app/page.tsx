@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +33,8 @@ import {
   DoorOpen,
 } from "lucide-react";
 import { motion, useInView } from "framer-motion";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+import { useSession } from "@/lib/auth-client";
 
 /* ─── Scroll-animated section wrapper ──────────────────────── */
 function ScrollSection({
@@ -112,6 +114,24 @@ const notifIcons: Record<string, React.ReactNode> = {
 
 /* ─── Landing Page Component ──────────────────────────────── */
 export default function Home() {
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isPending || !session?.user?.role) return;
+    const role = session.user.role;
+    if (role === "ADMIN") router.replace("/admin/orders");
+    else if (role === "OPERATOR") router.replace("/operator/topup");
+    else if (role === "MANAGEMENT") router.replace("/management");
+    else if (role === "LIB_OPERATOR") router.replace("/lib-operator/dashboard");
+    else if (role === "ATTENDANCE") router.replace("/attendance");
+    else router.replace("/menu");
+  }, [session, isPending, router]);
+
+  if (session?.user) {
+    return null;
+  }
+
   return (
     <div className="flex flex-col">
       {/* ── Hero Section ─────────────────────────────────── */}
