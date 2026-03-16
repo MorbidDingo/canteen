@@ -11,9 +11,10 @@ import {
   discount,
   preOrder,
   preOrderItem,
+  certeSubscription,
 } from "@/lib/db/schema";
 import { eq, and, gte, sql, asc } from "drizzle-orm";
-import { generateTokenCode } from "@/lib/constants";
+import { generateTokenCode, CERTE_PLUS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
@@ -242,15 +243,54 @@ async function placeOrderFromItems(
     }
   }
 
+  // Check for Certe+ overdraft eligibility
+  let overdraftAllowance = 0;
   if (studentWallet.balance < total) {
+    const now = new Date();
+    const [activeSub] = await db
+      .select({ id: certeSubscription.id, walletOverdraftUsed: certeSubscription.walletOverdraftUsed })
+      .from(certeSubscription)
+      .where(
+        and(
+          eq(certeSubscription.parentId, studentChild.parentId),
+          eq(certeSubscription.status, "ACTIVE"),
+          gte(certeSubscription.endDate, now),
+        ),
+      )
+      .limit(1);
+
+    if (activeSub) {
+      overdraftAllowance = Math.max(0, CERTE_PLUS.WALLET_OVERDRAFT_LIMIT - activeSub.walletOverdraftUsed);
+    }
+  }
+
+  if (studentWallet.balance + overdraftAllowance < total) {
     return {
       success: false,
-      reason: `Insufficient balance. You have Rs${studentWallet.balance.toFixed(0)} but need Rs${total.toFixed(0)}.`,
+      reason: `Insufficient balance. You have Rs${studentWallet.balance.toFixed(0)}${overdraftAllowance > 0 ? ` (+Rs${overdraftAllowance.toFixed(0)} overdraft)` : ""} but need Rs${total.toFixed(0)}.`,
     };
   }
 
   const tokenCode = generateTokenCode();
   const newBalance = studentWallet.balance - total;
+
+  // Track overdraft usage if balance went negative
+  if (newBalance < 0) {
+    const overdraftUsed = Math.abs(newBalance);
+    const now = new Date();
+    await db
+      .update(certeSubscription)
+      .set({
+        walletOverdraftUsed: sql`${certeSubscription.walletOverdraftUsed} + ${overdraftUsed}`,
+      })
+      .where(
+        and(
+          eq(certeSubscription.parentId, studentChild.parentId),
+          eq(certeSubscription.status, "ACTIVE"),
+          gte(certeSubscription.endDate, now),
+        ),
+      );
+  }
 
   const [newOrder] = await db
     .insert(order)

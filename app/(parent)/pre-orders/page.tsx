@@ -62,6 +62,7 @@ type MenuOption = {
   discountedPrice?: number | null;
   category: MenuCategory;
   available: boolean;
+  subscribable?: boolean;
 };
 
 type ChildControl = {
@@ -94,9 +95,9 @@ type DraftItem = {
   quantity: number;
 };
 
-const MIN_PREORDER_VALUE = 60;
-const MIN_SUBSCRIPTION_DAYS = 3;
-const MAX_SUBSCRIPTION_DAYS = 180;
+const DEFAULT_MIN_PREORDER_VALUE = 60;
+const DEFAULT_MIN_SUBSCRIPTION_DAYS = 3;
+const DEFAULT_MAX_SUBSCRIPTION_DAYS = 180;
 
 function todayDateInput() {
   return new Date().toISOString().slice(0, 10);
@@ -129,6 +130,12 @@ export default function PreOrdersPage() {
   const [creating, setCreating] = useState(false);
   const [removingBlocks, setRemovingBlocks] = useState(false);
   const [removeBlocksModalOpen, setRemoveBlocksModalOpen] = useState(false);
+  const [certePlusActive, setCertePlusActive] = useState<boolean | null>(null);
+  const [subscriptionSettings, setSubscriptionSettings] = useState({
+    minOrderValue: DEFAULT_MIN_PREORDER_VALUE,
+    minDays: DEFAULT_MIN_SUBSCRIPTION_DAYS,
+    maxDays: DEFAULT_MAX_SUBSCRIPTION_DAYS,
+  });
 
   const [childId, setChildId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(todayDateInput());
@@ -157,7 +164,8 @@ export default function PreOrdersPage() {
     if (!res.ok) throw new Error("Failed menu");
     const data = await res.json();
     const items = (data.items || data) as MenuOption[];
-    setMenuItems(items.filter((m) => m.available));
+    // Only show available items that are subscribable
+    setMenuItems(items.filter((m) => m.available && m.subscribable !== false));
   }, []);
 
   const fetchControls = useCallback(async () => {
@@ -167,15 +175,41 @@ export default function PreOrdersPage() {
     setControls(data);
   }, []);
 
+  const fetchCertePlusStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/certe-plus");
+      if (res.ok) {
+        const data = await res.json();
+        setCertePlusActive(data.active === true);
+      }
+    } catch {
+      setCertePlusActive(false);
+    }
+  }, []);
+
+  const fetchSubscriptionSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/menu/subscription-settings");
+      if (res.ok) {
+        const data = await res.json();
+        setSubscriptionSettings({
+          minOrderValue: Number(data.subscription_min_order_value) || DEFAULT_MIN_PREORDER_VALUE,
+          minDays: Number(data.subscription_min_days) || DEFAULT_MIN_SUBSCRIPTION_DAYS,
+          maxDays: Number(data.subscription_max_days) || DEFAULT_MAX_SUBSCRIPTION_DAYS,
+        });
+      }
+    } catch { /* use defaults */ }
+  }, []);
+
   const loadAll = useCallback(async () => {
     try {
-      await Promise.all([fetchPreOrders(), fetchChildren(), fetchMenu(), fetchControls()]);
+      await Promise.all([fetchPreOrders(), fetchChildren(), fetchMenu(), fetchControls(), fetchCertePlusStatus(), fetchSubscriptionSettings()]);
     } catch {
       toast.error("Failed to load pre-order data");
     } finally {
       setLoading(false);
     }
-  }, [fetchPreOrders, fetchChildren, fetchMenu, fetchControls]);
+  }, [fetchPreOrders, fetchChildren, fetchMenu, fetchControls, fetchCertePlusStatus, fetchSubscriptionSettings]);
 
   useEffect(() => {
     void loadAll();
@@ -241,11 +275,11 @@ export default function PreOrdersPage() {
       dailySpendLimit,
       perOrderExceeded: !!perOrderLimit && orderTotal > perOrderLimit,
       dailyLimitRisk: !!dailySpendLimit && orderTotal > dailySpendLimit,
-      belowMinValue: orderTotal < MIN_PREORDER_VALUE,
+      belowMinValue: orderTotal < subscriptionSettings.minOrderValue,
       invalidDuration:
-        durationDays < MIN_SUBSCRIPTION_DAYS || durationDays > MAX_SUBSCRIPTION_DAYS,
+        durationDays < subscriptionSettings.minDays || durationDays > subscriptionSettings.maxDays,
     };
-  }, [draftItems, menuLookup, selectedControl, orderTotal, durationDays]);
+  }, [draftItems, menuLookup, selectedControl, orderTotal, durationDays, subscriptionSettings]);
 
   const hasBlockingControls =
     controlFindings.blockedCategories.length > 0 ||
@@ -297,12 +331,12 @@ export default function PreOrdersPage() {
     }
     if (controlFindings.invalidDuration) {
       toast.error(
-        `Subscription must be ${MIN_SUBSCRIPTION_DAYS} to ${MAX_SUBSCRIPTION_DAYS} days`,
+        `Subscription must be ${subscriptionSettings.minDays} to ${subscriptionSettings.maxDays} days`,
       );
       return;
     }
     if (controlFindings.belowMinValue) {
-      toast.error(`Minimum pre-order value is ₹${MIN_PREORDER_VALUE}`);
+      toast.error(`Minimum pre-order value is ₹${subscriptionSettings.minOrderValue}`);
       return;
     }
     if (hasBlockingControls) {
@@ -475,10 +509,25 @@ export default function PreOrdersPage() {
         <CardHeader>
           <CardTitle>Create Subscription</CardTitle>
           <CardDescription>
-            Choose child, period and items. Minimum order value is ₹{MIN_PREORDER_VALUE}.
+            Choose child, period and items. Minimum order value is ₹{subscriptionSettings.minOrderValue}.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
+          {certePlusActive === false && (
+            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-center space-y-2">
+              <Sparkles className="h-6 w-6 text-amber-600 mx-auto" />
+              <p className="text-sm font-semibold text-amber-800">Certe+ Required</p>
+              <p className="text-xs text-amber-700">
+                Subscribe to Certe+ for ₹99/month to create subscriptions. Benefits include wallet overdraft protection, library penalty allowance, and more.
+              </p>
+              <Link href="/settings">
+                <Button size="sm" variant="outline" className="mt-2 border-amber-400 text-amber-700 hover:bg-amber-100">
+                  Subscribe Now
+                </Button>
+              </Link>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <LabelText>Child</LabelText>
@@ -504,7 +553,7 @@ export default function PreOrdersPage() {
                 onChange={(e) => {
                   const nextStart = e.target.value;
                   setScheduledDate(nextStart);
-                  const minEnd = addDays(nextStart, MIN_SUBSCRIPTION_DAYS - 1);
+                  const minEnd = addDays(nextStart, subscriptionSettings.minDays - 1);
                   if (subscriptionUntil < minEnd) {
                     setSubscriptionUntil(minEnd);
                   }
@@ -516,8 +565,8 @@ export default function PreOrdersPage() {
               <LabelText>End Date</LabelText>
               <Input
                 type="date"
-                min={addDays(scheduledDate, MIN_SUBSCRIPTION_DAYS - 1)}
-                max={addDays(scheduledDate, MAX_SUBSCRIPTION_DAYS - 1)}
+                min={addDays(scheduledDate, subscriptionSettings.minDays - 1)}
+                max={addDays(scheduledDate, subscriptionSettings.maxDays - 1)}
                 value={subscriptionUntil}
                 onChange={(e) => setSubscriptionUntil(e.target.value)}
               />
@@ -527,7 +576,7 @@ export default function PreOrdersPage() {
               <p className="text-xs text-muted-foreground">Duration</p>
               <p className="text-sm font-semibold mt-0.5">{durationDays} day(s)</p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                Allowed range: {MIN_SUBSCRIPTION_DAYS} to {MAX_SUBSCRIPTION_DAYS} days.
+                Allowed range: {subscriptionSettings.minDays} to {subscriptionSettings.maxDays} days.
               </p>
             </div>
           </div>
@@ -624,11 +673,11 @@ export default function PreOrdersPage() {
 
             <ul className="text-sm space-y-1">
               {controlFindings.belowMinValue ? (
-                <li className="text-amber-700">Minimum pre-order value is ₹{MIN_PREORDER_VALUE}.</li>
+                <li className="text-amber-700">Minimum pre-order value is ₹{subscriptionSettings.minOrderValue}.</li>
               ) : null}
               {controlFindings.invalidDuration ? (
                 <li className="text-amber-700">
-                  Subscription duration must be {MIN_SUBSCRIPTION_DAYS} to {MAX_SUBSCRIPTION_DAYS} days.
+                  Subscription duration must be {subscriptionSettings.minDays} to {subscriptionSettings.maxDays} days.
                 </li>
               ) : null}
               {controlFindings.blockedCategories.length > 0 ? (
