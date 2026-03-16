@@ -44,7 +44,9 @@ export default function ParentLayout({
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
   const [cartBounce, setCartBounce] = useState(false);
+  const [navDimmed, setNavDimmed] = useState(false);
   const prevCartCount = useRef(cartCount);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const parentMode = getParentMode(pathname);
   const isSettingsPage = ["/settings", "/children", "/wallet", "/controls", "/notifications"].includes(pathname);
@@ -67,6 +69,20 @@ export default function ParentLayout({
         if (data?.overdueCount) setOverdueCount(data.overdueCount);
       })
       .catch(() => {});
+  }, []);
+
+  // Dim bottom nav while scrolling
+  useEffect(() => {
+    const handleScroll = () => {
+      setNavDimmed(true);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => setNavDimmed(false), 800);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, []);
 
   const getInitials = (name?: string | null) => {
@@ -165,19 +181,22 @@ export default function ParentLayout({
       </header>
 
       {/* ── Page content ── */}
-      <div className="pb-20">{children}</div>
+      <div className="pb-24">{children}</div>
 
-      {/* ── Bottom tab bar (mobile-first) ── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1">
+      {/* ── iOS-like floating bottom tab bar ── */}
+      <nav className={cn(
+        "fixed bottom-3 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav",
+        navDimmed && "ios-bottom-nav-dimmed",
+      )}>
+        <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
           {/* Canteen */}
           <Link
             href="/menu"
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors",
+              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
               parentMode === "canteen" && !isSettingsPage
-                ? "text-foreground"
-                : "text-muted-foreground",
+                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                : "text-muted-foreground hover:text-foreground/70",
             )}
           >
             <UtensilsCrossed className="h-5 w-5" />
@@ -188,10 +207,10 @@ export default function ParentLayout({
           <Link
             href="/orders"
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors",
+              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
               pathname === "/orders" || pathname === "/pre-orders"
-                ? "text-foreground"
-                : "text-muted-foreground",
+                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                : "text-muted-foreground hover:text-foreground/70",
             )}
           >
             <ClipboardList className="h-5 w-5" />
@@ -202,10 +221,10 @@ export default function ParentLayout({
           <Link
             href="/library-history"
             className={cn(
-              "relative flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors",
+              "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
               parentMode === "library"
-                ? "text-foreground"
-                : "text-muted-foreground",
+                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                : "text-muted-foreground hover:text-foreground/70",
             )}
           >
             <BookOpen className="h-5 w-5" />
@@ -221,10 +240,10 @@ export default function ParentLayout({
           <Link
             href="/settings"
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 transition-colors",
+              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
               isSettingsPage
-                ? "text-foreground"
-                : "text-muted-foreground",
+                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                : "text-muted-foreground hover:text-foreground/70",
             )}
           >
             <Settings className="h-5 w-5" />

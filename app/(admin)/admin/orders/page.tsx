@@ -28,6 +28,7 @@ import {
   XCircle,
   CalendarRange,
   ArrowRight,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -206,6 +207,12 @@ export default function AdminOrdersPage() {
             <Button variant="secondary" size="sm" className="gap-2">
               Served & Metrics
               <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+          <Link href="/admin/settings">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Settings
             </Button>
           </Link>
         </div>

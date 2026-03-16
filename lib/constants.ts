@@ -308,6 +308,7 @@ export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
   fine_per_day: "0",
   max_fine_per_book: "100",
   allow_self_service_issue: "true",
+  penalty_limit_per_student: "0",
 };
 
 // ─── App Settings Defaults ───────────────────────────────

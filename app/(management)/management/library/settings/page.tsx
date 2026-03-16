@@ -243,6 +243,20 @@ export default function LibrarySettingsPage() {
                 Cap on total fine per single book
               </p>
             </div>
+            <div>
+              <Label>Penalty Limit Per Student</Label>
+              <Input
+                type="number"
+                min="0"
+                value={settings.penalty_limit_per_student || "0"}
+                onChange={(e) =>
+                  updateSetting("penalty_limit_per_student", e.target.value)
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Max penalties before blocking. 0 = no limit. Certe+ adds 5 free penalties/month.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
