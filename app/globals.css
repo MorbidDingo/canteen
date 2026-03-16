@@ -229,16 +229,7 @@ html {
   transition: opacity 0.3s ease;
 }
 
-/* Scroll-based dimming: dim nav when user scrolls */
-.ios-bottom-nav-dimmed {
-  opacity: 0.4;
-  pointer-events: auto;
-}
-
-.ios-bottom-nav-dimmed:hover,
-.ios-bottom-nav-dimmed:focus-within {
-  opacity: 1;
-}
+/* Scroll-based dimming: no longer applied to the nav directly */
 
 /* Card hover/active states — flat & bordered aesthetic */
 .card-interactive {

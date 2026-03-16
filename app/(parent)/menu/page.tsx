@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { UtensilsCrossed, Loader2 } from "lucide-react";
+import { UtensilsCrossed, Loader2, Lock, Sparkles } from "lucide-react";
 import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ interface MenuItem {
 export default function MenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [certePlusActive, setCertePlusActive] = useState<boolean | null>(null);
 
   const fetchMenu = useCallback(async () => {
     try {
@@ -39,6 +40,12 @@ export default function MenuPage() {
 
   useEffect(() => {
     fetchMenu();
+    fetch("/api/certe-plus")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setCertePlusActive(data.active === true);
+      })
+      .catch(() => {});
   }, [fetchMenu]);
 
   // Instant refresh via SSE when admin updates menu
@@ -70,9 +77,24 @@ export default function MenuPage() {
           </Button>
         </Link>
         <Link href="/pre-orders">
-          <Button type="button" variant="ghost" size="sm">
-            Pre-Order
-          </Button>
+          {certePlusActive ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="bg-gradient-to-r from-gray-900 to-black text-transparent bg-clip-text font-semibold border-0"
+            >
+              <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
+                Pre-Order
+              </span>
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" className="gap-1">
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              Pre-Order
+            </Button>
+          )}
         </Link>
       </div>
 

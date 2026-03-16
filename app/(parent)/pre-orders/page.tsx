@@ -140,6 +140,7 @@ export default function PreOrdersPage() {
 
   const [subscribing, setSubscribing] = useState(false);
   const [selectedSubPlan, setSelectedSubPlan] = useState<string>("MONTHLY");
+  const [showCelebration, setShowCelebration] = useState(false);
 
   const [childId, setChildId] = useState("");
   const [scheduledDate, setScheduledDate] = useState(todayDateInput());
@@ -485,36 +486,77 @@ export default function PreOrdersPage() {
           </Button>
         </Link>
         <Link href="/pre-orders">
-          <Button type="button" variant="secondary" size="sm" className="rounded-lg">
-            Pre-Order
-          </Button>
+          {certePlusActive ? (
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-lg bg-gradient-to-r from-gray-900 to-black border-0 shadow-sm"
+            >
+              <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
+                Pre-Order
+              </span>
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" size="sm" className="rounded-lg">
+              Pre-Order
+            </Button>
+          )}
         </Link>
       </div>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>Create Subscription</CardTitle>
-          <CardDescription>
-            Choose child, period and items. Minimum order value is ₹{subscriptionSettings.minOrderValue}.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {certePlusActive === false && (
-            <div className="rounded-xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
-              <div className="text-center space-y-1">
-                <Sparkles className="h-6 w-6 text-amber-600 mx-auto" />
-                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Certe+ Required</p>
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  Subscribe to Certe+ to create meal subscriptions.
-                </p>
+      {/* ── Celebration overlay when subscribing to Certe+ ── */}
+      {showCelebration && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="flex flex-col items-center gap-3 animate-scale-in">
+            <div className="relative">
+              <Sparkles className="h-16 w-16 text-amber-400 animate-bounce-subtle" />
+              <div className="absolute inset-0 h-16 w-16 animate-ping rounded-full bg-amber-400/20" />
+            </div>
+            <p className="text-xl font-bold text-white text-engraved-gold">Welcome to Certe+</p>
+            <p className="text-sm text-amber-200">You can now create meal subscriptions!</p>
+          </div>
+        </div>
+      )}
+
+      {certePlusActive === false ? (
+        /* ── Subscription-only card when not subscribed ── */
+        <Card className="rounded-2xl overflow-hidden">
+          <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-amber-50 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40">
+            <CardHeader className="text-center pb-2">
+              <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg">
+                <Sparkles className="h-7 w-7 text-white" />
               </div>
+              <CardTitle className="text-lg">Unlock Pre-Orders with Certe+</CardTitle>
+              <CardDescription>
+                Subscribe to Certe+ to create and manage meal subscriptions for your child.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pb-6">
+              {children.length > 0 && (
+                <div>
+                  <LabelText>Select Child</LabelText>
+                  <Select value={childId} onValueChange={setChildId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select child" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {children.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {CERTE_PLUS_PLAN_LIST.map((plan) => (
                   <button
                     key={plan.key}
                     type="button"
                     onClick={() => setSelectedSubPlan(plan.key)}
-                    className={`rounded-lg border p-2 text-left transition-all ${
+                    className={`rounded-lg border p-2.5 text-left transition-all ${
                       selectedSubPlan === plan.key
                         ? "border-amber-500 bg-amber-100/80 dark:bg-amber-900/30 ring-1 ring-amber-400"
                         : "border-amber-200 dark:border-amber-800 bg-white/60 dark:bg-white/5 hover:border-amber-300"
@@ -527,8 +569,8 @@ export default function PreOrdersPage() {
                 ))}
               </div>
               <Button
-                size="sm"
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
+                size="lg"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md"
                 disabled={subscribing || !childId}
                 onClick={async () => {
                   setSubscribing(true);
@@ -547,8 +589,10 @@ export default function PreOrdersPage() {
                       toast.error(data.error || "Subscription failed");
                       return;
                     }
-                    toast.success("Certe+ activated! You can now create meal subscriptions.");
+                    setShowCelebration(true);
+                    setTimeout(() => setShowCelebration(false), 2500);
                     setCertePlusActive(true);
+                    toast.success("Certe+ activated! You can now create meal subscriptions.");
                   } catch {
                     toast.error("Failed to subscribe");
                   } finally {
@@ -557,20 +601,30 @@ export default function PreOrdersPage() {
                 }}
               >
                 {subscribing ? (
-                  <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Subscribing...</>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Subscribing...</>
                 ) : (
-                  <><Sparkles className="h-3.5 w-3.5 mr-1" /> Subscribe via Wallet</>
+                  <><Sparkles className="h-4 w-4 mr-2" /> Subscribe to Certe+</>
                 )}
               </Button>
-              {!childId && (
-                <p className="text-[10px] text-center text-amber-600">Select a child above to subscribe.</p>
+              {!childId && children.length > 0 && (
+                <p className="text-[10px] text-center text-amber-600">Select a child to subscribe.</p>
               )}
               <p className="text-[10px] text-center text-amber-600 dark:text-amber-500">
                 Payment deducted from your child&apos;s wallet. Or <Link href="/settings" className="underline font-medium">subscribe from settings</Link>.
               </p>
-            </div>
-          )}
-
+            </CardContent>
+          </div>
+        </Card>
+      ) : (
+        /* ── Full pre-order creation card when subscribed ── */
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <CardTitle>Create Subscription</CardTitle>
+            <CardDescription>
+              Choose child, period and items. Minimum order value is ₹{subscriptionSettings.minOrderValue}.
+            </CardDescription>
+          </CardHeader>
+        <CardContent className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <LabelText>Child</LabelText>
@@ -785,7 +839,8 @@ export default function PreOrdersPage() {
             </p>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {preOrders.length === 0 ? (
         <Card className="rounded-2xl">
