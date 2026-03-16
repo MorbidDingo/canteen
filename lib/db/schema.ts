@@ -333,7 +333,7 @@ export const offlineSyncAction = pgTable("offline_sync_action", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   actionId: text("action_id").notNull().unique(),
   actionType: text("action_type", {
-    enum: ["KIOSK_ORDER", "LIBRARY_ISSUE", "LIBRARY_RETURN"],
+    enum: ["KIOSK_ORDER", "LIBRARY_ISSUE", "LIBRARY_RETURN", "GATE_TAP"],
   }).notNull(),
   status: text("status", { enum: ["SUCCESS", "FAILED"] }).notNull().default("SUCCESS"),
   response: text("response"),
