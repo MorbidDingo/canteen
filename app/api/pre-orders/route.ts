@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     const isCertePlus = await hasActiveCertePlus(session.user.id);
     if (!isCertePlus) {
       return NextResponse.json(
-        { error: "An active Certe+ subscription is required to use pre-orders. Subscribe for Rs99/month from your settings page." },
+        { error: "An active Certe+ subscription is required to use pre-orders. Subscribe from the pre-orders page or settings." },
         { status: 403 }
       );
     }
