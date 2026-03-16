@@ -20,6 +20,7 @@ import {
   CheckCircle,
   Clock,
   GraduationCap,
+  Package,
   Phone,
   RefreshCw,
   User,
@@ -27,6 +28,7 @@ import {
   XCircle,
   CalendarRange,
   ArrowRight,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -78,9 +80,25 @@ type AdminPreOrder = {
   items: Array<{ menuItemId: string; menuItemName: string; quantity: number }>;
 };
 
+type PrepDemandItem = {
+  menuItemId: string;
+  menuItemName: string;
+  quantity: number;
+  fromOneDay: number;
+  fromSubscription: number;
+};
+
+type PreOrderSummary = {
+  oneDayCount: number;
+  subscriptionCount: number;
+  totalPlannedItems: number;
+};
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<AdminPreOrder[]>([]);
+  const [prepDemand, setPrepDemand] = useState<PrepDemandItem[]>([]);
+  const [prepSummary, setPrepSummary] = useState<PreOrderSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -101,6 +119,8 @@ export default function AdminOrdersPage() {
 
       setOrders(ordersData.orders ?? []);
       setSubscriptions(preOrdersData.subscriptions ?? []);
+      setPrepDemand(preOrdersData.prepDemand ?? []);
+      setPrepSummary(preOrdersData.summary ?? null);
     } catch {
       toast.error("Failed to fetch canteen operations data");
     } finally {
@@ -189,6 +209,12 @@ export default function AdminOrdersPage() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
+          <Link href="/admin/settings">
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Settings
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -234,6 +260,52 @@ export default function AdminOrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      {prepDemand.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Package className="h-4 w-4" />
+              Prep Demand — Items to Make Today
+              {prepSummary && (
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {prepSummary.totalPlannedItems} total items
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              Aggregated quantities of each item across all pre-orders and subscriptions due today.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {prepDemand.map((item) => (
+                <div key={item.menuItemId} className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <p className="text-sm font-semibold">{item.menuItemName}</p>
+                    <div className="flex gap-3 mt-0.5">
+                      {item.fromSubscription > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.fromSubscription} from subscriptions
+                        </span>
+                      )}
+                      {item.fromOneDay > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.fromOneDay} from one-day
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-[#1a3a8f]">{item.quantity}</p>
+                    <p className="text-xs text-muted-foreground">to make</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>

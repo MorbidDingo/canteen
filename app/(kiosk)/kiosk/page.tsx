@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { CerteLogo } from "@/components/certe-logo";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
   Trash2,
   Search,
   X,
+  Timer,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { MENU_CATEGORY_LABELS, type MenuCategory } from "@/lib/constants";
@@ -73,6 +75,7 @@ export default function KioskPage() {
   const [orderLoading, setOrderLoading] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
   const [countdown, setCountdown] = useState(5);
+  const [browseTimer, setBrowseTimer] = useState(20);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRfid, setActiveRfid] = useState("");
   const [activeChildName, setActiveChildName] = useState<string | null>(null);
@@ -167,6 +170,22 @@ export default function KioskPage() {
     }, 1000);
     return () => clearInterval(interval);
   }, [phase]);
+
+  // 20-second browse timer — resets when cart changes, expires to reset kiosk
+  useEffect(() => {
+    if (phase !== "browse") return;
+    setBrowseTimer(20);
+    const interval = setInterval(() => {
+      setBrowseTimer((prev) => {
+        if (prev <= 1) {
+          resetKiosk();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase, cart.length]);
 
   const addToCart = (item: MenuItem) => {
     const MAX_QTY = 5;
@@ -480,6 +499,14 @@ export default function KioskPage() {
             </Badge>
           )}
 
+          <Badge
+            variant={browseTimer <= 5 ? "destructive" : "outline"}
+            className="whitespace-nowrap flex items-center gap-1 tabular-nums"
+          >
+            <Timer className="h-3.5 w-3.5" />
+            {browseTimer}s
+          </Badge>
+
           <CerteLogo size={48} />
           <Link href="/kiosk/offline">
             <Button variant="outline" size="sm">Offline Ops</Button>
@@ -529,10 +556,13 @@ export default function KioskPage() {
                   >
                     <div className="aspect-square bg-gray-100 relative">
                       {item.imageUrl ? (
-                        <img
+                        <Image
                           src={item.imageUrl}
                           alt={item.name}
-                          className="w-full h-full object-cover"
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
+                          className="object-cover"
+                          priority={false}
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-4xl">

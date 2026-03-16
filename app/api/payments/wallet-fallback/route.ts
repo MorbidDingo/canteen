@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order, orderItem, wallet, walletTransaction, child } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { order, orderItem, wallet, walletTransaction, child, certeSubscription } from "@/lib/db/schema";
+import { eq, and, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { CERTE_PLUS } from "@/lib/constants";
 
 const fallbackSchema = z.object({
   orderId: z.string().min(1),
@@ -85,23 +86,46 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!walletRow || walletRow.balance < existingOrder.totalAmount) {
-      // Insufficient balance — cancel the order
-      await db
-        .update(order)
-        .set({ status: "CANCELLED", updatedAt: new Date() })
-        .where(eq(order.id, orderId));
-      broadcast("orders-updated");
-      const reason = walletRow
-        ? `Insufficient wallet balance (₹${walletRow.balance.toFixed(0)} available, ₹${existingOrder.totalAmount.toFixed(0)} needed)`
-        : "No wallet found";
-      notifyParentForChild({
-        childId,
-        type: "KIOSK_ORDER_CANCELLED",
-        title: "Order cancelled",
-        message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — ${reason.toLowerCase()}.`,
-        metadata: { orderId, reason: "insufficient_balance" },
-      }).catch(() => {});
-      return NextResponse.json({ fallback: "cancelled", reason });
+      // Check for Certe+ overdraft before cancelling
+      let overdraftAllowance = 0;
+      if (walletRow) {
+        const now = new Date();
+        const [activeSub] = await db
+          .select({ id: certeSubscription.id, walletOverdraftUsed: certeSubscription.walletOverdraftUsed })
+          .from(certeSubscription)
+          .where(
+            and(
+              eq(certeSubscription.parentId, session.user.id),
+              eq(certeSubscription.status, "ACTIVE"),
+              gte(certeSubscription.endDate, now),
+            ),
+          )
+          .limit(1);
+
+        if (activeSub) {
+          overdraftAllowance = Math.max(0, CERTE_PLUS.WALLET_OVERDRAFT_LIMIT - activeSub.walletOverdraftUsed);
+        }
+      }
+
+      if (!walletRow || walletRow.balance + overdraftAllowance < existingOrder.totalAmount) {
+        // Insufficient balance — cancel the order
+        await db
+          .update(order)
+          .set({ status: "CANCELLED", updatedAt: new Date() })
+          .where(eq(order.id, orderId));
+        broadcast("orders-updated");
+        const reason = walletRow
+          ? `Insufficient wallet balance (₹${walletRow.balance.toFixed(0)}${overdraftAllowance > 0 ? ` +₹${overdraftAllowance.toFixed(0)} overdraft` : ""} available, ₹${existingOrder.totalAmount.toFixed(0)} needed)`
+          : "No wallet found";
+        notifyParentForChild({
+          childId,
+          type: "KIOSK_ORDER_CANCELLED",
+          title: "Order cancelled",
+          message: `Order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)} was cancelled — ${reason.toLowerCase()}.`,
+          metadata: { orderId, reason: "insufficient_balance" },
+        }).catch(() => {});
+        return NextResponse.json({ fallback: "cancelled", reason });
+      }
     }
 
     // Wallet has enough — pay and decrement units in a transaction

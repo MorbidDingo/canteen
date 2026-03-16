@@ -308,7 +308,24 @@ export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
   fine_per_day: "0",
   max_fine_per_book: "100",
   allow_self_service_issue: "true",
+  penalty_limit_per_student: "0",
 };
+
+// ─── App Settings Defaults ───────────────────────────────
+
+export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
+  subscription_min_order_value: "60",
+  subscription_min_days: "3",
+  subscription_max_days: "180",
+};
+
+// ─── Certe+ Premium Subscription ─────────────────────────
+
+export const CERTE_PLUS = {
+  MONTHLY_PRICE: 99,
+  WALLET_OVERDRAFT_LIMIT: 200,
+  LIBRARY_PENALTY_ALLOWANCE: 5,
+} as const;
 
 // ─── Gate Direction ─────────────────────────────────────
 

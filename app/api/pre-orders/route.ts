@@ -1,14 +1,36 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { preOrder, preOrderItem, child, menuItem, parentControl, discount } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { preOrder, preOrderItem, child, menuItem, parentControl, discount, appSetting, certeSubscription } from "@/lib/db/schema";
+import { eq, desc, and, gte } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 
-const MIN_PREORDER_VALUE = 60;
-const MIN_SUBSCRIPTION_DAYS = 3;
-const MAX_SUBSCRIPTION_DAYS = 180;
+async function getAppSettings(): Promise<Record<string, string>> {
+  const rows = await db.select().from(appSetting);
+  const settings: Record<string, string> = { ...APP_SETTINGS_DEFAULTS };
+  for (const row of rows) {
+    settings[row.key] = row.value;
+  }
+  return settings;
+}
+
+async function hasActiveCertePlus(parentId: string): Promise<boolean> {
+  const now = new Date();
+  const [active] = await db
+    .select({ id: certeSubscription.id })
+    .from(certeSubscription)
+    .where(
+      and(
+        eq(certeSubscription.parentId, parentId),
+        eq(certeSubscription.status, "ACTIVE"),
+        gte(certeSubscription.endDate, now),
+      ),
+    )
+    .limit(1);
+  return !!active;
+}
 
 function safeParseJSON(val: string | null): string[] {
   if (!val) return [];
@@ -96,6 +118,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check Certe+ subscription requirement
+    const isCertePlus = await hasActiveCertePlus(session.user.id);
+    if (!isCertePlus) {
+      return NextResponse.json(
+        { error: "An active Certe+ subscription is required to use pre-orders. Subscribe for Rs99/month from your settings page." },
+        { status: 403 }
+      );
+    }
+
     if (!body.subscriptionUntil) {
       return NextResponse.json(
         { error: "subscriptionUntil is required for subscription" },
@@ -109,6 +140,12 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Get dynamic settings
+    const settings = await getAppSettings();
+    const MIN_PREORDER_VALUE = Number(settings.subscription_min_order_value) || 60;
+    const MIN_SUBSCRIPTION_DAYS = Number(settings.subscription_min_days) || 3;
+    const MAX_SUBSCRIPTION_DAYS = Number(settings.subscription_max_days) || 180;
 
     const durationDays = dateDiffInDaysInclusive(body.scheduledDate, body.subscriptionUntil);
     if (durationDays < MIN_SUBSCRIPTION_DAYS || durationDays > MAX_SUBSCRIPTION_DAYS) {
@@ -135,7 +172,7 @@ export async function POST(request: Request) {
     }
 
     const menuRows = await db
-      .select({ id: menuItem.id, available: menuItem.available, category: menuItem.category, price: menuItem.price, name: menuItem.name })
+      .select({ id: menuItem.id, available: menuItem.available, category: menuItem.category, price: menuItem.price, name: menuItem.name, subscribable: menuItem.subscribable })
       .from(menuItem);
 
     const now = new Date();
@@ -158,6 +195,12 @@ export async function POST(request: Request) {
       if (!menu || !menu.available || item.quantity <= 0) {
         return NextResponse.json(
           { error: "One or more selected items are invalid or unavailable" },
+          { status: 400 }
+        );
+      }
+      if (!menu.subscribable) {
+        return NextResponse.json(
+          { error: `"${menu.name}" is not available for subscriptions` },
           { status: 400 }
         );
       }

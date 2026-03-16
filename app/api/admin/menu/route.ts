@@ -63,6 +63,7 @@ const createMenuItemSchema = z.object({
   imageUrl: z.string().optional().or(z.literal("")),
   available: z.boolean().default(true),
   availableUnits: z.number().int().min(0).nullable().optional(),
+  subscribable: z.boolean().default(true),
 });
 
 // POST — create a new menu item
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
         imageUrl: data.imageUrl || null,
         available: data.available,
         availableUnits: data.availableUnits ?? null,
+        subscribable: data.subscribable,
       })
       .returning();
 

@@ -204,7 +204,7 @@
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
-  padding-bottom: 70px;
+  padding-bottom: 85px;
 }
 
 /* Better touch targets */
@@ -219,6 +219,25 @@ html {
   main {
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+/* ─── iOS-like Floating Bottom Nav ──────────────────────────── */
+
+.ios-bottom-nav {
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  transition: opacity 0.3s ease;
+}
+
+/* Scroll-based dimming: dim nav when user scrolls */
+.ios-bottom-nav-dimmed {
+  opacity: 0.4;
+  pointer-events: auto;
+}
+
+.ios-bottom-nav-dimmed:hover,
+.ios-bottom-nav-dimmed:focus-within {
+  opacity: 1;
 }
 
 /* Card hover/active states — flat & bordered aesthetic */

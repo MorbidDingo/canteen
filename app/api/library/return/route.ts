@@ -8,10 +8,11 @@ import {
   librarySetting,
   wallet,
   walletTransaction,
+  certeSubscription,
 } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, gte } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
-import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
+import { LIBRARY_SETTINGS_DEFAULTS, CERTE_PLUS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 
@@ -233,35 +234,60 @@ export async function POST(request: NextRequest) {
       })
       .where(eq(book.id, resolvedCopy.bookId));
 
-    // ── 8. Deduct fine from wallet if applicable ─────
+    // ── 8. Deduct fine from wallet if applicable (with Certe+ penalty allowance) ─────
     let fineDeducted = false;
     if (fineAmount > 0) {
-      const wallets = await db
-        .select()
-        .from(wallet)
-        .where(eq(wallet.childId, studentChild.id))
+      // Check Certe+ penalty allowance
+      let fineWaived = false;
+      const [activeSub] = await db
+        .select({ id: certeSubscription.id, libraryPenaltiesUsed: certeSubscription.libraryPenaltiesUsed })
+        .from(certeSubscription)
+        .where(
+          and(
+            eq(certeSubscription.parentId, studentChild.parentId),
+            eq(certeSubscription.status, "ACTIVE"),
+            gte(certeSubscription.endDate, now),
+          ),
+        )
         .limit(1);
 
-      if (wallets.length > 0) {
-        const childWallet = wallets[0];
-        const deduction = Math.min(fineAmount, childWallet.balance);
+      if (activeSub && activeSub.libraryPenaltiesUsed < CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE) {
+        await db
+          .update(certeSubscription)
+          .set({ libraryPenaltiesUsed: activeSub.libraryPenaltiesUsed + 1 })
+          .where(eq(certeSubscription.id, activeSub.id));
+        fineWaived = true;
+        fineDeducted = true;
+      }
 
-        if (deduction > 0) {
-          const newBalance = childWallet.balance - deduction;
-          await db
-            .update(wallet)
-            .set({ balance: newBalance, updatedAt: now })
-            .where(eq(wallet.id, childWallet.id));
+      if (!fineWaived) {
+        const wallets = await db
+          .select()
+          .from(wallet)
+          .where(eq(wallet.childId, studentChild.id))
+          .limit(1);
 
-          await db.insert(walletTransaction).values({
-            walletId: childWallet.id,
-            type: "LIBRARY_FINE",
-            amount: -deduction,
-            balanceAfter: newBalance,
-            description: `Overdue fine: ${bookInfo[0]?.title ?? "Unknown book"}`,
-          });
+        if (wallets.length > 0) {
+          const childWallet = wallets[0];
+          const deduction = Math.min(fineAmount, childWallet.balance);
 
-          fineDeducted = true;
+          if (deduction > 0) {
+            const newBalance = childWallet.balance - deduction;
+            await db
+              .update(wallet)
+              .set({ balance: newBalance, updatedAt: now })
+              .where(eq(wallet.id, childWallet.id));
+
+            await db.insert(walletTransaction).values({
+              walletId: childWallet.id,
+              type: "LIBRARY_FINE",
+              amount: -deduction,
+              balanceAfter: newBalance,
+              description: `Overdue fine: ${bookInfo[0]?.title ?? "Unknown book"}`,
+            });
+
+            fineDeducted = true;
+          }
         }
       }
     }

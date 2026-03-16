@@ -51,6 +51,7 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits: number | null;
+  subscribable: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +64,7 @@ interface FormData {
   imageUrl: string;
   available: boolean;
   availableUnits: string;
+  subscribable: boolean;
 }
 
 const emptyForm: FormData = {
@@ -73,6 +75,7 @@ const emptyForm: FormData = {
   imageUrl: "",
   available: true,
   availableUnits: "",
+  subscribable: true,
 };
 
 export default function AdminMenuPage() {
@@ -121,6 +124,7 @@ export default function AdminMenuPage() {
       imageUrl: item.imageUrl || "",
       available: item.available,
       availableUnits: item.availableUnits !== null ? item.availableUnits.toString() : "",
+      subscribable: item.subscribable,
     });
     setDialogOpen(true);
   };
@@ -148,6 +152,7 @@ export default function AdminMenuPage() {
         availableUnits: formData.availableUnits.trim() !== ""
           ? parseInt(formData.availableUnits)
           : null,
+        subscribable: formData.subscribable,
       };
 
       let res: Response;
@@ -338,6 +343,11 @@ export default function AdminMenuPage() {
                             {item.availableUnits === null && (
                               <Badge variant="outline" className="text-[10px] text-muted-foreground">
                                 ∞
+                              </Badge>
+                            )}
+                            {!item.subscribable && (
+                              <Badge variant="outline" className="text-[10px] text-orange-600">
+                                No Sub
                               </Badge>
                             )}
                           </div>
@@ -590,6 +600,21 @@ function MenuItemForm({
         />
         <Label htmlFor="available" className="font-normal">
           Available for ordering
+        </Label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="subscribable"
+          checked={formData.subscribable}
+          onChange={(e) =>
+            setFormData({ ...formData, subscribable: e.target.checked })
+          }
+          className="rounded border-gray-300"
+        />
+        <Label htmlFor="subscribable" className="font-normal">
+          Available for subscriptions
         </Label>
       </div>
 
