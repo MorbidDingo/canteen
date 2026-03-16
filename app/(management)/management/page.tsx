@@ -30,6 +30,7 @@ const groups = [
     items: [
       { href: "/admin/orders", label: "Admin Orders", icon: UtensilsCrossed },
       { href: "/management/statistics", label: "Management Statistics", icon: BarChart3 },
+      { href: "/management/attendance", label: "Attendance Statistics", icon: BarChart3 },
       { href: "/management/audit", label: "Audit Log", icon: ScrollText },
     ],
   },
