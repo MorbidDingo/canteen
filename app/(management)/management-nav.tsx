@@ -55,7 +55,7 @@ const mobileGroups = [
     ],
   },
   {
-    label: "Canteen + Attendance",
+    label: "Statistics & Logs",
     links: [
       { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
       { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },

@@ -206,7 +206,7 @@ export default function ParentLayout({
       </div>
 
       {/* ── iOS-like floating bottom tab bar ── */}
-      <nav className="fixed bottom-2 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
+      <nav className="fixed bottom-3 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
           {/* Canteen */}
           <Link

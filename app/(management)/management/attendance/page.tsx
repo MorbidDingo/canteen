@@ -166,8 +166,11 @@ export default function ManagementAttendancePage() {
                 {data.anomalies.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No anomalies detected.</p>
                 ) : (
-                  data.anomalies.map((row, idx) => (
-                    <div key={`${row.childName}-${idx}`} className="rounded-md border px-3 py-2 text-xs">
+                  data.anomalies.map((row) => (
+                    <div
+                      key={`${row.childName}-${row.direction}-${row.tappedAt}`}
+                      className="rounded-md border px-3 py-2 text-xs"
+                    >
                       <p className="font-medium">{row.childName}</p>
                       <p className="text-muted-foreground">
                         {row.direction} · {new Date(row.tappedAt).toLocaleTimeString()}

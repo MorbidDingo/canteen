@@ -178,7 +178,7 @@ export default function CartPage() {
           )
         );
         const assigned = Object.values(filtered).reduce((sum, qty) => sum + qty, 0);
-        const defaultChildId = children[0]?.id;
+        const defaultChildId = Object.keys(filtered)[0] || children[0]?.id;
 
         if (defaultChildId) {
           if (assigned === 0) {
@@ -189,8 +189,10 @@ export default function CartPage() {
               (filtered[defaultChildId] || 0) + (item.quantity - assigned)
             );
           }
+          next[item.menuItemId] = filtered;
+        } else {
+          delete next[item.menuItemId];
         }
-        next[item.menuItemId] = filtered;
       }
       for (const key of Object.keys(next)) {
         if (!items.some((item) => item.menuItemId === key)) {
@@ -260,11 +262,15 @@ export default function CartPage() {
   };
 
   const childTotals = getChildTotals();
+  const hasMissingWalletForAssignedChild = [...childTotals.keys()].some(
+    (childId) => !wallets.some((w) => w.childId === childId)
+  );
   const hasEnoughBalance =
     childTotals.size > 0 &&
+    !hasMissingWalletForAssignedChild &&
     [...childTotals.entries()].every(([childId, amount]) => {
       const wallet = wallets.find((w) => w.childId === childId);
-      return wallet ? wallet.balance >= amount : false;
+      return !!wallet && wallet.balance >= amount;
     });
 
   const buildChildOrderGroups = () => {
@@ -277,8 +283,10 @@ export default function CartPage() {
       );
 
       if (assignedQty !== item.quantity) {
+        const remainingQty = Math.max(0, item.quantity - assignedQty);
+        const itemLabel = remainingQty === 1 ? "item" : "items";
         throw new Error(
-          `Please allocate all ${item.name} quantity across children before placing your order.`
+          `Please allocate the remaining ${remainingQty} ${item.name} ${itemLabel} across children before placing your order.`
         );
       }
 
@@ -967,7 +975,7 @@ export default function CartPage() {
                                           : "text-destructive"
                                       }
                                     >
-                                      ₹{amount.toFixed(2)} / ₹{(wallet?.balance || 0).toFixed(2)}
+                                      Need ₹{amount.toFixed(2)} • Balance ₹{(wallet?.balance || 0).toFixed(2)}
                                     </span>
                                   </div>
                                 );
