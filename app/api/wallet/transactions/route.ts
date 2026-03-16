@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet, walletTransaction } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
 // GET /api/wallet/transactions?childId=xxx
@@ -27,11 +27,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Child not found" }, { status: 404 });
   }
 
-  // Get the wallet
+  // Resolve the shared family wallet (first wallet under the same parent)
+  const siblingChildren = await db
+    .select({ id: child.id })
+    .from(child)
+    .where(eq(child.parentId, session.user.id));
+
+  const siblingIds = siblingChildren.map((c) => c.id);
+  if (siblingIds.length === 0) {
+    return NextResponse.json([]);
+  }
+
   const wallets = await db
     .select()
     .from(wallet)
-    .where(eq(wallet.childId, childId))
+    .where(inArray(wallet.childId, siblingIds))
+    .orderBy(asc(wallet.createdAt))
     .limit(1);
 
   if (wallets.length === 0) {

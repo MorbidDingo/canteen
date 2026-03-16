@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { order, orderItem, wallet, walletTransaction, child, certeSubscription } from "@/lib/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
@@ -78,11 +78,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ fallback: "cancelled", reason: "Child not found" });
     }
 
-    // Get wallet
+    const siblingRows = await db
+      .select({ id: child.id })
+      .from(child)
+      .where(eq(child.parentId, session.user.id));
+    const siblingIds = siblingRows.map((s) => s.id);
+
+    // Get shared family wallet
     const [walletRow] = await db
       .select()
       .from(wallet)
-      .where(eq(wallet.childId, childId))
+      .where(inArray(wallet.childId, siblingIds))
+      .orderBy(asc(wallet.createdAt))
       .limit(1);
 
     if (!walletRow || walletRow.balance < existingOrder.totalAmount) {
@@ -141,7 +148,7 @@ export async function POST(request: NextRequest) {
       await tx
         .update(wallet)
         .set({ balance: newBalance, updatedAt: new Date() })
-        .where(eq(wallet.id, walletRow.id));
+        .where(inArray(wallet.childId, siblingIds));
 
       // Record transaction
       await tx.insert(walletTransaction).values({

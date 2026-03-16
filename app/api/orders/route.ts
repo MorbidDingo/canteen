@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { order, orderItem, menuItem, wallet, walletTransaction, child, discount } from "@/lib/db/schema";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
@@ -133,10 +133,17 @@ export async function POST(request: NextRequest) {
           throw new Error("Child not found");
         }
 
+        const siblingChildRows = await tx
+          .select({ id: child.id })
+          .from(child)
+          .where(eq(child.parentId, session.user.id));
+        const siblingChildIds = siblingChildRows.map((c) => c.id);
+
         const wallets = await tx
           .select()
           .from(wallet)
-          .where(eq(wallet.childId, childId))
+          .where(inArray(wallet.childId, siblingChildIds))
+          .orderBy(asc(wallet.createdAt))
           .limit(1);
 
         if (wallets.length === 0) {
@@ -156,7 +163,7 @@ export async function POST(request: NextRequest) {
         .insert(order)
         .values({
           userId: session.user.id,
-          childId: paymentMethod === "WALLET" ? childId : undefined,
+          childId: childId || undefined,
           totalAmount,
           paymentMethod,
           status: "PLACED",
@@ -181,7 +188,7 @@ export async function POST(request: NextRequest) {
         await tx
           .update(wallet)
           .set({ balance: newBalance, updatedAt: new Date() })
-          .where(eq(wallet.id, walletRow.id));
+          .where(inArray(wallet.childId, siblingChildIds));
 
         await tx.insert(walletTransaction).values({
           walletId: walletRow.id,

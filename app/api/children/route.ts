@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet, parentControl } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
 // GET /api/children — list all children for the logged-in parent
@@ -19,16 +19,24 @@ export async function GET() {
       className: child.className,
       section: child.section,
       rfidCardId: child.rfidCardId,
-      walletBalance: wallet.balance,
     })
     .from(child)
-    .leftJoin(wallet, eq(wallet.childId, child.id))
     .where(eq(child.parentId, session.user.id));
+
+  const childIds = children.map((c) => c.id);
+  const [familyWallet] = childIds.length
+    ? await db
+      .select({ balance: wallet.balance })
+      .from(wallet)
+      .where(inArray(wallet.childId, childIds))
+      .orderBy(asc(wallet.createdAt))
+      .limit(1)
+    : [];
 
   return NextResponse.json(
     children.map((c) => ({
       ...c,
-      walletBalance: c.walletBalance ?? 0,
+      walletBalance: familyWallet?.balance ?? 0,
     }))
   );
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order, orderItem, wallet, walletTransaction } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { child, order, orderItem, wallet, walletTransaction } from "@/lib/db/schema";
+import { eq, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { incrementUnits } from "@/lib/units";
@@ -69,10 +69,24 @@ export async function PATCH(
       await db.transaction(async (tx) => {
         // Refund to wallet if order has a childId
         if (existingOrder.childId) {
+          const [orderChild] = await tx
+            .select({ parentId: child.parentId })
+            .from(child)
+            .where(eq(child.id, existingOrder.childId))
+            .limit(1);
+          const siblingRows = orderChild
+            ? await tx
+              .select({ id: child.id })
+              .from(child)
+              .where(eq(child.parentId, orderChild.parentId))
+            : [];
+          const siblingIds = siblingRows.map((s) => s.id);
+
           const [walletRow] = await tx
             .select()
             .from(wallet)
-            .where(eq(wallet.childId, existingOrder.childId))
+            .where(inArray(wallet.childId, siblingIds))
+            .orderBy(asc(wallet.createdAt))
             .limit(1);
 
           if (walletRow) {
@@ -81,7 +95,7 @@ export async function PATCH(
             await tx
               .update(wallet)
               .set({ balance: newBalance, updatedAt: new Date() })
-              .where(eq(wallet.id, walletRow.id));
+              .where(inArray(wallet.childId, siblingIds));
 
             await tx.insert(walletTransaction).values({
               walletId: walletRow.id,

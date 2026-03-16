@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const rfid = request.nextUrl.searchParams.get("rfid");
@@ -18,10 +18,9 @@ export async function GET(request: NextRequest) {
       className: child.className,
       section: child.section,
       rfidCardId: child.rfidCardId,
-      walletBalance: wallet.balance,
+      parentId: child.parentId,
     })
     .from(child)
-    .leftJoin(wallet, eq(wallet.childId, child.id))
     .where(eq(child.rfidCardId, rfid))
     .limit(1);
 
@@ -30,6 +29,20 @@ export async function GET(request: NextRequest) {
   }
 
   const row = result[0];
+  const siblingRows = await db
+    .select({ id: child.id })
+    .from(child)
+    .where(eq(child.parentId, row.parentId));
+  const siblingIds = siblingRows.map((s) => s.id);
+  const [familyWallet] = siblingIds.length
+    ? await db
+      .select({ balance: wallet.balance })
+      .from(wallet)
+      .where(inArray(wallet.childId, siblingIds))
+      .orderBy(asc(wallet.createdAt))
+      .limit(1)
+    : [];
+
   return NextResponse.json({
     id: row.id,
     name: row.name,
@@ -37,6 +50,6 @@ export async function GET(request: NextRequest) {
     className: row.className,
     section: row.section,
     rfidCardId: row.rfidCardId,
-    walletBalance: row.walletBalance ?? 0,
+    walletBalance: familyWallet?.balance ?? 0,
   });
 }

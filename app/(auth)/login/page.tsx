@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn, authClient } from "@/lib/auth-client";
@@ -24,6 +24,36 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const getDefaultRouteForRole = useCallback((role?: string | null) => {
+    switch (role) {
+      case "ADMIN":
+        return "/admin/orders";
+      case "OPERATOR":
+        return "/operator/topup";
+      case "MANAGEMENT":
+        return "/management";
+      case "LIB_OPERATOR":
+        return "/lib-operator/dashboard";
+      case "ATTENDANCE":
+        return "/attendance";
+      default:
+        return "/menu";
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const session = await authClient.getSession();
+      if (cancelled || !session?.data?.user) return;
+      router.replace(getDefaultRouteForRole(session.data.user.role));
+      router.refresh();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router, getDefaultRouteForRole]);
 
   async function resolveRoleWithRetry() {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -59,25 +89,7 @@ export default function LoginPage() {
 
     // Check user role and redirect accordingly
     const role = await resolveRoleWithRetry();
-    switch (role) {
-      case "ADMIN":
-        router.push("/admin/orders");
-        break;
-      case "OPERATOR":
-        router.push("/operator/topup");
-        break;
-      case "MANAGEMENT":
-        router.push("/management/cards");
-        break;
-      case "LIB_OPERATOR":
-        router.push("/lib-operator/dashboard");
-        break;
-      case "ATTENDANCE":
-        router.push("/attendance/attendance");
-        break;
-      default:
-        router.push("/menu");
-    }
+    router.push(getDefaultRouteForRole(role));
     router.refresh();
   };
 

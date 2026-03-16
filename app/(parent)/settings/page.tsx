@@ -125,6 +125,7 @@ export default function SettingsPage() {
   };
 
   const currentPlanInfo = CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ?? CERTE_PLUS_PLANS.MONTHLY;
+  const selectedChildName = children.find((c) => c.id === selectedChildId)?.name;
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-6 space-y-4">
@@ -156,6 +157,28 @@ export default function SettingsPage() {
 
           {certePlus?.active && certePlus.subscription ? (
             <div className="space-y-2">
+              {children.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">View subscription for child</p>
+                  <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                    <SelectTrigger className="h-8 text-xs bg-white/70 dark:bg-white/10">
+                      <SelectValue placeholder="Select child" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {children.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedChildName && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {selectedChildName} is covered under your family Certe+ subscription.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Expires</p>
@@ -231,7 +254,7 @@ export default function SettingsPage() {
                 )}
               </Button>
               <p className="text-[10px] text-center text-muted-foreground">
-                Payment will be deducted from your child&apos;s wallet balance.
+                Payment will be deducted from your family wallet balance.
               </p>
             </div>
           )}
