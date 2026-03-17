@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -21,6 +22,7 @@ import {
   RotateCcw,
   IndianRupee,
   ShieldCheck,
+  ArrowLeft,
 } from "lucide-react";
 
 export default function LibOperatorSettingsPage() {
@@ -84,45 +86,57 @@ export default function LibOperatorSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background flex items-center justify-center">
+      <div className="flex min-h-[40vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-[#1a3a8f]" />
-          <p className="text-sm text-muted-foreground">Loading settings…</p>
+          <p className="text-sm text-muted-foreground">Loading settings...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
-      {/* Header */}
-      <div className="border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 max-w-2xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-[#1a3a8f] flex items-center justify-center shadow-sm">
-              <Settings className="h-5 w-5 text-white" />
+    <div className="pb-24">
+      <div className="container mx-auto max-w-2xl px-4 pt-5">
+        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+                <Settings className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-semibold leading-none">Library Settings</h1>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Configure issue, return, and fine rules
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-semibold leading-none">Library Settings</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Configure rules and penalties</p>
+            <div className="flex gap-2">
+              <Link href="/lib-operator/dashboard">
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+              </Link>
+              <Button
+                onClick={handleSave}
+                disabled={saving}
+                size="sm"
+                className="bg-[#1a3a8f] shadow-sm hover:bg-[#1a3a8f]/90"
+              >
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Changes
+              </Button>
             </div>
           </div>
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90 shadow-sm"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Save Changes
-          </Button>
         </div>
       </div>
 
-      <div className="container mx-auto py-6 px-4 space-y-4 max-w-2xl">
+      <div className="container mx-auto max-w-2xl space-y-4 px-4 py-6">
         {/* Issue Rules */}
         <Card className="border-[#1a3a8f]/15 shadow-sm overflow-hidden">
           <CardHeader className="pb-3 bg-gradient-to-r from-[#1a3a8f]/5 to-transparent border-b border-[#1a3a8f]/10">
@@ -139,7 +153,7 @@ export default function LibOperatorSettingsPage() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FieldGroup
                 label="Issue Duration"
                 hint="Days a book can be borrowed"
@@ -236,7 +250,7 @@ export default function LibOperatorSettingsPage() {
               <div>
                 <CardTitle className="text-base">Fine Settings</CardTitle>
                 <CardDescription className="text-xs mt-0.5">
-                  Overdue penalty — fines auto-deduct from wallet on return
+                  Overdue penalty - fines auto-deduct from wallet on return
                 </CardDescription>
               </div>
             </div>
@@ -247,13 +261,13 @@ export default function LibOperatorSettingsPage() {
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Fine Mode
               </Label>
-              <div className="flex mt-2 rounded-lg border border-input overflow-hidden w-fit">
+              <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-lg border border-input">
                 {["DAY", "WEEK"].map((mode) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => updateSetting("fine_mode", mode)}
-                    className={`px-5 py-2 text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
                       fineMode === mode
                         ? "bg-[#1a3a8f] text-white"
                         : "bg-background text-muted-foreground hover:bg-muted"
@@ -265,7 +279,7 @@ export default function LibOperatorSettingsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <FieldGroup
                 label="Fine Per Day"
                 hint={fineMode === "DAY" ? "Active" : "Inactive in weekly mode"}
@@ -324,6 +338,21 @@ export default function LibOperatorSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur sm:hidden">
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
+        >
+          {saving ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="mr-2 h-4 w-4" />
+          )}
+          Save Changes
+        </Button>
+      </div>
     </div>
   );
 }
@@ -363,7 +392,7 @@ function CurrencyInput({
   return (
     <div className={`flex rounded-md border border-input overflow-hidden ${disabled ? "opacity-40" : ""}`}>
       <span className="flex items-center px-2.5 bg-muted border-r border-input text-sm text-muted-foreground select-none">
-        ₹
+        Rs
       </span>
       <Input
         type="number"
@@ -390,7 +419,7 @@ function ToggleField({
   onChange: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium leading-snug">{label}</p>
         <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>

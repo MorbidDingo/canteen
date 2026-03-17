@@ -20,9 +20,7 @@ import {
   AlertTriangle,
   Download,
   BookOpen,
-  ArrowLeft,
 } from "lucide-react";
-import Link from "next/link";
 import { BulkUploadLogPanel } from "@/components/bulk-upload-log-panel";
 import { BulkUploadStatusPanel, type UploadStage } from "@/components/bulk-upload-status-panel";
 
@@ -239,31 +237,20 @@ export default function LibOperatorBulkUploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Link href="/lib-operator/dashboard">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                Dashboard
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-[#1a3a8f]" />
-              <span className="font-bold text-lg">Bulk Upload</span>
+    <div className="pb-8">
+      <div className="container mx-auto max-w-5xl space-y-6 px-4 py-6">
+        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+              <BookOpen className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Bulk Book Upload</p>
+              <p className="text-xs text-muted-foreground">Import large catalog files from CSV or Excel.</p>
             </div>
           </div>
-          <Link href="/lib-operator/books">
-            <Button variant="outline" size="sm">
-              Book Catalog
-            </Button>
-          </Link>
         </div>
-      </div>
 
-      <div className="container mx-auto py-6 px-4 space-y-6">
         {/* Upload card */}
         <Card>
           <CardHeader>
@@ -278,14 +265,14 @@ export default function LibOperatorBulkUploadPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <input
                 ref={fileRef}
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 cursor-pointer"
               />
-              <Button onClick={handleUpload} disabled={uploading}>
+              <Button onClick={handleUpload} disabled={uploading} className="w-full sm:w-auto">
                 {uploading ? (
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                 ) : (
@@ -396,7 +383,7 @@ export default function LibOperatorBulkUploadPage() {
                   </Button>
                 </div>
               ) : null}
-              <div className="max-h-125 overflow-y-auto">
+              <div className="max-h-125 overflow-y-auto overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b sticky top-0 bg-background">
                     <tr>

@@ -22,14 +22,11 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  LogOut,
   Clock,
   AlertTriangle,
   ScanBarcode,
 } from "lucide-react";
-import { signOut } from "@/lib/auth-client";
 import { useSSE } from "@/lib/events";
-import Link from "next/link";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -317,70 +314,37 @@ export default function LibOperatorDashboardPage() {
   // ─── Render ────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+    <div className="pb-8">
+      <div className="container mx-auto max-w-2xl px-4 pt-5">
+        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-[#1a3a8f]" />
-            <span className="font-bold text-lg">Library Operator</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Tab switcher */}
-            <div className="flex rounded-lg border bg-muted p-0.5">
-              <Button
-                variant={activeTab === "issue-return" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setActiveTab("issue-return")}
-                className="text-xs"
-              >
-                Issue / Return
-              </Button>
-              <Button
-                variant={activeTab === "pending-returns" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setActiveTab("pending-returns")}
-                className="text-xs relative"
-              >
-                Pending Returns
-                {pendingReturns.length > 0 && (
-                  <Badge className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px]">
-                    {pendingReturns.length}
-                  </Badge>
-                )}
-              </Button>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+              <BookOpen className="h-5 w-5 text-white" />
             </div>
-            <Link href="/lib-operator/books">
-              <Button variant="outline" size="sm" className="text-xs">
-                Books
-              </Button>
-            </Link>
-            <Link href="/lib-operator/bulk-upload">
-              <Button variant="outline" size="sm" className="text-xs hidden sm:inline-flex">
-                Bulk Upload
-              </Button>
-            </Link>
-            <Link href="/lib-operator/settings">
-              <Button variant="outline" size="sm" className="text-xs">
-                Settings
-              </Button>
-            </Link>
+            <div>
+              <p className="text-sm font-semibold">Issue & Return Console</p>
+              <p className="text-xs text-muted-foreground">
+                Scan cards, issue books, and manage pending returns.
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                signOut({
-                  fetchOptions: {
-                    onSuccess: () => {
-                      window.location.href = "/login";
-                    },
-                  },
-                })
-              }
-              className="gap-2 text-destructive"
+              variant={activeTab === "issue-return" ? "default" : "outline"}
+              onClick={() => setActiveTab("issue-return")}
+              className={activeTab === "issue-return" ? "bg-[#1a3a8f] hover:bg-[#1a3a8f]/90" : ""}
             >
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Sign Out</span>
+              Issue / Return
+            </Button>
+            <Button
+              variant={activeTab === "pending-returns" ? "default" : "outline"}
+              onClick={() => setActiveTab("pending-returns")}
+              className={`gap-2 ${activeTab === "pending-returns" ? "bg-[#1a3a8f] hover:bg-[#1a3a8f]/90" : ""}`}
+            >
+              Pending Returns
+              {pendingReturns.length > 0 && (
+                <Badge className="h-5 min-w-5 px-1 text-[10px]">{pendingReturns.length}</Badge>
+              )}
             </Button>
           </div>
         </div>
@@ -460,12 +424,12 @@ export default function LibOperatorDashboardPage() {
                 <>
                   <Card className="border-[#1a3a8f]/30">
                     <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle className="flex items-center gap-2">
                           <User className="h-5 w-5 text-[#1a3a8f]" />
                           {childInfo.name}
                         </CardTitle>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="outline">
                             {childInfo.className}
                             {childInfo.section ? ` — ${childInfo.section}` : ""}
@@ -528,7 +492,7 @@ export default function LibOperatorDashboardPage() {
                           <div key={idx} className="rounded-lg bg-green-50 p-3 space-y-1">
                             <p className="font-semibold">{item.bookTitle}</p>
                             <p className="text-sm text-muted-foreground">{item.bookAuthor}</p>
-                            <div className="flex gap-4 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                               <span>Accession: {item.accessionNumber}</span>
                               <span>Due: {new Date(item.dueDate).toLocaleDateString()}</span>
                             </div>
@@ -611,7 +575,7 @@ export default function LibOperatorDashboardPage() {
                             </Badge>
                           )}
                         </div>
-                        <div className="flex gap-4 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                           <span>Accession: {item.accessionNumber}</span>
                           <span>Student: {item.childName}</span>
                           {item.fineAmount > 0 && (
@@ -676,7 +640,7 @@ export default function LibOperatorDashboardPage() {
                 return (
                   <Card key={pr.id} className={isOverdue ? "border-red-300" : "border-amber-300"}>
                     <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold">{pr.bookTitle}</h3>
                           <p className="text-sm text-muted-foreground">{pr.bookAuthor}</p>
@@ -704,10 +668,10 @@ export default function LibOperatorDashboardPage() {
                             Return requested: {new Date(pr.updatedAt).toLocaleString()}
                           </p>
                         </div>
-                        <div className="flex flex-col gap-2 shrink-0">
+                        <div className="flex gap-2 sm:flex-col sm:gap-2">
                           <Button
                             size="sm"
-                            className="bg-[#2eab57] hover:bg-[#259c4c] text-white gap-1"
+                            className="flex-1 gap-1 bg-[#2eab57] text-white hover:bg-[#259c4c] sm:flex-none"
                             onClick={() => confirmPendingReturn(pr.id, pr.accessionNumber)}
                           >
                             <CheckCircle className="h-3.5 w-3.5" />
@@ -716,7 +680,7 @@ export default function LibOperatorDashboardPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-1 text-destructive"
+                            className="flex-1 gap-1 text-destructive sm:flex-none"
                             onClick={() => rejectPendingReturn(pr.id)}
                           >
                             <XCircle className="h-3.5 w-3.5" />

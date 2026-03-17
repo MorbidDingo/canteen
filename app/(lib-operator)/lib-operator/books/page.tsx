@@ -41,7 +41,6 @@ import {
   Pencil,
   X,
   MapPin,
-  ArrowLeft,
 } from "lucide-react";
 import {
   BOOK_CATEGORY_LABELS,
@@ -51,7 +50,6 @@ import {
   type BookCopyStatus,
   type BookCopyCondition,
 } from "@/lib/constants";
-import Link from "next/link";
 
 interface Book {
   id: string;
@@ -419,35 +417,22 @@ export default function LibOperatorBooksPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Link href="/lib-operator/dashboard">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowLeft className="h-4 w-4" />
-                Dashboard
-              </Button>
-            </Link>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-[#1a3a8f]" />
-              <span className="font-bold text-lg">Book Catalog</span>
+    <div className="pb-8">
+      <div className="container mx-auto max-w-5xl space-y-6 px-4 py-6">
+        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+              <BookOpen className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Book Catalog</p>
+              <p className="text-xs text-muted-foreground">Manage titles, copies, and book inventory.</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Link href="/lib-operator/bulk-upload">
-              <Button variant="outline" size="sm">
-                Bulk Upload
-              </Button>
-            </Link>
-          </div>
         </div>
-      </div>
 
-      <div className="container mx-auto py-6 px-4 space-y-6">
         {/* Actions */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Manage books, copies, and inventory
           </p>
@@ -472,7 +457,7 @@ export default function LibOperatorBooksPage() {
                   </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="col-span-2">
                       <Label>Title *</Label>
                       <Input
@@ -563,7 +548,7 @@ export default function LibOperatorBooksPage() {
         </div>
 
         {/* Search & filter */}
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -574,7 +559,7 @@ export default function LibOperatorBooksPage() {
             />
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent>
@@ -604,7 +589,7 @@ export default function LibOperatorBooksPage() {
           <div className="space-y-3">
             {books.map((b) => (
               <Card key={b.id} className="overflow-hidden">
-                <div className="flex items-start justify-between p-4">
+                <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-base">{b.title}</h3>
@@ -621,7 +606,7 @@ export default function LibOperatorBooksPage() {
                       {b.publisher && ` · ${b.publisher}`}
                       {b.edition && ` · ${b.edition}`}
                     </p>
-                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       {b.isbn && (
                         <span className="font-mono">ISBN: {b.isbn}</span>
                       )}
@@ -631,7 +616,7 @@ export default function LibOperatorBooksPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-3">
+                  <div className="ml-0 flex items-center gap-1 self-end sm:ml-3 sm:self-auto">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -669,7 +654,7 @@ export default function LibOperatorBooksPage() {
                 {/* Expanded copies view */}
                 {expandedBookId === b.id && (
                   <div className="border-t bg-muted/30 p-4">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <h4 className="font-medium text-sm">
                         Physical Copies ({copies.length})
                       </h4>
@@ -703,7 +688,7 @@ export default function LibOperatorBooksPage() {
                                 placeholder="Unique barcode / accession #"
                               />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                               <div>
                                 <Label>Condition</Label>
                                 <Select
@@ -770,18 +755,18 @@ export default function LibOperatorBooksPage() {
                         {copies.map((c) => (
                           <div
                             key={c.id}
-                            className="flex items-center justify-between bg-background rounded-lg border px-3 py-2"
+                            className="rounded-lg border bg-background px-3 py-2"
                           >
                             {editingCopyId === c.id ? (
-                              <div className="flex items-center gap-2 flex-1 flex-wrap">
-                                <span className="font-mono text-sm font-medium w-28 shrink-0">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+                                <span className="w-full shrink-0 font-mono text-sm font-medium sm:w-28">
                                   {c.accessionNumber}
                                 </span>
                                 <Select
                                   value={editCondition}
                                   onValueChange={setEditCondition}
                                 >
-                                  <SelectTrigger className="w-24 h-8 text-xs">
+                                  <SelectTrigger className="h-8 w-full text-xs sm:w-24">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -798,7 +783,7 @@ export default function LibOperatorBooksPage() {
                                   value={editStatus}
                                   onValueChange={setEditStatus}
                                 >
-                                  <SelectTrigger className="w-28 h-8 text-xs">
+                                  <SelectTrigger className="h-8 w-full text-xs sm:w-28">
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -817,12 +802,12 @@ export default function LibOperatorBooksPage() {
                                     setEditLocation(e.target.value)
                                   }
                                   placeholder="Location"
-                                  className="w-24 h-8 text-xs"
+                                  className="h-8 w-full text-xs sm:w-24"
                                 />
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-8"
+                                  className="h-8 justify-start sm:justify-center"
                                   disabled={savingCopy}
                                   onClick={() => handleSaveCopy(c.id)}
                                 >
@@ -835,7 +820,7 @@ export default function LibOperatorBooksPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="h-8"
+                                  className="h-8 justify-start sm:justify-center"
                                   onClick={() => setEditingCopyId(null)}
                                 >
                                   <X className="h-3.5 w-3.5" />
@@ -843,7 +828,7 @@ export default function LibOperatorBooksPage() {
                               </div>
                             ) : (
                               <>
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                                   <span className="font-mono text-sm font-medium">
                                     {c.accessionNumber}
                                   </span>
@@ -867,7 +852,7 @@ export default function LibOperatorBooksPage() {
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="mt-2 flex items-center gap-1 sm:mt-0">
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -905,7 +890,7 @@ export default function LibOperatorBooksPage() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex justify-center gap-2 pt-2">
+              <div className="flex flex-col items-center justify-center gap-2 pt-2 sm:flex-row">
                 <Button
                   variant="outline"
                   size="sm"

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth-server";
+import { LibOperatorNav } from "./lib-operator-nav";
 
 export default async function LibOperatorLayout({
   children,
@@ -16,5 +17,10 @@ export default async function LibOperatorLayout({
     redirect("/");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
+      <LibOperatorNav />
+      {children}
+    </div>
+  );
 }
