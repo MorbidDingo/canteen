@@ -9,7 +9,7 @@ import { APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
+    if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "MANAGEMENT")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -30,7 +30,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
+    if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "MANAGEMENT")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

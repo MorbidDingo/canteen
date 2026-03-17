@@ -61,6 +61,7 @@ type ReturnResult = {
   fineAmount: number;
   fineDeducted: boolean;
   wasOverdue: boolean;
+  fineModeApplied?: "NONE" | "DAY" | "WEEK";
 };
 
 type PendingReturn = {
@@ -173,6 +174,7 @@ export default function LibOperatorDashboardPage() {
         fineAmount: data.fineAmount,
         fineDeducted: data.fineDeducted,
         wasOverdue: data.wasOverdue,
+        fineModeApplied: data.fineModeApplied,
       },
       ...prev,
     ]);
@@ -356,6 +358,11 @@ export default function LibOperatorDashboardPage() {
             <Link href="/lib-operator/bulk-upload">
               <Button variant="outline" size="sm" className="text-xs hidden sm:inline-flex">
                 Bulk Upload
+              </Button>
+            </Link>
+            <Link href="/lib-operator/settings">
+              <Button variant="outline" size="sm" className="text-xs">
+                Settings
               </Button>
             </Link>
             <Button
@@ -610,6 +617,7 @@ export default function LibOperatorDashboardPage() {
                           {item.fineAmount > 0 && (
                             <span className="text-red-600 font-medium">
                               Fine: ₹{item.fineAmount.toFixed(2)}
+                              {item.fineModeApplied === "WEEK" ? " (weekly)" : item.fineModeApplied === "DAY" ? " (daily)" : ""}
                               {item.fineDeducted ? " (deducted)" : " (pending)"}
                             </span>
                           )}

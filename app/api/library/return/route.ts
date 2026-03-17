@@ -134,16 +134,26 @@ export async function POST(request: NextRequest) {
     // ── 5. Calculate fine if overdue ─────────────────
     const now = new Date();
     let fineAmount = 0;
+    let fineModeApplied: "NONE" | "DAY" | "WEEK" = "NONE";
 
     if (now > new Date(issuance.dueDate)) {
       const overdueDays = Math.ceil(
         (now.getTime() - new Date(issuance.dueDate).getTime()) / (1000 * 60 * 60 * 24)
       );
+      const fineMode = (await getSetting("fine_mode")).toUpperCase() === "WEEK" ? "WEEK" : "DAY";
       const finePerDay = parseFloat(await getSetting("fine_per_day")) || 0;
+      const finePerWeek = parseFloat(await getSetting("fine_per_week")) || 0;
       const maxFine = parseFloat(await getSetting("max_fine_per_book")) || 100;
 
-      if (finePerDay > 0) {
+      if (fineMode === "WEEK") {
+        const overdueWeeks = Math.ceil(overdueDays / 7);
+        if (finePerWeek > 0) {
+          fineAmount = Math.min(overdueWeeks * finePerWeek, maxFine);
+          fineModeApplied = "WEEK";
+        }
+      } else if (finePerDay > 0) {
         fineAmount = Math.min(overdueDays * finePerDay, maxFine);
+        fineModeApplied = "DAY";
       }
     }
 
@@ -179,6 +189,7 @@ export async function POST(request: NextRequest) {
           issuanceId: issuance.id,
           status: "RETURN_PENDING",
           fineAmount,
+          fineModeApplied,
           bookTitle: bookInfo[0]?.title,
           accessionNumber: resolvedCopy.accessionNumber,
         },
@@ -195,6 +206,7 @@ export async function POST(request: NextRequest) {
           childId: studentChild.id,
           status: "RETURN_PENDING",
           fineAmount,
+          fineModeApplied,
         },
       });
 
@@ -203,6 +215,7 @@ export async function POST(request: NextRequest) {
         status: "RETURN_PENDING",
         message: "Return requested — please drop the book at the return desk.",
         fineAmount,
+        fineModeApplied,
         bookTitle: bookInfo[0]?.title,
         bookAuthor: bookInfo[0]?.author,
         accessionNumber: resolvedCopy.accessionNumber,
@@ -303,6 +316,7 @@ export async function POST(request: NextRequest) {
         issuanceId: issuance.id,
         status: "RETURNED",
         fineAmount,
+        fineModeApplied,
         fineDeducted,
         bookTitle: bookInfo[0]?.title,
         accessionNumber: resolvedCopy.accessionNumber,
@@ -320,6 +334,7 @@ export async function POST(request: NextRequest) {
         childId: studentChild.id,
         status: "RETURNED",
         fineAmount,
+        fineModeApplied,
         fineDeducted,
       },
     });
@@ -344,6 +359,7 @@ export async function POST(request: NextRequest) {
       message: "Book returned successfully!",
       fineAmount,
       fineDeducted,
+      fineModeApplied,
       bookTitle: bookInfo[0]?.title,
       bookAuthor: bookInfo[0]?.author,
       accessionNumber: resolvedCopy.accessionNumber,

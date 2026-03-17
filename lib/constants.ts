@@ -305,7 +305,9 @@ export const LIBRARY_SETTINGS_DEFAULTS: Record<string, string> = {
   max_books_per_student: "3",
   require_operator_return_confirmation: "false",
   block_issue_if_overdue: "true",
+  fine_mode: "DAY",
   fine_per_day: "0",
+  fine_per_week: "0",
   max_fine_per_book: "100",
   allow_self_service_issue: "true",
   penalty_limit_per_student: "0",
@@ -317,10 +319,13 @@ export const APP_SETTINGS_DEFAULTS: Record<string, string> = {
   subscription_min_order_value: "60",
   subscription_min_days: "3",
   subscription_max_days: "180",
+  subscription_breaks_json: JSON.stringify(DEFAULT_BREAK_SLOTS),
 };
 
-/** Maximum number of active (PENDING) pre-orders a Certe+ subscriber can have */
-export const MAX_ACTIVE_PREORDERS = 2;
+/** Maximum number of active (PENDING) pre-orders per child */
+export const MAX_ACTIVE_PREORDERS_PER_CHILD = 1;
+/** Legacy alias kept for compatibility */
+export const MAX_ACTIVE_PREORDERS = MAX_ACTIVE_PREORDERS_PER_CHILD;
 
 // ─── Certe+ Premium Subscription ─────────────────────────
 
@@ -357,3 +362,4 @@ export const GATE_DIRECTION_LABELS: Record<GateDirection, string> = {
 
 /** Cooldown in milliseconds between consecutive taps for the same card */
 export const GATE_TAP_COOLDOWN_MS = 3000;
+import { DEFAULT_BREAK_SLOTS } from "@/lib/break-slots";

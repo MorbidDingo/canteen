@@ -59,31 +59,52 @@ export async function GET() {
             menuItemId: preOrderItem.menuItemId,
             menuItemName: menuItem.name,
             quantity: preOrderItem.quantity,
+            breakName: preOrderItem.breakName,
+            lastFulfilledOn: preOrderItem.lastFulfilledOn,
           })
           .from(preOrderItem)
           .innerJoin(menuItem, eq(menuItem.id, preOrderItem.menuItemId))
           .where(inArray(preOrderItem.preOrderId, ids))
       : [];
 
-    const itemsByPreOrder = new Map<string, Array<{ menuItemId: string; menuItemName: string; quantity: number }>>();
+    const itemsByPreOrder = new Map<
+      string,
+      Array<{ menuItemId: string; menuItemName: string; quantity: number; breakName: string | null }>
+    >();
     for (const row of itemRows) {
+      if (row.lastFulfilledOn === today) {
+        continue;
+      }
       const current = itemsByPreOrder.get(row.preOrderId) ?? [];
-      current.push({ menuItemId: row.menuItemId, menuItemName: row.menuItemName, quantity: row.quantity });
+      current.push({
+        menuItemId: row.menuItemId,
+        menuItemName: row.menuItemName,
+        quantity: row.quantity,
+        breakName: row.breakName,
+      });
       itemsByPreOrder.set(row.preOrderId, current);
     }
 
     const prepDemandMap = new Map<
       string,
-      { menuItemId: string; menuItemName: string; quantity: number; fromOneDay: number; fromSubscription: number }
+      {
+        menuItemId: string;
+        menuItemName: string;
+        breakName: string | null;
+        quantity: number;
+        fromOneDay: number;
+        fromSubscription: number;
+      }
     >();
 
     for (const row of rows) {
       const items = itemsByPreOrder.get(row.id) ?? [];
       for (const item of items) {
-        const key = item.menuItemId;
+        const key = `${item.menuItemId}::${item.breakName || ""}`;
         const existing = prepDemandMap.get(key) ?? {
           menuItemId: item.menuItemId,
           menuItemName: item.menuItemName,
+          breakName: item.breakName,
           quantity: 0,
           fromOneDay: 0,
           fromSubscription: 0,

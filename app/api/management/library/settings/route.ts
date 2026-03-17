@@ -9,7 +9,7 @@ import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 // GET — return all settings (merged with defaults)
 export async function GET() {
   const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  if (!session?.user || (session.user.role !== "MANAGEMENT" && session.user.role !== "LIB_OPERATOR")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -26,7 +26,7 @@ export async function GET() {
 // PUT — save all settings atomically
 export async function PUT(request: NextRequest) {
   const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  if (!session?.user || (session.user.role !== "MANAGEMENT" && session.user.role !== "LIB_OPERATOR")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

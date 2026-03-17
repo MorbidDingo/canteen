@@ -12,12 +12,14 @@ import {
   preOrder,
   preOrderItem,
   certeSubscription,
+  appSetting,
 } from "@/lib/db/schema";
 import { eq, and, gte, sql, asc, inArray } from "drizzle-orm";
-import { generateTokenCode, CERTE_PLUS } from "@/lib/constants";
+import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { getCurrentBreakSlot, parseBreakSlots } from "@/lib/break-slots";
 
 type IncomingItem = { menuItemId: string; quantity: number };
 
@@ -46,6 +48,15 @@ function todayISODate(): string {
 
 function formatItemSummary(items: { name: string; quantity: number }[]) {
   return items.map((item) => `${item.name} x${item.quantity}`).join(", ");
+}
+
+async function getAppSettings(): Promise<Record<string, string>> {
+  const rows = await db.select().from(appSetting);
+  const settings: Record<string, string> = { ...APP_SETTINGS_DEFAULTS };
+  for (const row of rows) {
+    settings[row.key] = row.value;
+  }
+  return settings;
 }
 
 async function placeOrderFromItems(
@@ -381,7 +392,7 @@ async function placeOrderFromItems(
   };
 }
 
-async function resolvePreOrderItemsForToday(childId: string) {
+async function resolvePreOrderItemsForToday(childId: string, currentBreakName: string) {
   const today = todayISODate();
   const rows = await db
     .select()
@@ -389,26 +400,39 @@ async function resolvePreOrderItemsForToday(childId: string) {
     .where(and(eq(preOrder.childId, childId), eq(preOrder.status, "PENDING")))
     .orderBy(asc(preOrder.createdAt));
 
-  const candidate = rows.find((po) => {
-    if (po.mode === "ONE_DAY") {
-      return po.scheduledDate === today;
+  for (const candidate of rows) {
+    const inRange =
+      candidate.mode === "ONE_DAY"
+        ? candidate.scheduledDate === today
+        : candidate.scheduledDate <= today && (!candidate.subscriptionUntil || candidate.subscriptionUntil >= today);
+    if (!inRange) continue;
+
+    const poItems = await db
+      .select({
+        id: preOrderItem.id,
+        menuItemId: preOrderItem.menuItemId,
+        quantity: preOrderItem.quantity,
+        breakName: preOrderItem.breakName,
+        lastFulfilledOn: preOrderItem.lastFulfilledOn,
+      })
+      .from(preOrderItem)
+      .where(eq(preOrderItem.preOrderId, candidate.id));
+
+    if (poItems.length === 0) continue;
+
+    const forCurrentBreak = poItems.filter((item) => {
+      const assignedBreak = (item.breakName || "").trim();
+      const breakMatches = assignedBreak ? assignedBreak === currentBreakName : true;
+      const notFulfilledToday = item.lastFulfilledOn !== today;
+      return breakMatches && notFulfilledToday;
+    });
+
+    if (forCurrentBreak.length > 0) {
+      return { preOrder: candidate, items: forCurrentBreak };
     }
+  }
 
-    const inRange = po.scheduledDate <= today && (!po.subscriptionUntil || po.subscriptionUntil >= today);
-    const notUsedToday = po.lastFulfilledDate !== today;
-    return inRange && notUsedToday;
-  });
-
-  if (!candidate) return null;
-
-  const poItems = await db
-    .select({ menuItemId: preOrderItem.menuItemId, quantity: preOrderItem.quantity })
-    .from(preOrderItem)
-    .where(eq(preOrderItem.preOrderId, candidate.id));
-
-  if (poItems.length === 0) return null;
-
-  return { preOrder: candidate, items: poItems };
+  return null;
 }
 
 // POST /api/kiosk/order — no auth session; RFID card is the auth
@@ -442,19 +466,36 @@ export async function POST(request: NextRequest) {
     const studentChild = children[0];
 
     if (mode === "AUTO_PREORDER") {
-      const resolved = await resolvePreOrderItemsForToday(studentChild.id);
+      const settings = await getAppSettings();
+      const breakSlots = parseBreakSlots(settings.subscription_breaks_json);
+      const currentBreak = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
+
+      if (!currentBreak) {
+        return NextResponse.json({
+          success: true,
+          autoPreOrder: false,
+          childName: studentChild.name,
+          currentBreakName: null,
+          reason: "No active break right now.",
+        });
+      }
+
+      const resolved = await resolvePreOrderItemsForToday(studentChild.id, currentBreak.name);
       if (!resolved) {
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
+          currentBreakName: currentBreak.name,
         });
       }
 
       const placed = await placeOrderFromItems(
         rfidCardId,
         resolved.items,
-        resolved.preOrder.mode === "SUBSCRIPTION" ? "Subscription pre-order" : "Pre-order"
+        resolved.preOrder.mode === "SUBSCRIPTION"
+          ? `Subscription pre-order (${currentBreak.name})`
+          : `Pre-order (${currentBreak.name})`
       );
 
       if (!placed.success) {
@@ -462,23 +503,43 @@ export async function POST(request: NextRequest) {
           success: false,
           autoPreOrder: true,
           reason: placed.reason,
+          currentBreakName: currentBreak.name,
         });
       }
 
       const today = todayISODate();
+      await db
+        .update(preOrderItem)
+        .set({ lastFulfilledOn: today })
+        .where(inArray(preOrderItem.id, resolved.items.map((item) => item.id)));
+
+      const remainingItemsToday = await db
+        .select({ id: preOrderItem.id })
+        .from(preOrderItem)
+        .where(
+          and(
+            eq(preOrderItem.preOrderId, resolved.preOrder.id),
+            sql`${preOrderItem.lastFulfilledOn} IS NULL OR ${preOrderItem.lastFulfilledOn} <> ${today}`,
+          ),
+        );
+
+      const hasRemainingItemsToday = remainingItemsToday.length > 0;
       if (resolved.preOrder.mode === "ONE_DAY") {
         await db
           .update(preOrder)
-          .set({ status: "FULFILLED", lastFulfilledDate: today })
+          .set({
+            status: hasRemainingItemsToday ? "PENDING" : "FULFILLED",
+            lastFulfilledDate: today,
+          })
           .where(eq(preOrder.id, resolved.preOrder.id));
       } else {
-        const shouldComplete =
+        const atSubscriptionEnd =
           !!resolved.preOrder.subscriptionUntil && resolved.preOrder.subscriptionUntil <= today;
         await db
           .update(preOrder)
           .set({
             lastFulfilledDate: today,
-            status: shouldComplete ? "FULFILLED" : "PENDING",
+            status: atSubscriptionEnd && !hasRemainingItemsToday ? "FULFILLED" : "PENDING",
           })
           .where(eq(preOrder.id, resolved.preOrder.id));
       }
@@ -487,6 +548,7 @@ export async function POST(request: NextRequest) {
         ...placed,
         autoPreOrder: true,
         preOrderMode: resolved.preOrder.mode,
+        currentBreakName: currentBreak.name,
       });
     }
 

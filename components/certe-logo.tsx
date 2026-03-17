@@ -18,7 +18,7 @@ interface CerteLogoProps {
 export function CerteLogo({ size = 40, className }: CerteLogoProps) {
   return (
     <Image
-      src="/logo.png"
+      src="/logo-512.png"
       alt="certe logo"
       width={Math.round(size * LOGO_ASPECT_RATIO)}
       height={size}

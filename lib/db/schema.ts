@@ -163,6 +163,8 @@ export const preOrderItem = pgTable("pre_order_item", {
   menuItemId: text("menu_item_id")
     .notNull()
     .references(() => menuItem.id),
+  breakName: text("break_name"),
+  lastFulfilledOn: text("last_fulfilled_on"),
   quantity: integer("quantity").notNull().default(1),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });

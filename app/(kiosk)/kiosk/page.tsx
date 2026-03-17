@@ -32,6 +32,7 @@ import {
 } from "@/lib/store/offline-db";
 import { printCanteenReceipt } from "@/lib/printer";
 import { PrinterStatusBadge } from "@/components/kiosk/printer-status";
+import { getCurrentBreakSlot, parseBreakSlots, type BreakSlot } from "@/lib/break-slots";
 
 type MenuItem = {
   id: string;
@@ -61,6 +62,7 @@ type OrderResult = {
   balanceAfter?: number;
   childName?: string;
   reason?: string;
+  currentBreakName?: string | null;
 };
 
 export default function KioskPage() {
@@ -79,6 +81,8 @@ export default function KioskPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRfid, setActiveRfid] = useState("");
   const [activeChildName, setActiveChildName] = useState<string | null>(null);
+  const [breakSlots, setBreakSlots] = useState<BreakSlot[]>([]);
+  const [currentBreakName, setCurrentBreakName] = useState<string | null>(null);
   const [lastTappedCard, setLastTappedCard] = useState("");
   const [sameCardTapCount, setSameCardTapCount] = useState(0);
 
@@ -127,6 +131,35 @@ export default function KioskPage() {
   useEffect(() => {
     fetchMenu();
   }, [fetchMenu]);
+
+  useEffect(() => {
+    const syncBreakInfo = async () => {
+      try {
+        const res = await fetch("/api/menu/subscription-settings");
+        if (!res.ok) return;
+        const data = await res.json();
+        const slots = parseBreakSlots(JSON.stringify(data.subscription_break_slots ?? []));
+        setBreakSlots(slots);
+        const current = getCurrentBreakSlot(slots, { timeZone: "Asia/Kolkata" });
+        setCurrentBreakName(current?.name ?? null);
+      } catch {
+        // non-blocking on kiosk
+      }
+    };
+
+    void syncBreakInfo();
+  }, []);
+
+  useEffect(() => {
+    const updateCurrentBreak = () => {
+      const current = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
+      setCurrentBreakName(current?.name ?? null);
+    };
+
+    updateCurrentBreak();
+    const timer = setInterval(updateCurrentBreak, 30_000);
+    return () => clearInterval(timer);
+  }, [breakSlots]);
 
   useEffect(() => {
     const eventSource = new EventSource("/api/events");
@@ -271,6 +304,9 @@ export default function KioskPage() {
         body: JSON.stringify({ rfidCardId: card, mode: "AUTO_PREORDER" }),
       });
       const data = await res.json();
+      if ("currentBreakName" in data) {
+        setCurrentBreakName((data.currentBreakName as string | null) ?? null);
+      }
 
       if (!data.success) {
         if (isInsufficientBalanceReason(data.reason)) {
@@ -315,6 +351,9 @@ export default function KioskPage() {
       }
 
       setPhase("browse");
+      if (data.reason) {
+        toast.message(data.reason);
+      }
       toast.success(`Welcome ${data.childName || "Student"}. Select items to order.`);
     } catch {
       setResult({ success: false, reason: "Failed to verify card. Please try again." });
@@ -436,9 +475,12 @@ export default function KioskPage() {
               <CreditCard className="h-20 w-20 text-[#1a3a8f] mx-auto animate-pulse" />
               <h1 className="text-3xl font-bold text-[#1a3a8f]">Tap Your RFID Card</h1>
               <p className="text-muted-foreground">
-                If a pre-order/subscription exists for today, it will be placed automatically.
+                If a pre-order/subscription exists for the current break, it will be placed automatically.
                 Otherwise you can select items and place order.
               </p>
+              <Badge variant={currentBreakName ? "default" : "outline"} className="mx-auto">
+                {currentBreakName ? `Current Break: ${currentBreakName}` : "No active break right now"}
+              </Badge>
             </>
           )}
           <input
@@ -498,6 +540,10 @@ export default function KioskPage() {
               {activeChildName}
             </Badge>
           )}
+
+          <Badge variant={currentBreakName ? "default" : "outline"} className="whitespace-nowrap">
+            {currentBreakName ? currentBreakName : "No active break"}
+          </Badge>
 
           <Badge
             variant={browseTimer <= 5 ? "destructive" : "outline"}

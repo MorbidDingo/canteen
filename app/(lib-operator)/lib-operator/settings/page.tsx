@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -23,14 +23,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-export default function LibrarySettingsPage() {
+export default function LibOperatorSettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const fineMode = settings.fine_mode === "WEEK" ? "WEEK" : "DAY";
 
   useEffect(() => {
-    fetchSettings();
+    void fetchSettings();
   }, []);
 
   async function fetchSettings() {
@@ -87,7 +87,7 @@ export default function LibrarySettingsPage() {
       <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-[#1a3a8f]" />
-          <p className="text-sm text-muted-foreground">Loading settingsâ€¦</p>
+          <p className="text-sm text-muted-foreground">Loading settings…</p>
         </div>
       </div>
     );
@@ -95,7 +95,7 @@ export default function LibrarySettingsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1a3a8f]/5 to-background">
-      {/* Sticky header */}
+      {/* Header */}
       <div className="border-b bg-white/60 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 max-w-2xl flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -104,7 +104,7 @@ export default function LibrarySettingsPage() {
             </div>
             <div>
               <h1 className="text-lg font-semibold leading-none">Library Settings</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Configure library rules and policies</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Configure rules and penalties</p>
             </div>
           </div>
           <Button
@@ -142,7 +142,7 @@ export default function LibrarySettingsPage() {
             <div className="grid grid-cols-2 gap-4">
               <FieldGroup
                 label="Issue Duration"
-                hint="Number of days a book can be borrowed"
+                hint="Days a book can be borrowed"
                 suffix="days"
               >
                 <Input
@@ -155,7 +155,7 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Max Books Per Student"
-                hint="Maximum books a student can borrow at once"
+                hint="Maximum concurrent borrows"
               >
                 <Input
                   type="number"
@@ -167,7 +167,7 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Max Reissues"
-                hint="How many times a student can renew a book"
+                hint="Renewal limit per book"
               >
                 <Input
                   type="number"
@@ -179,7 +179,7 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Reissue Duration"
-                hint="Additional days granted per renewal"
+                hint="Extra days per renewal"
                 suffix="days"
               >
                 <Input
@@ -212,14 +212,14 @@ export default function LibrarySettingsPage() {
           <CardContent className="pt-4 space-y-4">
             <ToggleField
               label="Require Operator Confirmation for Returns"
-              description="If enabled, student self-returns go to RETURN_PENDING and must be confirmed by the library operator"
+              description="Student self-returns go to RETURN_PENDING and must be confirmed by you"
               checked={settings.require_operator_return_confirmation === "true"}
               onChange={() => toggleSetting("require_operator_return_confirmation")}
             />
             <Separator />
             <ToggleField
               label="Block New Issues If Student Has Overdue Books"
-              description="Prevent students from borrowing new books until all overdue books are returned"
+              description="Prevent students from borrowing new books until overdue books are returned"
               checked={settings.block_issue_if_overdue === "true"}
               onChange={() => toggleSetting("block_issue_if_overdue")}
             />
@@ -236,7 +236,7 @@ export default function LibrarySettingsPage() {
               <div>
                 <CardTitle className="text-base">Fine Settings</CardTitle>
                 <CardDescription className="text-xs mt-0.5">
-                  Overdue fine configuration â€” fines auto-deduct from wallet on return
+                  Overdue penalty — fines auto-deduct from wallet on return
                 </CardDescription>
               </div>
             </div>
@@ -263,9 +263,6 @@ export default function LibrarySettingsPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-1.5">
-                Choose whether overdue penalty is charged daily or weekly
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -281,7 +278,7 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Fine Per Week"
-                hint={fineMode === "WEEK" ? "Active â€” charged per started week" : "Inactive in daily mode"}
+                hint={fineMode === "WEEK" ? "Active" : "Inactive in daily mode"}
               >
                 <CurrencyInput
                   value={settings.fine_per_week || "0"}
@@ -291,22 +288,11 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Max Fine Per Book"
-                hint="Cap on total fine for a single book"
+                hint="Cap on total fine per book"
               >
                 <CurrencyInput
                   value={settings.max_fine_per_book || "100"}
                   onChange={(v) => updateSetting("max_fine_per_book", v)}
-                />
-              </FieldGroup>
-              <FieldGroup
-                label="Penalty Limit Per Student"
-                hint="Max penalties before blocking. 0 = no limit. Certe+ adds 5 free/month."
-              >
-                <Input
-                  type="number"
-                  min="0"
-                  value={settings.penalty_limit_per_student || "0"}
-                  onChange={(e) => updateSetting("penalty_limit_per_student", e.target.value)}
                 />
               </FieldGroup>
             </div>
@@ -331,7 +317,7 @@ export default function LibrarySettingsPage() {
           <CardContent className="pt-4">
             <ToggleField
               label="Allow Self-Service Issue"
-              description="Let students issue books from the library kiosk terminal without operator intervention"
+              description="Let students issue books from the kiosk terminal without operator intervention"
               checked={settings.allow_self_service_issue === "true"}
               onChange={() => toggleSetting("allow_self_service_issue")}
             />
@@ -377,7 +363,7 @@ function CurrencyInput({
   return (
     <div className={`flex rounded-md border border-input overflow-hidden ${disabled ? "opacity-40" : ""}`}>
       <span className="flex items-center px-2.5 bg-muted border-r border-input text-sm text-muted-foreground select-none">
-        â‚¹
+        ₹
       </span>
       <Input
         type="number"

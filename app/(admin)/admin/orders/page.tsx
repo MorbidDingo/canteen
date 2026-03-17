@@ -77,12 +77,13 @@ type AdminPreOrder = {
   childName: string;
   parentName: string;
   parentEmail: string;
-  items: Array<{ menuItemId: string; menuItemName: string; quantity: number }>;
+  items: Array<{ menuItemId: string; menuItemName: string; quantity: number; breakName: string | null }>;
 };
 
 type PrepDemandItem = {
   menuItemId: string;
   menuItemName: string;
+  breakName: string | null;
   quantity: number;
   fromOneDay: number;
   fromSubscription: number;
@@ -250,8 +251,9 @@ export default function AdminOrdersPage() {
                 </div>
                 <div className="mt-2 space-y-1">
                   {subscription.items.map((item) => (
-                    <p key={item.menuItemId} className="text-xs text-muted-foreground">
+                    <p key={`${item.menuItemId}-${item.breakName || "none"}`} className="text-xs text-muted-foreground">
                       {item.quantity}x {item.menuItemName}
+                      {item.breakName ? ` (${item.breakName})` : ""}
                     </p>
                   ))}
                 </div>
@@ -280,9 +282,12 @@ export default function AdminOrdersPage() {
           <CardContent>
             <div className="space-y-2">
               {prepDemand.map((item) => (
-                <div key={item.menuItemId} className="flex items-center justify-between rounded-md border p-3">
+                <div key={`${item.menuItemId}-${item.breakName || "none"}`} className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <p className="text-sm font-semibold">{item.menuItemName}</p>
+                    {item.breakName ? (
+                      <p className="text-xs text-muted-foreground">{item.breakName}</p>
+                    ) : null}
                     <div className="flex gap-3 mt-0.5">
                       {item.fromSubscription > 0 && (
                         <span className="text-xs text-muted-foreground">

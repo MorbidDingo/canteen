@@ -414,6 +414,11 @@ export default function LibraryTerminalPage() {
       };
       if (data.fineAmount > 0) {
         details["Fine"] = `₹${data.fineAmount.toFixed(2)}`;
+        if (data.fineModeApplied === "WEEK") {
+          details["Fine Policy"] = "Per Week";
+        } else if (data.fineModeApplied === "DAY") {
+          details["Fine Policy"] = "Per Day";
+        }
       }
 
       setResult({
