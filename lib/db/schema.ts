@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 // ─── Better Auth Core Tables ─────────────────────────────
@@ -249,6 +249,7 @@ export const childRelations = relations(child, ({ one, many }) => ({
   bookIssuances: many(bookIssuance),
   gateLogs: many(gateLog),
   parentNotifications: many(parentNotification),
+  certeSubscriptionPenaltyUsages: many(certeSubscriptionPenaltyUsage),
 }));
 
 export const walletRelations = relations(wallet, ({ one, many }) => ({
@@ -566,6 +567,28 @@ export const certeSubscription = pgTable("certe_subscription", {
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
+export const certeSubscriptionPenaltyUsage = pgTable(
+  "certe_subscription_penalty_usage",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    subscriptionId: text("subscription_id")
+      .notNull()
+      .references(() => certeSubscription.id, { onDelete: "cascade" }),
+    childId: text("child_id")
+      .notNull()
+      .references(() => child.id, { onDelete: "cascade" }),
+    penaltiesUsed: integer("penalties_used").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    uniqueSubscriptionChild: unique("certe_subscription_penalty_usage_sub_child_unique").on(
+      table.subscriptionId,
+      table.childId,
+    ),
+  }),
+);
+
 // ─── Library Relations ───────────────────────────────────
 
 export const bookRelations = relations(book, ({ many }) => ({
@@ -591,9 +614,24 @@ export const appSettingRelations = relations(appSetting, ({ one }) => ({
   updater: one(user, { fields: [appSetting.updatedBy], references: [user.id] }),
 }));
 
-export const certeSubscriptionRelations = relations(certeSubscription, ({ one }) => ({
+export const certeSubscriptionRelations = relations(certeSubscription, ({ one, many }) => ({
   parent: one(user, { fields: [certeSubscription.parentId], references: [user.id] }),
+  penaltyUsages: many(certeSubscriptionPenaltyUsage),
 }));
+
+export const certeSubscriptionPenaltyUsageRelations = relations(
+  certeSubscriptionPenaltyUsage,
+  ({ one }) => ({
+    subscription: one(certeSubscription, {
+      fields: [certeSubscriptionPenaltyUsage.subscriptionId],
+      references: [certeSubscription.id],
+    }),
+    child: one(child, {
+      fields: [certeSubscriptionPenaltyUsage.childId],
+      references: [child.id],
+    }),
+  }),
+);
 
 export const parentNotificationRelations = relations(parentNotification, ({ one }) => ({
   parent: one(user, { fields: [parentNotification.parentId], references: [user.id] }),

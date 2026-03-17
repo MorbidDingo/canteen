@@ -9,6 +9,7 @@ import {
   wallet,
   walletTransaction,
   certeSubscription,
+  certeSubscriptionPenaltyUsage,
 } from "@/lib/db/schema";
 import { eq, and, sql, gte } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest) {
       // Check Certe+ penalty allowance
       let fineWaived = false;
       const [activeSub] = await db
-        .select({ id: certeSubscription.id, libraryPenaltiesUsed: certeSubscription.libraryPenaltiesUsed })
+        .select({ id: certeSubscription.id })
         .from(certeSubscription)
         .where(
           and(
@@ -264,13 +265,49 @@ export async function POST(request: NextRequest) {
         )
         .limit(1);
 
-      if (activeSub && activeSub.libraryPenaltiesUsed < CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE) {
-        await db
-          .update(certeSubscription)
-          .set({ libraryPenaltiesUsed: activeSub.libraryPenaltiesUsed + 1 })
-          .where(eq(certeSubscription.id, activeSub.id));
-        fineWaived = true;
-        fineDeducted = true;
+      if (activeSub) {
+        const [childUsage] = await db
+          .select({
+            id: certeSubscriptionPenaltyUsage.id,
+            penaltiesUsed: certeSubscriptionPenaltyUsage.penaltiesUsed,
+          })
+          .from(certeSubscriptionPenaltyUsage)
+          .where(
+            and(
+              eq(certeSubscriptionPenaltyUsage.subscriptionId, activeSub.id),
+              eq(certeSubscriptionPenaltyUsage.childId, studentChild.id),
+            ),
+          )
+          .limit(1);
+
+        const usedForChild = childUsage?.penaltiesUsed ?? 0;
+        if (usedForChild < CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE) {
+          if (childUsage) {
+            await db
+              .update(certeSubscriptionPenaltyUsage)
+              .set({
+                penaltiesUsed: usedForChild + 1,
+                updatedAt: now,
+              })
+              .where(eq(certeSubscriptionPenaltyUsage.id, childUsage.id));
+          } else {
+            await db.insert(certeSubscriptionPenaltyUsage).values({
+              subscriptionId: activeSub.id,
+              childId: studentChild.id,
+              penaltiesUsed: 1,
+              createdAt: now,
+              updatedAt: now,
+            });
+          }
+
+          await db
+            .update(certeSubscription)
+            .set({ libraryPenaltiesUsed: sql`${certeSubscription.libraryPenaltiesUsed} + 1` })
+            .where(eq(certeSubscription.id, activeSub.id));
+
+          fineWaived = true;
+          fineDeducted = true;
+        }
       }
 
       if (!fineWaived) {
@@ -372,3 +409,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

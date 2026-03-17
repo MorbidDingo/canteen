@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
+import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
 
@@ -43,7 +44,8 @@ export default function ParentLayout({
   const pathname = usePathname();
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
-  const [certePlusActive, setCertePlusActive] = useState(false);
+  const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
+  const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [cartBounce, setCartBounce] = useState(false);
   const [navDimmed, setNavDimmed] = useState(false);
   const prevCartCount = useRef(cartCount);
@@ -73,15 +75,10 @@ export default function ParentLayout({
       .catch(() => {});
   }, []);
 
-  // Fetch Certe+ status
+  // Keep Certe+ status warm for all parent screens.
   useEffect(() => {
-    fetch("/api/certe-plus")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setCertePlusActive(data.active === true);
-      })
-      .catch(() => {});
-  }, []);
+    void ensureCertePlusFresh(45_000);
+  }, [ensureCertePlusFresh]);
 
   // Dim content area below bottom nav while scrolling
   useEffect(() => {

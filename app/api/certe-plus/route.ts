@@ -1,18 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { certeSubscription, wallet, walletTransaction, child } from "@/lib/db/schema";
+import {
+  certeSubscription,
+  certeSubscriptionPenaltyUsage,
+  wallet,
+  walletTransaction,
+  child,
+} from "@/lib/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { CERTE_PLUS, CERTE_PLUS_PLANS, type CertePlusPlan } from "@/lib/constants";
 import { getRazorpay } from "@/lib/razorpay";
 import crypto from "crypto";
 
+function noStoreJson(body: unknown, init?: Omit<ResponseInit, "headers"> & { headers?: HeadersInit }) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    },
+  });
+}
+
 // GET — check current Certe+ subscription status
 export async function GET() {
   try {
     const session = await getSession();
     if (!session?.user) {
-      return NextResponse.json({
+      return noStoreJson({
         active: false,
         subscription: null,
         benefits: {
@@ -20,6 +36,7 @@ export async function GET() {
           libraryPenaltyAllowance: 0,
           libraryPenaltiesUsed: 0,
           walletOverdraftUsed: 0,
+          libraryPenaltiesUsedByChild: {},
         },
       });
     }
@@ -39,7 +56,7 @@ export async function GET() {
       .limit(1);
 
     if (!active) {
-      return NextResponse.json({
+      return noStoreJson({
         active: false,
         subscription: null,
         benefits: {
@@ -47,11 +64,25 @@ export async function GET() {
           libraryPenaltyAllowance: 0,
           libraryPenaltiesUsed: 0,
           walletOverdraftUsed: 0,
+          libraryPenaltiesUsedByChild: {},
         },
       });
     }
 
-    return NextResponse.json({
+    const usageRows = await db
+      .select({
+        childId: certeSubscriptionPenaltyUsage.childId,
+        penaltiesUsed: certeSubscriptionPenaltyUsage.penaltiesUsed,
+      })
+      .from(certeSubscriptionPenaltyUsage)
+      .where(eq(certeSubscriptionPenaltyUsage.subscriptionId, active.id));
+
+    const libraryPenaltiesUsedByChild = usageRows.reduce<Record<string, number>>((acc, row) => {
+      acc[row.childId] = row.penaltiesUsed;
+      return acc;
+    }, {});
+
+    return noStoreJson({
       active: true,
       subscription: {
         id: active.id,
@@ -61,12 +92,14 @@ export async function GET() {
         status: active.status,
         walletOverdraftUsed: active.walletOverdraftUsed,
         libraryPenaltiesUsed: active.libraryPenaltiesUsed,
+        libraryPenaltiesUsedByChild,
       },
       benefits: {
         walletOverdraftLimit: CERTE_PLUS.WALLET_OVERDRAFT_LIMIT,
         libraryPenaltyAllowance: CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE,
         libraryPenaltiesUsed: active.libraryPenaltiesUsed,
         walletOverdraftUsed: active.walletOverdraftUsed,
+        libraryPenaltiesUsedByChild,
       },
     });
   } catch (error) {

@@ -300,7 +300,7 @@ export default function LibrarySettingsPage() {
               </FieldGroup>
               <FieldGroup
                 label="Penalty Limit Per Student"
-                hint="Max penalties before blocking. 0 = no limit. Certe+ adds 5 free/month."
+                hint="Max penalties before blocking. 0 = no limit. Certe+ adds 5 free per child per active plan."
               >
                 <Input
                   type="number"

@@ -46,6 +46,7 @@ import {
   type PreOrderStatus,
 } from "@/lib/constants";
 import { type BreakSlot, parseBreakSlots } from "@/lib/break-slots";
+import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 
 type ChildOption = { id: string; name: string };
 type MenuOption = {
@@ -95,17 +96,6 @@ type EditRow = {
   breakName: string;
 };
 
-type CertePlusResponse = {
-  active: boolean;
-  subscription: {
-    id: string;
-    plan: string;
-    startDate: string;
-    endDate: string;
-    status: string;
-  } | null;
-};
-
 const DEFAULT_BREAKS = ["Short Break", "Lunch Break", "High Tea"];
 const DEFAULT_BREAK_SLOTS: BreakSlot[] = [
   { name: "Short Break", startTime: "10:30", endTime: "10:50" },
@@ -153,6 +143,8 @@ function countSchoolDaysInclusive(startIso: string, endIso: string): number {
 }
 
 export default function PreOrdersPage() {
+  const certePlusStatus = useCertePlusStore((s) => s.status);
+  const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -184,16 +176,15 @@ export default function PreOrdersPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [preOrdersRes, childrenRes, menuRes, controlsRes, certeRes, settingsRes] = await Promise.all([
+      const [preOrdersRes, childrenRes, menuRes, controlsRes, settingsRes] = await Promise.all([
         fetch("/api/pre-orders"),
         fetch("/api/children"),
         fetch("/api/menu"),
         fetch("/api/controls"),
-        fetch("/api/certe-plus"),
         fetch("/api/menu/subscription-settings"),
       ]);
 
-      if (!preOrdersRes.ok || !childrenRes.ok || !menuRes.ok || !controlsRes.ok || !certeRes.ok || !settingsRes.ok) {
+      if (!preOrdersRes.ok || !childrenRes.ok || !menuRes.ok || !controlsRes.ok || !settingsRes.ok) {
         throw new Error("load failed");
       }
 
@@ -204,7 +195,6 @@ export default function PreOrdersPage() {
         (m) => m.available && m.subscribable !== false,
       );
       const controlsData = (await controlsRes.json()) as ChildControl[];
-      const certeData = (await certeRes.json()) as CertePlusResponse;
       const settingsData = await settingsRes.json();
 
       const breakSlots = Array.isArray(settingsData.subscription_break_slots)
@@ -216,9 +206,6 @@ export default function PreOrdersPage() {
       setChildren(childrenData);
       setMenuItems(menuData);
       setControls(controlsData);
-      setCertePlusActive(certeData.active === true);
-      setSubscriptionEndDate(certeData.subscription?.endDate ?? null);
-      setSubscriptionPlan(certeData.subscription?.plan ?? null);
       setSettings({
         minOrderValue: Number(settingsData.subscription_min_order_value) || DEFAULT_MIN_ORDER,
         minDays: Number(settingsData.subscription_min_days) || DEFAULT_MIN_DAYS,
@@ -237,8 +224,16 @@ export default function PreOrdersPage() {
   }, [assignBreak, assignChildId]);
 
   useEffect(() => {
+    if (!certePlusStatus) return;
+    setCertePlusActive(certePlusStatus.active === true);
+    setSubscriptionEndDate(certePlusStatus.subscription?.endDate ?? null);
+    setSubscriptionPlan(certePlusStatus.subscription?.plan ?? null);
+  }, [certePlusStatus]);
+
+  useEffect(() => {
+    void ensureCertePlusFresh(45_000);
     void fetchAll();
-  }, [fetchAll]);
+  }, [ensureCertePlusFresh, fetchAll]);
 
   const menuById = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
   const childById = useMemo(() => new Map(children.map((c) => [c.id, c.name])), [children]);
@@ -446,6 +441,15 @@ export default function PreOrdersPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (certePlusActive === null) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Checking Certe+ status...
       </div>
     );
   }

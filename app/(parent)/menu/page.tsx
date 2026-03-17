@@ -6,6 +6,7 @@ import { UtensilsCrossed, Loader2, Lock, Sparkles } from "lucide-react";
 import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { Button } from "@/components/ui/button";
+import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 
 interface MenuItem {
   id: string;
@@ -23,7 +24,10 @@ interface MenuItem {
 export default function MenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [certePlusActive, setCertePlusActive] = useState<boolean | null>(null);
+  const certePlusStatus = useCertePlusStore((s) => s.status);
+  const certePlusActive = certePlusStatus?.active === true;
+  const certePlusResolved = certePlusStatus !== null;
+  const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
 
   const fetchMenu = useCallback(async () => {
     try {
@@ -39,14 +43,9 @@ export default function MenuPage() {
   }, []);
 
   useEffect(() => {
-    fetchMenu();
-    fetch("/api/certe-plus")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setCertePlusActive(data.active === true);
-      })
-      .catch(() => {});
-  }, [fetchMenu]);
+    void fetchMenu();
+    void ensureCertePlusFresh(45_000);
+  }, [fetchMenu, ensureCertePlusFresh]);
 
   // Instant refresh via SSE when admin updates menu
   useRealtimeData(fetchMenu, "menu-updated");
@@ -77,7 +76,18 @@ export default function MenuPage() {
           </Button>
         </Link>
         <Link href="/pre-orders">
-          {certePlusActive ? (
+          {!certePlusResolved ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              disabled
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Pre-Order
+            </Button>
+          ) : certePlusActive ? (
             <Button
               type="button"
               variant="ghost"

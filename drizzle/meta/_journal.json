@@ -57,6 +57,13 @@
       "when": 1773900000000,
       "tag": "0007_break_fulfillment_track",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774000000000,
+      "tag": "0008_certe_penalty_per_child",
+      "breakpoints": true
     }
   ]
 }
