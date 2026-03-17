@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, user, wallet, parentControl } from "@/lib/db/schema";
-import { eq, or, ilike, sql } from "drizzle-orm";
+import { eq, or, and, ilike, sql } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sanitizeImageUrl } from "@/lib/image-url";
@@ -37,10 +37,13 @@ export async function GET(request: NextRequest) {
       .from(child)
       .innerJoin(user, eq(child.parentId, user.id))
       .where(
-        or(
-          ilike(child.name, `%${q}%`),
-          ilike(child.grNumber, `%${q}%`),
-          ilike(user.name, `%${q}%`),
+        and(
+          eq(user.role, "PARENT"),
+          or(
+            ilike(child.name, `%${q}%`),
+            ilike(child.grNumber, `%${q}%`),
+            ilike(user.name, `%${q}%`),
+          ),
         ),
       )
       .limit(50);
@@ -62,6 +65,7 @@ export async function GET(request: NextRequest) {
       })
       .from(child)
       .innerJoin(user, eq(child.parentId, user.id))
+      .where(eq(user.role, "PARENT"))
       .orderBy(child.name)
       .limit(50);
   }

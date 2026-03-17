@@ -53,7 +53,7 @@ export function LibOperatorNav() {
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#1a3a8f] shadow-sm">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#d4891a] shadow-sm">
             <BookOpen className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">

@@ -18,7 +18,7 @@ export default async function LibOperatorLayout({
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
+    <div className="min-h-screen bg-linear-to-b from-[#d4891a]/5 to-background">
       <LibOperatorNav />
       {children}
     </div>

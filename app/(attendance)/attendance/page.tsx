@@ -14,6 +14,7 @@ import {
   Activity,
   Camera,
   Clock3,
+  Download,
   FileSpreadsheet,
   Image as ImageIcon,
   Loader2,
@@ -64,8 +65,19 @@ type ReportStudent = {
   totalTaps: number;
   tapsLast24h: number;
   anomalyCount: number;
+  timeInsideSeconds: number | null;
   timeInsideFormatted: string | null;
 };
+
+type ReportView =
+  | "all"
+  | "inside"
+  | "outside"
+  | "classwise"
+  | "with-photo"
+  | "without-photo"
+  | "overstays"
+  | "anomalies";
 
 type BulkSummary = {
   total: number;
@@ -88,6 +100,30 @@ const defaultStats: SummaryStats = {
   exitsLast24h: 0,
 };
 
+const OVERSTAY_SECONDS = 2 * 60 * 60;
+
+const reportViewOptions: Array<{ value: ReportView; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "inside", label: "Inside" },
+  { value: "outside", label: "Outside" },
+  { value: "classwise", label: "Class Wise" },
+  { value: "with-photo", label: "With Photo" },
+  { value: "without-photo", label: "Without Photo" },
+  { value: "overstays", label: "Overstays" },
+  { value: "anomalies", label: "Anomalies" },
+];
+
+const reportViewLabels: Record<ReportView, string> = {
+  all: "All",
+  inside: "Inside",
+  outside: "Outside",
+  classwise: "Class Wise",
+  "with-photo": "With Photo",
+  "without-photo": "Without Photo",
+  overstays: "Overstays",
+  anomalies: "Anomalies",
+};
+
 function formatDateTime(value: string) {
   const date = new Date(value);
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
@@ -95,12 +131,12 @@ function formatDateTime(value: string) {
 
 export default function AttendancePage() {
   const [recent, setRecent] = useState<LiveTapRecord[]>([]);
-  const [latest, setLatest] = useState<LiveTapRecord | null>(null);
-  const [latestVisible, setLatestVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState("live");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SummaryStats>(defaultStats);
   const [reportStudents, setReportStudents] = useState<ReportStudent[]>([]);
   const [reportQuery, setReportQuery] = useState("");
+  const [reportView, setReportView] = useState<ReportView>("all");
   const [reportsLoading, setReportsLoading] = useState(false);
   const [totalMatchedStudents, setTotalMatchedStudents] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,7 +170,6 @@ export default function AttendancePage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const uploadInFlightRef = useRef(false);
-  const latestTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchRecent = async () => {
     try {
@@ -152,7 +187,7 @@ export default function AttendancePage() {
   const fetchReports = async (q = reportQuery) => {
     try {
       setReportsLoading(true);
-      const res = await fetch(`/api/attendance/reports?q=${encodeURIComponent(q)}&limit=50`, {
+      const res = await fetch(`/api/attendance/reports?q=${encodeURIComponent(q)}&limit=200`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch reports");
@@ -189,19 +224,6 @@ export default function AttendancePage() {
     if (message) setBulkStatusText(message);
   };
 
-  const showLatestForThreeSeconds = (record: LiveTapRecord) => {
-    setLatest(record);
-    setLatestVisible(true);
-
-    if (latestTimerRef.current) {
-      clearTimeout(latestTimerRef.current);
-    }
-
-    latestTimerRef.current = setTimeout(() => {
-      setLatestVisible(false);
-    }, 3000);
-  };
-
   useEffect(() => {
     fetchRecent();
     fetchReports("");
@@ -218,7 +240,6 @@ export default function AttendancePage() {
         if (data.type !== "gate-tap" || !data.payload) return;
 
         const record = data.payload as LiveTapRecord;
-        showLatestForThreeSeconds(record);
 
         setRecent((prev) => {
           const merged = [record, ...prev.filter((r) => r.id !== record.id)];
@@ -238,9 +259,6 @@ export default function AttendancePage() {
     return () => {
       clearInterval(poll);
       eventSource.close();
-      if (latestTimerRef.current) {
-        clearTimeout(latestTimerRef.current);
-      }
     };
   }, []);
 
@@ -256,6 +274,136 @@ export default function AttendancePage() {
       (a, b) => new Date(b.tappedAt).getTime() - new Date(a.tappedAt).getTime(),
     );
   }, [recent]);
+
+  const filteredReportStudents = useMemo(() => {
+    switch (reportView) {
+      case "inside":
+        return reportStudents.filter((student) => student.presenceStatus === "INSIDE");
+      case "outside":
+        return reportStudents.filter((student) => student.presenceStatus === "OUTSIDE");
+      case "with-photo":
+        return reportStudents.filter((student) => student.hasPhoto);
+      case "without-photo":
+        return reportStudents.filter((student) => !student.hasPhoto);
+      case "overstays":
+        return reportStudents.filter(
+          (student) =>
+            student.presenceStatus === "INSIDE" &&
+            typeof student.timeInsideSeconds === "number" &&
+            student.timeInsideSeconds >= OVERSTAY_SECONDS,
+        );
+      case "anomalies":
+        return reportStudents.filter((student) => student.anomalyCount > 0);
+      case "all":
+      case "classwise":
+      default:
+        return reportStudents;
+    }
+  }, [reportStudents, reportView]);
+
+  const classWiseGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        label: string;
+        students: ReportStudent[];
+      }
+    >();
+
+    for (const student of reportStudents) {
+      const label = [student.className || "Unassigned", student.section || null].filter(Boolean).join("-");
+      const existing = groups.get(label) || { label, students: [] };
+      existing.students.push(student);
+      groups.set(label, existing);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        students: group.students.sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [reportStudents]);
+
+  const visibleStudents = useMemo(() => {
+    return reportView === "classwise" ? reportStudents : filteredReportStudents;
+  }, [filteredReportStudents, reportStudents, reportView]);
+
+  const handleReportViewChange = (view: ReportView) => {
+    setActiveTab("reports");
+    setReportView(view);
+  };
+
+  const downloadFile = (content: string, fileName: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCurrentReport = (format: "csv" | "json") => {
+    const rows = visibleStudents.map((student) => ({
+      name: student.name,
+      grNumber: student.grNumber || "",
+      className: student.className || "",
+      section: student.section || "",
+      classLabel: [student.className || "", student.section || ""].filter(Boolean).join("-") || "Unassigned",
+      presenceStatus: student.presenceStatus,
+      hasPhoto: student.hasPhoto ? "Yes" : "No",
+      anomalyCount: student.anomalyCount,
+      totalTaps: student.totalTaps,
+      tapsLast24h: student.tapsLast24h,
+      timeInside: student.timeInsideFormatted || "",
+      lastGateTapAt: student.lastGateTapAt ? formatDateTime(student.lastGateTapAt) : "",
+    }));
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const fileBase = `attendance-${reportView}-${stamp}`;
+
+    if (format === "json") {
+      downloadFile(JSON.stringify(rows, null, 2), `${fileBase}.json`, "application/json;charset=utf-8");
+      return;
+    }
+
+    const headers = [
+      "Name",
+      "GR Number",
+      "Class",
+      "Section",
+      "Class Label",
+      "Presence",
+      "Has Photo",
+      "Anomalies",
+      "Total Taps",
+      "Taps Last 24h",
+      "Inside For",
+      "Last Gate Tap",
+    ];
+
+    const csvRows = rows.map((row) => [
+      row.name,
+      row.grNumber,
+      row.className,
+      row.section,
+      row.classLabel,
+      row.presenceStatus,
+      row.hasPhoto,
+      String(row.anomalyCount),
+      String(row.totalTaps),
+      String(row.tapsLast24h),
+      row.timeInside,
+      row.lastGateTapAt,
+    ]);
+
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = [headers, ...csvRows].map((cols) => cols.map(escapeCsv).join(",")).join("\n");
+    downloadFile(csv, `${fileBase}.csv`, "text/csv;charset=utf-8");
+  };
 
   const uploadStudentPhoto = async (childId: string, file: File) => {
     try {
@@ -414,7 +562,7 @@ export default function AttendancePage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-orange-950">Attendance Live Feed</h1>
             <p className="mt-1 text-sm sm:text-base text-orange-900/70">
-              Latest tap pops for 3 seconds, while only last 3 records are kept on screen.
+              Live gate feed with the last 3 tap records kept on screen.
             </p>
           </div>
           <Button
@@ -428,7 +576,7 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="live" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-3 bg-orange-100/70 p-1">
           <TabsTrigger value="live" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">Live</TabsTrigger>
           <TabsTrigger value="bulk" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">Bulk Upload</TabsTrigger>
@@ -436,42 +584,6 @@ export default function AttendancePage() {
         </TabsList>
 
         <TabsContent value="live" className="mt-4 space-y-4">
-          <Card className="border-orange-200/70">
-            <CardHeader>
-              <CardTitle className="text-orange-950">Latest Tap (Auto Hides)</CardTitle>
-              <CardDescription>Shows the newest entry/exit immediately for 3 seconds.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!latest || !latestVisible ? (
-                <div className="rounded-xl border border-dashed border-orange-200 p-5 text-sm text-muted-foreground">
-                  Waiting for next gate tap...
-                </div>
-              ) : (
-                <div className="rounded-xl border border-orange-300 bg-orange-50 p-4 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="relative h-12 w-12 overflow-hidden rounded-full border border-orange-200 bg-white">
-                      {latest.image ? (
-                        <Image src={latest.image} alt={latest.name} fill className="object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-orange-700">
-                          {latest.name.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold text-orange-950">{latest.name}</p>
-                      <p className="text-xs text-muted-foreground">GR: {latest.grNumber || "-"}</p>
-                    </div>
-                    <Badge className={latest.direction === "ENTRY" ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-800"}>
-                      {latest.direction}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs text-orange-900/80">{formatDateTime(latest.tappedAt)}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <Card className="border-orange-200/70">
             <CardHeader>
               <CardTitle className="text-orange-950">Past 3 Records</CardTitle>
@@ -600,61 +712,77 @@ export default function AttendancePage() {
 
         <TabsContent value="reports" className="mt-4 space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-orange-700"><Users className="h-4 w-4" /> Students</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.totalStudents}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-emerald-700"><Activity className="h-4 w-4" /> Inside</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.insideCount}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-orange-700"><Clock3 className="h-4 w-4" /> Taps (24h)</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.tapsLast24h}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-red-700"><ShieldAlert className="h-4 w-4" /> Anomalies</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.anomalyCount}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-zinc-700"><Clock3 className="h-4 w-4" /> Outside</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.outsideCount}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-amber-700"><Activity className="h-4 w-4" /> Overstay</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.overstayCount}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-emerald-700"><ImageIcon className="h-4 w-4" /> With Photo</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.withPhotoCount}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-orange-200/70">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-2 text-orange-700"><ImageIcon className="h-4 w-4" /> Without Photo</div>
-                <p className="mt-2 text-2xl font-bold text-orange-950">{stats.withoutPhotoCount}</p>
-              </CardContent>
-            </Card>
+            <ReportSummaryCard
+              label="Students"
+              value={stats.totalStudents}
+              icon={<Users className="h-4 w-4" />}
+              tone="text-orange-700"
+              active={reportView === "all"}
+              onClick={() => handleReportViewChange("all")}
+            />
+            <ReportSummaryCard
+              label="Inside"
+              value={stats.insideCount}
+              icon={<Activity className="h-4 w-4" />}
+              tone="text-emerald-700"
+              active={reportView === "inside"}
+              onClick={() => handleReportViewChange("inside")}
+            />
+            <ReportSummaryCard
+              label="Taps (24h)"
+              value={stats.tapsLast24h}
+              icon={<Clock3 className="h-4 w-4" />}
+              tone="text-orange-700"
+              active={reportView === "all"}
+              onClick={() => handleReportViewChange("all")}
+            />
+            <ReportSummaryCard
+              label="Anomalies"
+              value={stats.anomalyCount}
+              icon={<ShieldAlert className="h-4 w-4" />}
+              tone="text-red-700"
+              active={reportView === "anomalies"}
+              onClick={() => handleReportViewChange("anomalies")}
+            />
+            <ReportSummaryCard
+              label="Outside"
+              value={stats.outsideCount}
+              icon={<Clock3 className="h-4 w-4" />}
+              tone="text-zinc-700"
+              active={reportView === "outside"}
+              onClick={() => handleReportViewChange("outside")}
+            />
+            <ReportSummaryCard
+              label="Overstay"
+              value={stats.overstayCount}
+              icon={<Activity className="h-4 w-4" />}
+              tone="text-amber-700"
+              active={reportView === "overstays"}
+              onClick={() => handleReportViewChange("overstays")}
+            />
+            <ReportSummaryCard
+              label="With Photo"
+              value={stats.withPhotoCount}
+              icon={<ImageIcon className="h-4 w-4" />}
+              tone="text-emerald-700"
+              active={reportView === "with-photo"}
+              onClick={() => handleReportViewChange("with-photo")}
+            />
+            <ReportSummaryCard
+              label="Without Photo"
+              value={stats.withoutPhotoCount}
+              icon={<ImageIcon className="h-4 w-4" />}
+              tone="text-orange-700"
+              active={reportView === "without-photo"}
+              onClick={() => handleReportViewChange("without-photo")}
+            />
           </div>
 
           <Card className="border-orange-200/70">
             <CardHeader>
-              <CardTitle className="text-orange-950">Search Students</CardTitle>
+              <CardTitle className="text-orange-950">Student Reports</CardTitle>
               <CardDescription>
-                Search by name, GR number, class, or section. Showing last 50 matched rows.
+                Search by name, GR number, class, or section, then switch views with one click.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -668,58 +796,113 @@ export default function AttendancePage() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">Matched: {totalMatchedStudents}</Badge>
-                <Badge variant="outline">Entries (24h): {stats.entriesLast24h}</Badge>
-                <Badge variant="outline">Exits (24h): {stats.exitsLast24h}</Badge>
-                <Badge variant="outline">Tap events (24h): {stats.totalTapEvents}</Badge>
+              <div className="rounded-xl border border-orange-100 bg-orange-50/80 p-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {reportViewOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setReportView(option.value)}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                        reportView === option.value
+                          ? "border-orange-600 bg-orange-600 text-white shadow-sm"
+                          : "border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">Matched: {totalMatchedStudents}</Badge>
+                  <Badge variant="outline">View: {reportViewLabels[reportView]}</Badge>
+                  <Badge variant="outline">Visible: {visibleStudents.length}</Badge>
+                  <Badge variant="outline">Entries (24h): {stats.entriesLast24h}</Badge>
+                  <Badge variant="outline">Exits (24h): {stats.exitsLast24h}</Badge>
+                  <Badge variant="outline">Tap events (24h): {stats.totalTapEvents}</Badge>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-orange-200 text-orange-900 hover:bg-orange-50 sm:w-auto"
+                    onClick={() => exportCurrentReport("csv")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full border-orange-200 text-orange-900 hover:bg-orange-50 sm:w-auto"
+                    onClick={() => exportCurrentReport("json")}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export JSON
+                  </Button>
+                </div>
               </div>
 
               {reportsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading report students...
                 </div>
-              ) : reportStudents.length === 0 ? (
+              ) : reportView === "classwise" ? (
+                classWiseGroups.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    No students matched your search.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {classWiseGroups.map((group) => {
+                      const insideCount = group.students.filter((student) => student.presenceStatus === "INSIDE").length;
+                      const withPhotoCount = group.students.filter((student) => student.hasPhoto).length;
+                      const anomalyCount = group.students.filter((student) => student.anomalyCount > 0).length;
+                      const overstayCount = group.students.filter(
+                        (student) =>
+                          student.presenceStatus === "INSIDE" &&
+                          typeof student.timeInsideSeconds === "number" &&
+                          student.timeInsideSeconds >= OVERSTAY_SECONDS,
+                      ).length;
+
+                      return (
+                        <div key={group.label} className="rounded-xl border border-orange-100 bg-orange-50/50 p-4">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-orange-950">{group.label}</p>
+                              <p className="text-xs text-muted-foreground">{group.students.length} students</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              <Badge className="bg-emerald-100 text-emerald-800">Inside: {insideCount}</Badge>
+                              <Badge className="bg-zinc-100 text-zinc-800">Outside: {group.students.length - insideCount}</Badge>
+                              <Badge className="bg-orange-100 text-orange-800">Photos: {withPhotoCount}</Badge>
+                              <Badge className="bg-amber-100 text-amber-800">Overstays: {overstayCount}</Badge>
+                              <Badge className="bg-red-100 text-red-800">Anomalies: {anomalyCount}</Badge>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {group.students.map((student) => (
+                              <StudentReportCard key={student.childId} student={student} />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : filteredReportStudents.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                  No students matched your search.
+                  No students matched this report view.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {reportStudents.map((student) => (
-                    <div key={student.childId} className="rounded-lg border border-orange-100 bg-white p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-orange-200 bg-orange-50">
-                          {student.image ? (
-                            <Image src={student.image} alt={student.name} fill className="object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-orange-700">
-                              {student.name.slice(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-orange-950">{student.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            GR: {student.grNumber || "-"} • {student.className || "-"}{student.section ? `-${student.section}` : ""}
-                          </p>
-                        </div>
-
-                        <Badge className={student.presenceStatus === "INSIDE" ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-800"}>
-                          {student.presenceStatus}
-                        </Badge>
-                        <Badge variant="outline" className={student.hasPhoto ? "border-emerald-200 text-emerald-700" : "border-amber-200 text-amber-700"}>
-                          {student.hasPhoto ? "Photo" : "No Photo"}
-                        </Badge>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span>Total taps: {student.totalTaps}</span>
-                        <span>Taps (24h): {student.tapsLast24h}</span>
-                        <span>Anomalies: {student.anomalyCount}</span>
-                        {student.timeInsideFormatted ? <span>Inside for: {student.timeInsideFormatted}</span> : null}
-                      </div>
-                    </div>
+                  {filteredReportStudents.map((student) => (
+                    <StudentReportCard key={student.childId} student={student} />
                   ))}
                 </div>
               )}
@@ -727,6 +910,81 @@ export default function AttendancePage() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function ReportSummaryCard({
+  label,
+  value,
+  icon,
+  tone,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${
+        active
+          ? "border-orange-400 bg-orange-50 shadow-sm"
+          : "border-orange-200/70 bg-white hover:border-orange-300"
+      }`}
+    >
+      <Card className="border-0 bg-transparent shadow-none">
+        <CardContent className="pt-6">
+          <div className={`flex items-center gap-2 ${tone}`}>{icon}<span>{label}</span></div>
+          <p className="mt-2 text-2xl font-bold text-orange-950">{value}</p>
+        </CardContent>
+      </Card>
+    </button>
+  );
+}
+
+function StudentReportCard({ student }: { student: ReportStudent }) {
+  return (
+    <div className="rounded-lg border border-orange-100 bg-white p-3">
+      <div className="flex items-center gap-3">
+        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-orange-200 bg-orange-50">
+          {student.image ? (
+            <Image src={student.image} alt={student.name} fill className="object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-orange-700">
+              {student.name.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-orange-950">{student.name}</p>
+          <p className="text-xs text-muted-foreground">
+            GR: {student.grNumber || "-"} • {student.className || "-"}
+            {student.section ? `-${student.section}` : ""}
+          </p>
+        </div>
+
+        <Badge className={student.presenceStatus === "INSIDE" ? "bg-emerald-100 text-emerald-800" : "bg-zinc-100 text-zinc-800"}>
+          {student.presenceStatus}
+        </Badge>
+        <Badge variant="outline" className={student.hasPhoto ? "border-emerald-200 text-emerald-700" : "border-amber-200 text-amber-700"}>
+          {student.hasPhoto ? "Photo" : "No Photo"}
+        </Badge>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span>Total taps: {student.totalTaps}</span>
+        <span>Taps (24h): {student.tapsLast24h}</span>
+        <span>Anomalies: {student.anomalyCount}</span>
+        {student.timeInsideFormatted ? <span>Inside for: {student.timeInsideFormatted}</span> : null}
+      </div>
     </div>
   );
 }

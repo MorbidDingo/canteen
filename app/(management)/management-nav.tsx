@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -10,9 +11,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -22,20 +20,23 @@ import {
   GraduationCap,
   ScrollText,
   LogOut,
-  Settings,
-  Users,
-  Upload,
-  BookOpen,
   Menu,
   ClipboardCheck,
+  BookOpen,
+  Upload,
+  Users,
+  ShieldCheck,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/management", label: "Home", icon: LayoutGrid },
-  { href: "/management/cards", label: "Cards", icon: CreditCard },
-  { href: "/management/students", label: "Students", icon: GraduationCap },
+  { href: "/management/accounts", label: "Accounts", icon: ShieldCheck },
   { href: "/management/parents", label: "Parents", icon: Users },
+  { href: "/management/students", label: "Students", icon: GraduationCap },
+  { href: "/management/cards", label: "Cards", icon: CreditCard },
   { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },
@@ -43,118 +44,132 @@ const links = [
   { href: "/management/library/books", label: "Library", icon: BookOpen },
 ];
 
-const mobileGroups = [
-  {
-    label: "Organisational",
-    links: [
-      { href: "/management", label: "Home", icon: LayoutGrid },
-      { href: "/management/cards", label: "Cards", icon: CreditCard },
-      { href: "/management/students", label: "Students", icon: GraduationCap },
-      { href: "/management/parents", label: "Parents", icon: Users },
-      { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
-    ],
-  },
-  {
-    label: "Statistics & Logs",
-    links: [
-      { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
-      { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },
-      { href: "/management/audit", label: "Audit Log", icon: ScrollText },
-    ],
-  },
-  {
-    label: "Library",
-    links: [
-      { href: "/management/library/books", label: "Books", icon: BookOpen },
-      { href: "/management/library/bulk-upload", label: "Bulk Upload", icon: Upload },
-      { href: "/management/library/statistics", label: "Statistics", icon: BarChart3 },
-    ],
-  },
-];
+function doSignOut() {
+  signOut({
+    fetchOptions: {
+      onSuccess: () => {
+        window.location.href = "/login";
+      },
+    },
+  });
+}
 
 export function ManagementNav() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("management-nav-collapsed");
+    setCollapsed(stored === "1");
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("management-nav-collapsed", next ? "1" : "0");
+      return next;
+    });
+  };
 
   const isLinkActive = (href: string) => {
-    if (href.startsWith("/management/library")) {
-      return pathname.startsWith("/management/library");
-    }
-    return pathname === href;
+    if (href.startsWith("/management/library")) return pathname.startsWith("/management/library");
+    if (href === "/management") return pathname === "/management";
+    return pathname.startsWith(href);
   };
 
   return (
-    <div className="border-b bg-background/95 backdrop-blur">
-      <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <div className="flex items-center gap-1 min-w-0">
-          <Settings className="h-5 w-5 text-[#1a3a8f] mr-2 shrink-0" />
-          <span className="font-bold text-lg hidden sm:inline shrink-0">Management</span>
-          <nav className="hidden md:flex items-center gap-1 ml-4">
+    <>
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 border-b border-amber-200/70 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 backdrop-blur">
+        <div className="h-full px-3 flex items-center justify-between">
+          <p className="font-semibold text-amber-900">Management</p>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="border-amber-200">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuLabel>Navigation</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {links.map(({ href, label, icon: Icon }) => (
+                  <DropdownMenuItem key={href} asChild>
+                    <Link href={href} className={cn("gap-2", isLinkActive(href) && "font-semibold")}>
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={doSignOut} className="text-destructive focus:text-destructive gap-2">
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
+      <div className="h-14 lg:hidden" />
+
+      <aside
+        className={cn(
+          "hidden lg:flex fixed top-0 left-0 z-40 h-screen border-r border-amber-200/60 bg-gradient-to-b from-amber-50 to-orange-50/70 backdrop-blur transition-all duration-300",
+          collapsed ? "w-20" : "w-64",
+        )}
+      >
+        <div className="flex h-full w-full flex-col p-3">
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-amber-200/70 bg-white/60 px-2 py-2">
+            <span className={cn("text-sm font-semibold text-amber-900", collapsed && "sr-only")}>Management</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-800 hover:text-amber-900 hover:bg-amber-100"
+              onClick={toggleCollapsed}
+            >
+              {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
             {links.map(({ href, label, icon: Icon }) => {
               const isActive = isLinkActive(href);
               return (
-                <Link key={href} href={href}>
-                  <Button
-                    variant={isActive ? "secondary" : "ghost"}
-                    size="sm"
-                    className={cn(
-                      "gap-1.5 text-xs sm:text-sm",
-                      isActive && "font-semibold",
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{label}</span>
-                  </Button>
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center rounded-xl px-3 py-2 text-sm transition-colors",
+                    isActive
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "text-amber-900 hover:bg-amber-100",
+                    collapsed && "justify-center px-2",
+                  )}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className={cn("ml-2 truncate", collapsed && "hidden")}>{label}</span>
                 </Link>
               );
             })}
           </nav>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="md:hidden ml-2">
-                <Menu className="h-4 w-4" />
-                Menu
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel>Management Navigation</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {mobileGroups.map((group) => (
-                <DropdownMenuSub key={group.label}>
-                  <DropdownMenuSubTrigger>{group.label}</DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="w-56">
-                    {group.links.map(({ href, label, icon: Icon }) => (
-                      <DropdownMenuItem key={href} asChild>
-                        <Link href={href} className={cn(isLinkActive(href) && "font-semibold")}>
-                          <Icon className="h-4 w-4" />
-                          {label}
-                        </Link>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              "mt-3 text-destructive hover:text-destructive hover:bg-red-50",
+              collapsed ? "justify-center px-2" : "justify-start",
+            )}
+            onClick={doSignOut}
+            title={collapsed ? "Sign Out" : undefined}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span className={cn("ml-2", collapsed && "hidden")}>Sign Out</span>
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            signOut({
-              fetchOptions: {
-                onSuccess: () => {
-                  window.location.href = "/login";
-                },
-              },
-            })
-          }
-          className="gap-2 text-destructive"
-        >
-          <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline">Sign Out</span>
-        </Button>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }

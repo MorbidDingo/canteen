@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, user } from "@/lib/db/schema";
-import { or, ilike, eq, and, isNull, isNotNull, asc, sql } from "drizzle-orm";
+import { or, ilike, eq, and, isNull, isNotNull, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     const rows = await db
       .select({ className: child.className, section: child.section })
       .from(child)
-      .where(isNotNull(child.className))
+      .innerJoin(user, eq(user.id, child.parentId))
+      .where(and(isNotNull(child.className), eq(user.role, "PARENT")))
       .groupBy(child.className, child.section)
       .orderBy(asc(child.className), asc(child.section));
     return NextResponse.json(rows);
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       })
       .from(child)
       .innerJoin(user, eq(user.id, child.parentId))
-      .where(and(...conditions))
+      .where(and(eq(user.role, "PARENT"), ...conditions))
       .orderBy(asc(child.name));
 
     return NextResponse.json(results);
@@ -72,10 +73,13 @@ export async function GET(request: NextRequest) {
     .from(child)
     .innerJoin(user, eq(user.id, child.parentId))
     .where(
-      or(
-        ilike(child.name, pattern),
-        ilike(child.grNumber, pattern),
-        ilike(user.name, pattern)
+      and(
+        eq(user.role, "PARENT"),
+        or(
+          ilike(child.name, pattern),
+          ilike(child.grNumber, pattern),
+          ilike(user.name, pattern),
+        ),
       )
     )
     .limit(20);

@@ -467,13 +467,13 @@ export default function KioskPage() {
         <div className="max-w-lg w-full text-center space-y-5">
           {orderLoading ? (
             <>
-              <Loader2 className="h-16 w-16 animate-spin text-[#1a3a8f] mx-auto" />
-              <h1 className="text-2xl font-bold text-[#1a3a8f]">Checking pre-orders...</h1>
+              <Loader2 className="h-16 w-16 animate-spin text-[#d4891a] mx-auto" />
+              <h1 className="text-2xl font-bold text-[#d4891a]">Checking pre-orders...</h1>
             </>
           ) : (
             <>
-              <CreditCard className="h-20 w-20 text-[#1a3a8f] mx-auto animate-pulse" />
-              <h1 className="text-3xl font-bold text-[#1a3a8f]">Tap Your RFID Card</h1>
+              <CreditCard className="h-20 w-20 text-[#d4891a] mx-auto animate-pulse" />
+              <h1 className="text-3xl font-bold text-[#d4891a]">Tap Your RFID Card</h1>
               <p className="text-muted-foreground">
                 If a pre-order/subscription exists for the current break, it will be placed automatically.
                 Otherwise you can select items and place order.
@@ -571,7 +571,7 @@ export default function KioskPage() {
               onClick={() => setActiveCategory(cat.key)}
               className={`text-sm whitespace-nowrap px-4 py-2 ${
                 activeCategory === cat.key
-                  ? "bg-[#1a3a8f] hover:bg-[#15307a]"
+                  ? "bg-[#d4891a] hover:bg-[#b87314]"
                   : ""
               }`}
             >
@@ -648,7 +648,7 @@ export default function KioskPage() {
                           <span className="text-[#2eab57] font-bold">Rs{item.discountedPrice}</span>
                         </div>
                       ) : (
-                        <p className="text-[#1a3a8f] font-bold">Rs{item.price}</p>
+                        <p className="text-[#d4891a] font-bold">Rs{item.price}</p>
                       )}
                     </CardContent>
                   </Card>
@@ -662,8 +662,8 @@ export default function KioskPage() {
           <div className="absolute bottom-0 left-0 right-0 bg-white border-t shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-5 py-3 z-20">
             <div className="flex items-center justify-between max-w-4xl mx-auto">
               <div className="flex items-center gap-3">
-                <div className="bg-[#1a3a8f]/10 rounded-full p-2">
-                  <ShoppingCart className="h-5 w-5 text-[#1a3a8f]" />
+                <div className="bg-[#d4891a]/10 rounded-full p-2">
+                  <ShoppingCart className="h-5 w-5 text-[#d4891a]" />
                 </div>
                 <div>
                   <p className="font-semibold">
@@ -709,7 +709,7 @@ export default function KioskPage() {
 
             <h2 className="text-3xl font-bold text-[#2eab57] mb-4">ORDER PLACED!</h2>
 
-            <Card className="bg-[#1a3a8f] text-white mb-4">
+            <Card className="bg-[#d4891a] text-white mb-4">
               <CardContent className="py-6 text-center">
                 <p className="text-sm opacity-75 mb-1">Your Token</p>
                 <p className="text-5xl font-mono font-bold tracking-widest">{result.tokenCode}</p>

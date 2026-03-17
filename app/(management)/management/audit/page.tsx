@@ -52,6 +52,10 @@ const ACTION_LABELS: Record<string, string> = {
   STUDENT_DELETED: "Student Deleted",
   UNITS_UPDATED: "Units Updated",
   UNITS_RESET: "Units Reset",
+  ACCOUNT_CREATED: "Account Created",
+  ACCOUNT_UPDATED: "Account Updated",
+  ACCOUNT_DELETED: "Account Deleted",
+  ACCOUNT_BULK_CREATED: "Accounts Bulk Created",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -65,6 +69,10 @@ const ACTION_COLORS: Record<string, string> = {
   STUDENT_DELETED: "bg-red-100 text-red-800",
   UNITS_UPDATED: "bg-blue-100 text-blue-800",
   UNITS_RESET: "bg-orange-100 text-orange-800",
+  ACCOUNT_CREATED: "bg-amber-100 text-amber-800",
+  ACCOUNT_UPDATED: "bg-yellow-100 text-yellow-800",
+  ACCOUNT_DELETED: "bg-red-100 text-red-800",
+  ACCOUNT_BULK_CREATED: "bg-orange-100 text-orange-800",
 };
 
 function parseDetails(details: string | null): Record<string, unknown> | null {

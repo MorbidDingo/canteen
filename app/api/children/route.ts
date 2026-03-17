@@ -3,12 +3,17 @@ import { db } from "@/lib/db";
 import { child, wallet, parentControl } from "@/lib/db/schema";
 import { eq, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
+import { ensureGeneralSelfProfile } from "@/lib/general-account";
 
 // GET /api/children — list all children for the logged-in parent
 export async function GET() {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.user.role === "GENERAL") {
+    await ensureGeneralSelfProfile(session.user.id, session.user.name);
   }
 
   const children = await db
@@ -46,6 +51,13 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (session.user.role === "GENERAL") {
+    return NextResponse.json(
+      { error: "General accounts do not support child management" },
+      { status: 403 },
+    );
   }
 
   const body = await request.json();

@@ -138,7 +138,7 @@ export default function LibraryStatisticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-[#1a3a8f]" />
+            <BookOpen className="h-6 w-6 text-[#d4891a]" />
             Library Statistics
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -170,7 +170,7 @@ export default function LibraryStatisticsPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KPICard
-          icon={<BookOpen className="h-5 w-5 text-[#1a3a8f]" />}
+          icon={<BookOpen className="h-5 w-5 text-[#d4891a]" />}
           label="Total Books"
           value={overview.totalBooks}
         />

@@ -18,9 +18,11 @@ export default async function ManagementLayout({
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-[#1a3a8f]/5 to-background">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50/50 to-background">
       <ManagementNav />
-      {children}
+      <main className="px-3 py-4 lg:pl-72 lg:pr-6 lg:py-6">
+        {children}
+      </main>
     </div>
   );
 }

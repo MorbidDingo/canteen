@@ -98,6 +98,7 @@ export default function CartPage() {
     getTotal,
   } = useCartStore();
   const { data: session } = useSession();
+  const isGeneralAccount = session?.user?.role === "GENERAL";
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ONLINE");
@@ -151,6 +152,12 @@ export default function CartPage() {
       fetchWallets();
     }
   }, [paymentMethod, fetchWallets]);
+
+  useEffect(() => {
+    if (isGeneralAccount && paymentMethod === "WALLET") {
+      setPaymentMethod("ONLINE");
+    }
+  }, [isGeneralAccount, paymentMethod]);
 
   useEffect(() => {
     (async () => {
@@ -841,41 +848,47 @@ export default function CartPage() {
                     )}
                   </button>
 
-                  {/* Wallet Option */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("WALLET")}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
-                      paymentMethod === "WALLET"
-                        ? "border-emerald-500 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 shadow-md shadow-emerald-500/10"
-                        : "border-border hover:border-emerald-500/30 hover:bg-muted/50"
-                    }`}
-                  >
-                    <div
-                      className={`rounded-full p-2.5 transition-all duration-300 ${
+                  {!isGeneralAccount && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("WALLET")}
+                      className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
                         paymentMethod === "WALLET"
-                          ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
-                          : "bg-muted text-muted-foreground"
+                          ? "border-emerald-500 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 shadow-md shadow-emerald-500/10"
+                          : "border-border hover:border-emerald-500/30 hover:bg-muted/50"
                       }`}
                     >
-                      <Wallet className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Wallet</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Instant pay
-                      </p>
-                    </div>
-                    {paymentMethod === "WALLET" && (
-                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5 animate-scale-in">
-                        <Check className="h-3 w-3 text-white" />
+                      <div
+                        className={`rounded-full p-2.5 transition-all duration-300 ${
+                          paymentMethod === "WALLET"
+                            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        <Wallet className="h-5 w-5" />
                       </div>
-                    )}
-                  </button>
+                      <div>
+                        <p className="text-sm font-semibold">Wallet</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Instant pay
+                        </p>
+                      </div>
+                      {paymentMethod === "WALLET" && (
+                        <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5 animate-scale-in">
+                          <Check className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  )}
                 </div>
                 {children.length > 1 && (
                   <p className="text-[11px] text-muted-foreground">
                     Online checkout currently supports one child per order. Use Wallet for multi-child checkout.
+                  </p>
+                )}
+                {isGeneralAccount && (
+                  <p className="text-[11px] text-muted-foreground">
+                    General accounts currently checkout using Razorpay.
                   </p>
                 )}
 

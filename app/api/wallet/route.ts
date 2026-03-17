@@ -11,6 +11,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (session.user.role === "GENERAL") {
+    return NextResponse.json([]);
+  }
+
   const children = await db
     .select({ id: child.id, name: child.name, rfidCardId: child.rfidCardId })
     .from(child)

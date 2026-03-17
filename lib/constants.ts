@@ -82,20 +82,24 @@ export const MENU_CATEGORY_COLORS: Record<MenuCategory, string> = {
 
 export const USER_ROLES = {
   PARENT: "PARENT",
+  GENERAL: "GENERAL",
   ADMIN: "ADMIN",
   OPERATOR: "OPERATOR",
   MANAGEMENT: "MANAGEMENT",
   LIB_OPERATOR: "LIB_OPERATOR",
+  ATTENDANCE: "ATTENDANCE",
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
 
 export const USER_ROLE_LABELS: Record<UserRole, string> = {
   PARENT: "Parent",
+  GENERAL: "General / Teacher",
   ADMIN: "Admin",
   OPERATOR: "Operator",
   MANAGEMENT: "Management",
   LIB_OPERATOR: "Library Operator",
+  ATTENDANCE: "Attendance",
 };
 
 // ─── Wallet Transaction Types ────────────────────────────

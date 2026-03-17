@@ -7,7 +7,7 @@ async function createUserWithRole(
   email: string,
   password: string,
   name: string,
-  role: "PARENT" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR" | "ATTENDANCE"
+  role: "PARENT" | "GENERAL" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR" | "ATTENDANCE"
 ) {
   const existing = await db
     .select()

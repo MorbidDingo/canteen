@@ -78,8 +78,8 @@ export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl
       label: "Today's Orders",
       value: summary.totalOrders,
       icon: ShoppingCart,
-      color: "text-[#1a3a8f]",
-      bgColor: "bg-[#1a3a8f]/10",
+      color: "text-[#d4891a]",
+      bgColor: "bg-[#d4891a]/10",
     },
     {
       label: "Revenue",
@@ -121,7 +121,7 @@ export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl
       label: "Served",
       value: summary.byStatus.SERVED,
       icon: CheckCircle,
-      color: "text-[#1a3a8f]",
+      color: "text-[#d4891a]",
     },
     {
       label: "Cancelled",
@@ -156,8 +156,8 @@ export function DailySummary({ summaryUrl = "/api/admin/summary" }: { summaryUrl
         <Card className="overflow-hidden">
           <CardContent className="py-3 px-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg p-2 bg-[#1a3a8f]/10">
-                <ShoppingCart className="h-4 w-4 text-[#1a3a8f]" />
+              <div className="rounded-lg p-2 bg-[#d4891a]/10">
+                <ShoppingCart className="h-4 w-4 text-[#d4891a]" />
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground truncate">Pre-Orders Today</p>

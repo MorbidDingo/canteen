@@ -14,6 +14,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (session.user.role === "GENERAL") {
+    return NextResponse.json(
+      { error: "General accounts do not support child management" },
+      { status: 403 },
+    );
+  }
+
   const { id } = await params;
   const body = await request.json();
   const { name, grNumber, className, section } = body;

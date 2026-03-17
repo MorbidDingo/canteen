@@ -11,10 +11,10 @@ export default function KioskLayout({
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* certe branding header */}
-      {/* <header className="bg-[#1a3a8f] text-white px-6 py-2 flex items-center justify-between shadow-lg">
+      {/* <header className="bg-[#d4891a] text-white px-6 py-2 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-            <span className="text-[#1a3a8f] font-bold text-lg">
+            <span className="text-[#d4891a] font-bold text-lg">
               <Image
                 src="/cropped-logo-venus-1-2.png"
                 alt="certe Logo"

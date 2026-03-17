@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import {
   Card,
   CardContent,
@@ -45,6 +46,8 @@ type Child = {
 
 export default function ChildrenPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isGeneralAccount = session?.user?.role === "GENERAL";
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -74,6 +77,26 @@ export default function ChildrenPage() {
   useEffect(() => {
     fetchChildren();
   }, [fetchChildren]);
+
+  if (isGeneralAccount) {
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>General Account</CardTitle>
+            <CardDescription>
+              General and teacher accounts do not use child profiles.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => router.push("/settings")}>
+              Back to Settings
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const resetForm = () => {
     setFormData({ name: "", grNumber: "", className: "", section: "" });
@@ -155,7 +178,7 @@ export default function ChildrenPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6 text-[#1a3a8f]" />
+            <Users className="h-6 w-6 text-[#d4891a]" />
             My Children
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -251,7 +274,7 @@ export default function ChildrenPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <User className="h-5 w-5 text-[#1a3a8f]" />
+                    <User className="h-5 w-5 text-[#d4891a]" />
                     {child.name}
                   </CardTitle>
                   <Button

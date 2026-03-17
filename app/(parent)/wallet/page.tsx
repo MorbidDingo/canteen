@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import {
   Card,
   CardContent,
@@ -217,6 +218,8 @@ const WALLET_CSS = `
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function WalletPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isGeneralAccount = session?.user?.role === "GENERAL";
   const [wallets, setWallets]                 = useState<ChildWallet[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [transactions, setTransactions]       = useState<Transaction[]>([]);
@@ -504,6 +507,30 @@ export default function WalletPage() {
   );
 
   // ── Loading / empty ───────────────────────────────────────────────────────
+  if (isGeneralAccount) {
+    return (
+      <div className="container mx-auto max-w-lg px-4 py-6 space-y-4">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="-ml-2 w-fit gap-1.5"
+          onClick={() => router.push("/settings")}
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Settings
+        </Button>
+        <Card>
+          <CardContent className="pt-8 pb-8 text-center">
+            <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground">
+              Wallet is not available for general and teacher accounts.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">

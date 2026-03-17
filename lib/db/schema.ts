@@ -13,7 +13,9 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updated_at").notNull(),
 
   // App-specific fields
-  role: text("role", { enum: ["PARENT", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR", "ATTENDANCE"] })
+  role: text("role", {
+    enum: ["PARENT", "GENERAL", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR", "ATTENDANCE"],
+  })
     .notNull()
     .default("PARENT"),
   phone: text("phone"),
@@ -81,6 +83,23 @@ export const child = pgTable("child", {
   lastGateTapAt: timestamp("last_gate_tap_at"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const temporaryRfidAccess = pgTable("temporary_rfid_access", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  temporaryRfidCardId: text("temporary_rfid_card_id").notNull().unique(),
+  accessType: text("access_type", { enum: ["STUDENT_TEMP", "GUEST_TEMP"] })
+    .notNull()
+    .default("STUDENT_TEMP"),
+  validFrom: timestamp("valid_from").notNull().$defaultFn(() => new Date()),
+  validUntil: timestamp("valid_until").notNull(),
+  revokedAt: timestamp("revoked_at"),
+  createdByOperatorId: text("created_by_operator_id").references(() => user.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
 // ─── Wallet ──────────────────────────────────────────────
@@ -248,8 +267,14 @@ export const childRelations = relations(child, ({ one, many }) => ({
   preOrders: many(preOrder),
   bookIssuances: many(bookIssuance),
   gateLogs: many(gateLog),
+  temporaryRfidAccesses: many(temporaryRfidAccess),
   parentNotifications: many(parentNotification),
   certeSubscriptionPenaltyUsages: many(certeSubscriptionPenaltyUsage),
+}));
+
+export const temporaryRfidAccessRelations = relations(temporaryRfidAccess, ({ one }) => ({
+  child: one(child, { fields: [temporaryRfidAccess.childId], references: [child.id] }),
+  operator: one(user, { fields: [temporaryRfidAccess.createdByOperatorId], references: [user.id] }),
 }));
 
 export const walletRelations = relations(wallet, ({ one, many }) => ({

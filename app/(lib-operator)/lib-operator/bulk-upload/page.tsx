@@ -239,9 +239,9 @@ export default function LibOperatorBulkUploadPage() {
   return (
     <div className="pb-8">
       <div className="container mx-auto max-w-5xl space-y-6 px-4 py-6">
-        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+        <div className="rounded-2xl border border-[#d4891a]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
               <BookOpen className="h-5 w-5 text-white" />
             </div>
             <div>

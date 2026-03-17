@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import {
   Card,
   CardContent,
@@ -85,6 +86,8 @@ type ControlMode = "canteen" | "library";
 
 export default function ControlsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isGeneralAccount = session?.user?.role === "GENERAL";
   const [children, setChildren] = useState<ChildControl[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [controlMode, setControlMode] = useState<ControlMode>("canteen");
@@ -283,6 +286,26 @@ export default function ControlsPage() {
     }
   };
 
+  if (isGeneralAccount) {
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Controls Not Applicable</CardTitle>
+            <CardDescription>
+              General and teacher accounts do not support child-specific controls.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={() => router.push("/settings")}>
+              Back to Settings
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -332,7 +355,7 @@ export default function ControlsPage() {
 
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Shield className="h-6 w-6 text-[#1a3a8f]" />
+          <Shield className="h-6 w-6 text-[#d4891a]" />
           Controls
         </h1>
         <p className="text-sm text-muted-foreground mt-1">

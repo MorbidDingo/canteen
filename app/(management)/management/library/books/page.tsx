@@ -430,7 +430,7 @@ export default function LibraryBooksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-[#1a3a8f]" />
+            <BookOpen className="h-6 w-6 text-[#d4891a]" />
             Book Catalog
           </h1>
           <p className="text-sm text-muted-foreground mt-1">

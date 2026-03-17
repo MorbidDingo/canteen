@@ -20,6 +20,7 @@ import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { getCurrentBreakSlot, parseBreakSlots } from "@/lib/break-slots";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
 type IncomingItem = { menuItemId: string; quantity: number };
 
@@ -68,20 +69,15 @@ async function placeOrderFromItems(
     return { success: false, reason: "Invalid request" };
   }
 
-  const children = await db
-    .select()
-    .from(child)
-    .where(eq(child.rfidCardId, rfidCardId))
-    .limit(1);
-
-  if (children.length === 0) {
+  const resolved = await resolveChildByRfid(rfidCardId);
+  if (!resolved) {
     return {
       success: false,
       reason: "Unknown card. Please ask the school office to register your card.",
     };
   }
 
-  const studentChild = children[0];
+  const studentChild = resolved.child;
 
   async function notifyBlockedAttempt(reason: string) {
     await notifyParentForChild({
@@ -450,20 +446,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, reason: "Invalid request" }, { status: 400 });
     }
 
-    const children = await db
-      .select()
-      .from(child)
-      .where(eq(child.rfidCardId, rfidCardId))
-      .limit(1);
+    const resolved = await resolveChildByRfid(rfidCardId);
 
-    if (children.length === 0) {
+    if (!resolved) {
       return NextResponse.json(
         { success: false, reason: "Unknown card. Please ask the school office to register your card." },
         { status: 200 }
       );
     }
 
-    const studentChild = children[0];
+    const studentChild = resolved.child;
 
     if (mode === "AUTO_PREORDER") {
       const settings = await getAppSettings();

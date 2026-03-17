@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 import { z } from "zod";
@@ -36,6 +36,8 @@ const registerSchema = z
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -107,9 +109,7 @@ export default function RegisterPage() {
                 value={form.name}
                 onChange={(e) => updateField("name", e.target.value)}
               />
-              {errors.name && (
-                <p className="text-xs text-destructive">{errors.name}</p>
-              )}
+              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
             </div>
 
             <div className="space-y-2">
@@ -121,9 +121,7 @@ export default function RegisterPage() {
                 value={form.email}
                 onChange={(e) => updateField("email", e.target.value)}
               />
-              {errors.email && (
-                <p className="text-xs text-destructive">{errors.email}</p>
-              )}
+              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
 
             <div className="space-y-2">
@@ -135,38 +133,62 @@ export default function RegisterPage() {
                 value={form.phone}
                 onChange={(e) => updateField("phone", e.target.value)}
               />
-              {errors.phone && (
-                <p className="text-xs text-destructive">{errors.phone}</p>
-              )}
+              {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => updateField("password", e.target.value)}
-              />
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password}</p>
-              )}
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="********"
+                  value={form.password}
+                  onChange={(e) => updateField("password", e.target.value)}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={form.confirmPassword}
-                onChange={(e) => updateField("confirmPassword", e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="********"
+                  value={form.confirmPassword}
+                  onChange={(e) => updateField("confirmPassword", e.target.value)}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               {errors.confirmPassword && (
-                <p className="text-xs text-destructive">
-                  {errors.confirmPassword}
-                </p>
+                <p className="text-xs text-destructive">{errors.confirmPassword}</p>
               )}
             </div>
           </CardContent>
@@ -181,10 +203,7 @@ export default function RegisterPage() {
             </Button>
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-medium text-primary hover:underline"
-              >
+              <Link href="/login" className="font-medium text-primary hover:underline">
                 Sign in
               </Link>
             </p>

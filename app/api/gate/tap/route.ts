@@ -7,6 +7,7 @@ import { broadcast } from "@/lib/sse";
 import { isMissingRelationError } from "@/lib/db-errors";
 import { sanitizeImageUrl } from "@/lib/image-url";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
 /**
  * POST /api/gate/tap
@@ -45,21 +46,9 @@ export async function POST(request: Request) {
     const trimmedCardId = rfidCardId.trim();
     const now = new Date();
 
-    // 1. Look up child by RFID card with presence status
-    const [student] = await db
-      .select({
-        id: child.id,
-        name: child.name,
-        grNumber: child.grNumber,
-        className: child.className,
-        section: child.section,
-        image: child.image,
-        presenceStatus: child.presenceStatus,
-        lastGateTapAt: child.lastGateTapAt,
-      })
-      .from(child)
-      .where(eq(child.rfidCardId, trimmedCardId))
-      .limit(1);
+    // 1. Look up child by permanent/temporary RFID card with presence status
+    const resolved = await resolveChildByRfid(trimmedCardId);
+    const student = resolved?.child;
 
     if (!student) {
       return NextResponse.json(
@@ -178,6 +167,7 @@ export async function POST(request: Request) {
       direction: expectedDirection,
       presenceStatus: newPresenceStatus,
       tappedAt: now.toISOString(),
+      cardSource: resolved?.source || "PERMANENT",
     };
 
     // Push live updates to attendance screens without refetching full records.

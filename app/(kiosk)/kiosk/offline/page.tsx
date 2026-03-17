@@ -126,7 +126,7 @@ export default function KioskOfflineOpsPage() {
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-[#1a3a8f]">Kiosk Offline Ops</h1>
+        <h1 className="text-2xl font-bold text-[#d4891a]">Kiosk Offline Ops</h1>
         <Link href="/kiosk">
           <Button variant="outline">Back to Kiosk</Button>
         </Link>

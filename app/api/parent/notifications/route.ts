@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   const role = session.user.role;
-  if (role !== "PARENT") {
+  if (role !== "PARENT" && role !== "GENERAL") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const role = session.user.role;
-  if (role !== "PARENT") {
+  if (role !== "PARENT" && role !== "GENERAL") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -37,7 +37,7 @@ export function BulkUploadStatusPanel({
               cx="32"
               cy="32"
               r={radius}
-              className="stroke-[#1a3a8f]"
+              className="stroke-[#d4891a]"
               strokeWidth="6"
               fill="none"
               strokeLinecap="round"
@@ -69,14 +69,14 @@ export function BulkUploadStatusPanel({
                   className={cn(
                     "relative flex h-8 items-center overflow-hidden rounded-full border px-3 text-xs font-medium whitespace-nowrap",
                     isDone && "border-green-500/40 bg-green-50 text-green-700",
-                    isActive && "border-[#1a3a8f]/40 bg-[#1a3a8f]/10 text-[#1a3a8f]",
+                    isActive && "border-[#d4891a]/40 bg-[#d4891a]/10 text-[#d4891a]",
                     !isDone && !isActive && "border-muted-foreground/30 text-muted-foreground",
                   )}
                 >
                   <span
                     className={cn(
                       "absolute inset-y-0 left-0 transition-all duration-300",
-                      isDone ? "bg-green-500/20" : "bg-[#1a3a8f]/20",
+                      isDone ? "bg-green-500/20" : "bg-[#d4891a]/20",
                     )}
                     style={{ width: `${progress}%` }}
                   />

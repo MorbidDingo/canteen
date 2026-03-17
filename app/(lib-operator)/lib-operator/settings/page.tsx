@@ -88,7 +88,7 @@ export default function LibOperatorSettingsPage() {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-[#1a3a8f]" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#d4891a]" />
           <p className="text-sm text-muted-foreground">Loading settings...</p>
         </div>
       </div>
@@ -98,10 +98,10 @@ export default function LibOperatorSettingsPage() {
   return (
     <div className="pb-24">
       <div className="container mx-auto max-w-2xl px-4 pt-5">
-        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+        <div className="rounded-2xl border border-[#d4891a]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
                 <Settings className="h-5 w-5 text-white" />
               </div>
               <div>
@@ -122,7 +122,7 @@ export default function LibOperatorSettingsPage() {
                 onClick={handleSave}
                 disabled={saving}
                 size="sm"
-                className="bg-[#1a3a8f] shadow-sm hover:bg-[#1a3a8f]/90"
+                className="bg-[#d4891a] shadow-sm hover:bg-[#d4891a]/90"
               >
                 {saving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -138,11 +138,11 @@ export default function LibOperatorSettingsPage() {
 
       <div className="container mx-auto max-w-2xl space-y-4 px-4 py-6">
         {/* Issue Rules */}
-        <Card className="border-[#1a3a8f]/15 shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 bg-gradient-to-r from-[#1a3a8f]/5 to-transparent border-b border-[#1a3a8f]/10">
+        <Card className="border-[#d4891a]/15 shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 bg-gradient-to-r from-[#d4891a]/5 to-transparent border-b border-[#d4891a]/10">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-md bg-[#1a3a8f]/10 flex items-center justify-center">
-                <BookOpen className="h-4 w-4 text-[#1a3a8f]" />
+              <div className="h-8 w-8 rounded-md bg-[#d4891a]/10 flex items-center justify-center">
+                <BookOpen className="h-4 w-4 text-[#d4891a]" />
               </div>
               <div>
                 <CardTitle className="text-base">Issue Rules</CardTitle>
@@ -209,11 +209,11 @@ export default function LibOperatorSettingsPage() {
         </Card>
 
         {/* Return Rules */}
-        <Card className="border-[#1a3a8f]/15 shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 bg-gradient-to-r from-[#1a3a8f]/5 to-transparent border-b border-[#1a3a8f]/10">
+        <Card className="border-[#d4891a]/15 shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 bg-gradient-to-r from-[#d4891a]/5 to-transparent border-b border-[#d4891a]/10">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-md bg-[#1a3a8f]/10 flex items-center justify-center">
-                <RotateCcw className="h-4 w-4 text-[#1a3a8f]" />
+              <div className="h-8 w-8 rounded-md bg-[#d4891a]/10 flex items-center justify-center">
+                <RotateCcw className="h-4 w-4 text-[#d4891a]" />
               </div>
               <div>
                 <CardTitle className="text-base">Return Rules</CardTitle>
@@ -241,11 +241,11 @@ export default function LibOperatorSettingsPage() {
         </Card>
 
         {/* Fine Settings */}
-        <Card className="border-[#1a3a8f]/15 shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 bg-gradient-to-r from-[#1a3a8f]/5 to-transparent border-b border-[#1a3a8f]/10">
+        <Card className="border-[#d4891a]/15 shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 bg-gradient-to-r from-[#d4891a]/5 to-transparent border-b border-[#d4891a]/10">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-md bg-[#1a3a8f]/10 flex items-center justify-center">
-                <IndianRupee className="h-4 w-4 text-[#1a3a8f]" />
+              <div className="h-8 w-8 rounded-md bg-[#d4891a]/10 flex items-center justify-center">
+                <IndianRupee className="h-4 w-4 text-[#d4891a]" />
               </div>
               <div>
                 <CardTitle className="text-base">Fine Settings</CardTitle>
@@ -269,7 +269,7 @@ export default function LibOperatorSettingsPage() {
                     onClick={() => updateSetting("fine_mode", mode)}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${
                       fineMode === mode
-                        ? "bg-[#1a3a8f] text-white"
+                        ? "bg-[#d4891a] text-white"
                         : "bg-background text-muted-foreground hover:bg-muted"
                     }`}
                   >
@@ -314,11 +314,11 @@ export default function LibOperatorSettingsPage() {
         </Card>
 
         {/* Access Control */}
-        <Card className="border-[#1a3a8f]/15 shadow-sm overflow-hidden">
-          <CardHeader className="pb-3 bg-gradient-to-r from-[#1a3a8f]/5 to-transparent border-b border-[#1a3a8f]/10">
+        <Card className="border-[#d4891a]/15 shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 bg-gradient-to-r from-[#d4891a]/5 to-transparent border-b border-[#d4891a]/10">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-md bg-[#1a3a8f]/10 flex items-center justify-center">
-                <ShieldCheck className="h-4 w-4 text-[#1a3a8f]" />
+              <div className="h-8 w-8 rounded-md bg-[#d4891a]/10 flex items-center justify-center">
+                <ShieldCheck className="h-4 w-4 text-[#d4891a]" />
               </div>
               <div>
                 <CardTitle className="text-base">Access Control</CardTitle>
@@ -343,7 +343,7 @@ export default function LibOperatorSettingsPage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
+          className="w-full bg-[#d4891a] hover:bg-[#d4891a]/90"
         >
           {saving ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -429,8 +429,8 @@ function ToggleField({
         role="switch"
         aria-checked={checked}
         onClick={onChange}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1a3a8f] focus-visible:ring-offset-2 ${
-          checked ? "bg-[#1a3a8f]" : "bg-gray-200"
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d4891a] focus-visible:ring-offset-2 ${
+          checked ? "bg-[#d4891a]" : "bg-gray-200"
         }`}
       >
         <span

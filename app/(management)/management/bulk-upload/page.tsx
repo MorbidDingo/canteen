@@ -326,7 +326,7 @@ export default function BulkUploadPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5 text-[#1a3a8f]" />
+            <Upload className="h-5 w-5 text-[#d4891a]" />
             Bulk Upload Students
           </CardTitle>
           <CardDescription>
@@ -345,7 +345,7 @@ export default function BulkUploadPage() {
                 type="file"
                 accept=".xlsx,.xls,.csv"
                 onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name ?? "")}
-                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#1a3a8f]/10 file:text-[#1a3a8f] hover:file:bg-[#1a3a8f]/20 cursor-pointer"
+                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[#d4891a]/10 file:text-[#d4891a] hover:file:bg-[#d4891a]/20 cursor-pointer"
               />
             </div>
             <div className="flex gap-2">
@@ -360,7 +360,7 @@ export default function BulkUploadPage() {
               <Button
                 onClick={handleUpload}
                 disabled={uploading || !selectedFileName}
-                className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
+                className="bg-[#d4891a] hover:bg-[#d4891a]/90"
               >
                 {uploading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -450,7 +450,7 @@ export default function BulkUploadPage() {
 
       {/* Send Credentials */}
       {results && newParentCount > 0 && (
-        <Card className="border-[#1a3a8f]/30">
+        <Card className="border-[#d4891a]/30">
           <CardContent className="py-4 flex items-center justify-between">
             <div>
               <p className="font-medium">
@@ -465,7 +465,7 @@ export default function BulkUploadPage() {
               <Button
                 onClick={handleSendCredentials}
                 disabled={sending || uploading}
-                className="bg-[#1a3a8f] hover:bg-[#1a3a8f]/90"
+                className="bg-[#d4891a] hover:bg-[#d4891a]/90"
               >
                 {sending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />

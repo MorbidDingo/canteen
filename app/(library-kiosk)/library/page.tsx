@@ -502,8 +502,8 @@ export default function LibraryTerminalPage() {
     return (
       <div className="flex flex-col max-h-screen items-center justify-center min-h-screen p-2 sm:p-8 overflow-x-hidden">
         <div className="text-center space-y-4 sm:space-y-6 max-w-md w-full">
-          <BookOpen className="h-14 w-14 sm:h-20 sm:w-20 mx-auto text-[#1a3a8f] animate-pulse" />
-          <h1 className="text-2xl sm:text-4xl font-bold text-[#1a3a8f]">Library Terminal</h1>
+          <BookOpen className="h-14 w-14 sm:h-20 sm:w-20 mx-auto text-[#d4891a] animate-pulse" />
+          <h1 className="text-2xl sm:text-4xl font-bold text-[#d4891a]">Library Terminal</h1>
           <p className="text-base sm:text-xl text-muted-foreground">
             Tap your RFID card to get started
           </p>
@@ -642,7 +642,7 @@ export default function LibraryTerminalPage() {
               setBarcodeAction("issue");
             }}
             disabled={Boolean(issueBlockedUntil)}
-            className="gap-2 flex-1 bg-[#1a3a8f] hover:bg-[#1a3a8f]/90 text-sm sm:text-base"
+            className="gap-2 flex-1 bg-[#d4891a] hover:bg-[#d4891a]/90 text-sm sm:text-base"
           >
             <BookUp className="h-4 w-4 sm:h-5 sm:w-5" />
             Issue a Book
@@ -851,7 +851,7 @@ export default function LibraryTerminalPage() {
         ) : searchResults.length > 0 ? (
           <div className="grid gap-2 sm:gap-3">
             {searchResults.map((searchBook) => (
-              <Card key={searchBook.id} className="hover:border-[#1a3a8f]/30 transition-colors">
+              <Card key={searchBook.id} className="hover:border-[#d4891a]/30 transition-colors">
                 <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-sm sm:text-base truncate">{searchBook.title}</h3>

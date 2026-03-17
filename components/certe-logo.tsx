@@ -42,7 +42,7 @@ export function CerteWordmark({ className, showPlus }: { className?: string; sho
         className,
       )}
     >
-      erte
+      certe
       {showPlus && (
         <sup className="text-[0.55em] font-bold ml-[1px] bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent">
           +

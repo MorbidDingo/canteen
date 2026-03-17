@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet } from "@/lib/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
 export async function GET(request: NextRequest) {
   const rfid = request.nextUrl.searchParams.get("rfid");
@@ -9,26 +10,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing rfid parameter" }, { status: 400 });
   }
 
-  // Look up child by RFID card ID
-  const result = await db
-    .select({
-      id: child.id,
-      name: child.name,
-      grNumber: child.grNumber,
-      className: child.className,
-      section: child.section,
-      rfidCardId: child.rfidCardId,
-      parentId: child.parentId,
-    })
-    .from(child)
-    .where(eq(child.rfidCardId, rfid))
-    .limit(1);
-
-  if (result.length === 0) {
+  const resolved = await resolveChildByRfid(rfid);
+  if (!resolved) {
     return NextResponse.json({ error: "Card not found or not assigned to any student" }, { status: 404 });
   }
 
-  const row = result[0];
+  const row = resolved.child;
   const siblingRows = await db
     .select({ id: child.id })
     .from(child)
@@ -49,7 +36,9 @@ export async function GET(request: NextRequest) {
     grNumber: row.grNumber,
     className: row.className,
     section: row.section,
-    rfidCardId: row.rfidCardId,
+    rfidCardId: row.permanentRfidCardId,
     walletBalance: familyWallet?.balance ?? 0,
+    cardSource: resolved.source,
+    temporaryValidUntil: resolved.temporaryAccess?.validUntil ?? null,
   });
 }

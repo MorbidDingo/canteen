@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
 
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const getDefaultRouteForRole = useCallback((role?: string | null) => {
@@ -87,7 +88,6 @@ export default function LoginPage() {
 
     toast.success("Signed in successfully!");
 
-    // Check user role and redirect accordingly
     const role = await resolveRoleWithRetry();
     router.push(getDefaultRouteForRole(role));
     router.refresh();
@@ -101,7 +101,9 @@ export default function LoginPage() {
             <CerteLogo size={60} />
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Sign in to your <CerteWordmark /> account</CardDescription>
+          <CardDescription>
+            Sign in to your <CerteWordmark /> account
+          </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -118,14 +120,29 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="********"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-primary transition-colors"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <div className="text-right">
                 <Link
                   href="/forgot-password"
@@ -147,10 +164,7 @@ export default function LoginPage() {
             </Button>
             <p className="text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <Link
-                href="/register"
-                className="font-medium text-primary hover:underline"
-              >
+              <Link href="/register" className="font-medium text-primary hover:underline">
                 Register
               </Link>
             </p>

@@ -240,7 +240,7 @@ export default function LibraryBulkUploadPage() {
     <div className="container mx-auto py-6 px-4 space-y-6">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <BookOpen className="h-6 w-6 text-[#1a3a8f]" />
+          <BookOpen className="h-6 w-6 text-[#d4891a]" />
           Library Bulk Upload
         </h1>
         <p className="text-sm text-muted-foreground mt-1">

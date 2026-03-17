@@ -160,7 +160,7 @@ function SequentialAssignment() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
-            <ListOrdered className="h-5 w-5 text-[#1a3a8f]" />
+            <ListOrdered className="h-5 w-5 text-[#d4891a]" />
             Sequential Card Assignment
           </CardTitle>
           <CardDescription>
@@ -188,7 +188,7 @@ function SequentialAssignment() {
                       }}
                       className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
                         selectedClass === c
-                          ? "border-[#1a3a8f] bg-[#1a3a8f] text-white"
+                          ? "border-[#d4891a] bg-[#d4891a] text-white"
                           : "hover:bg-muted"
                       }`}
                     >
@@ -204,7 +204,7 @@ function SequentialAssignment() {
                     <button
                       onClick={() => setSelectedSection(null)}
                       className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
-                        !selectedSection ? "border-[#1a3a8f] bg-[#1a3a8f] text-white" : "hover:bg-muted"
+                        !selectedSection ? "border-[#d4891a] bg-[#d4891a] text-white" : "hover:bg-muted"
                       }`}
                     >
                       All
@@ -215,7 +215,7 @@ function SequentialAssignment() {
                         onClick={() => setSelectedSection(s)}
                         className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
                           selectedSection === s
-                            ? "border-[#1a3a8f] bg-[#1a3a8f] text-white"
+                            ? "border-[#d4891a] bg-[#d4891a] text-white"
                             : "hover:bg-muted"
                         }`}
                       >
@@ -227,7 +227,7 @@ function SequentialAssignment() {
               )}
               {selectedClass && (
                 <Button
-                  className="w-full bg-[#1a3a8f] hover:bg-[#15307a]"
+                  className="w-full bg-[#d4891a] hover:bg-[#b87314]"
                   onClick={startAssignment}
                   disabled={loadingQueue}
                 >
@@ -289,7 +289,7 @@ function SequentialAssignment() {
       )}
 
       {/* Current student */}
-      <Card className="border-[#1a3a8f]/40">
+      <Card className="border-[#d4891a]/40">
         <CardContent className="py-6">
           <div className="text-center space-y-1">
             <p className="text-3xl font-bold">{current!.name}</p>
@@ -435,7 +435,7 @@ export default function ManagementCardsPage() {
           onClick={() => setMode("individual")}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
             mode === "individual"
-              ? "bg-[#1a3a8f] text-white"
+              ? "bg-[#d4891a] text-white"
               : "hover:bg-muted"
           }`}
         >
@@ -446,7 +446,7 @@ export default function ManagementCardsPage() {
           onClick={() => setMode("sequential")}
           className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
             mode === "sequential"
-              ? "bg-[#1a3a8f] text-white"
+              ? "bg-[#d4891a] text-white"
               : "hover:bg-muted"
           }`}
         >
@@ -463,7 +463,7 @@ export default function ManagementCardsPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-[#1a3a8f]" />
+                <Users className="h-5 w-5 text-[#d4891a]" />
                 Search Student
               </CardTitle>
               <CardDescription>
@@ -504,7 +504,7 @@ export default function ManagementCardsPage() {
                     }}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedChild?.id === child.id
-                        ? "border-[#1a3a8f] bg-[#1a3a8f]/5"
+                        ? "border-[#d4891a] bg-[#d4891a]/5"
                         : "hover:bg-muted"
                     }`}
                   >
@@ -536,10 +536,10 @@ export default function ManagementCardsPage() {
 
           {/* Selected Child — Card Assignment */}
           {selectedChild && (
-            <Card className="border-[#1a3a8f]/30">
+            <Card className="border-[#d4891a]/30">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-[#1a3a8f]" />
+                  <User className="h-5 w-5 text-[#d4891a]" />
                   {selectedChild.name}
                 </CardTitle>
                 <CardDescription>
@@ -579,7 +579,7 @@ export default function ManagementCardsPage() {
                     <CreditCard className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-muted-foreground mb-3">No card assigned</p>
                     <Button
-                      className="bg-[#1a3a8f] hover:bg-[#15307a]"
+                      className="bg-[#d4891a] hover:bg-[#b87314]"
                       onClick={() => { setScanMode(true); setRfidInput(""); }}
                     >
                       Assign Card

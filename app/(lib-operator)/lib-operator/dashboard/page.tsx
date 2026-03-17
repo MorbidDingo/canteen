@@ -316,9 +316,9 @@ export default function LibOperatorDashboardPage() {
   return (
     <div className="pb-8">
       <div className="container mx-auto max-w-2xl px-4 pt-5">
-        <div className="rounded-2xl border border-[#1a3a8f]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
+        <div className="rounded-2xl border border-[#d4891a]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1a3a8f] shadow-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
               <BookOpen className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -332,14 +332,14 @@ export default function LibOperatorDashboardPage() {
             <Button
               variant={activeTab === "issue-return" ? "default" : "outline"}
               onClick={() => setActiveTab("issue-return")}
-              className={activeTab === "issue-return" ? "bg-[#1a3a8f] hover:bg-[#1a3a8f]/90" : ""}
+              className={activeTab === "issue-return" ? "bg-[#d4891a] hover:bg-[#d4891a]/90" : ""}
             >
               Issue / Return
             </Button>
             <Button
               variant={activeTab === "pending-returns" ? "default" : "outline"}
               onClick={() => setActiveTab("pending-returns")}
-              className={`gap-2 ${activeTab === "pending-returns" ? "bg-[#1a3a8f] hover:bg-[#1a3a8f]/90" : ""}`}
+              className={`gap-2 ${activeTab === "pending-returns" ? "bg-[#d4891a] hover:bg-[#d4891a]/90" : ""}`}
             >
               Pending Returns
               {pendingReturns.length > 0 && (
@@ -358,7 +358,7 @@ export default function LibOperatorDashboardPage() {
             <Button
               size="lg"
               variant={mode === "issue" ? "default" : "outline"}
-              className={`flex-1 gap-2 ${mode === "issue" ? "bg-[#1a3a8f] hover:bg-[#1a3a8f]/90" : ""}`}
+              className={`flex-1 gap-2 ${mode === "issue" ? "bg-[#d4891a] hover:bg-[#d4891a]/90" : ""}`}
               onClick={() => {
                 setMode("issue");
                 setReturnedBatch([]);
@@ -392,7 +392,7 @@ export default function LibOperatorDashboardPage() {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-5 w-5 text-[#1a3a8f]" />
+                      <CreditCard className="h-5 w-5 text-[#d4891a]" />
                       Scan Student Card
                     </CardTitle>
                     <CardDescription>
@@ -422,11 +422,11 @@ export default function LibOperatorDashboardPage() {
               {/* Step 2: Student identified — scan books */}
               {childInfo && (
                 <>
-                  <Card className="border-[#1a3a8f]/30">
+                  <Card className="border-[#d4891a]/30">
                     <CardHeader className="pb-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <CardTitle className="flex items-center gap-2">
-                          <User className="h-5 w-5 text-[#1a3a8f]" />
+                          <User className="h-5 w-5 text-[#d4891a]" />
                           {childInfo.name}
                         </CardTitle>
                         <div className="flex flex-wrap items-center gap-2">
@@ -452,7 +452,7 @@ export default function LibOperatorDashboardPage() {
                   <Card>
                     <CardHeader className="pb-3">
                       <CardTitle className="flex items-center gap-2">
-                        <ScanBarcode className="h-5 w-5 text-[#1a3a8f]" />
+                        <ScanBarcode className="h-5 w-5 text-[#d4891a]" />
                         Scan Book Barcode
                       </CardTitle>
                       <CardDescription>

@@ -12,6 +12,7 @@ import {
   BarChart3,
   ScrollText,
   BookOpen,
+  ShieldCheck,
   ChevronRight,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ const groups = [
   {
     title: "Organisational",
     items: [
+      { href: "/management/accounts", label: "Accounts", icon: ShieldCheck },
       { href: "/management/parents", label: "Parents", icon: Users },
       { href: "/management/students", label: "Students", icon: GraduationCap },
       { href: "/management/bulk-upload", label: "Bulk Uploads", icon: Upload },

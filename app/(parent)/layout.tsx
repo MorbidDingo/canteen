@@ -41,6 +41,7 @@ export default function ParentLayout({
   children: React.ReactNode;
 }) {
   const { data: session } = useSession();
+  const isGeneralAccount = session?.user?.role === "GENERAL";
   const pathname = usePathname();
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
@@ -139,12 +140,14 @@ export default function ParentLayout({
                     </span>
                   )}
                 </Link>
-                <Link
-                  href="/wallet"
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-full"
-                >
-                  <Wallet className="h-5 w-5" />
-                </Link>
+                {!isGeneralAccount && (
+                  <Link
+                    href="/wallet"
+                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-full"
+                  >
+                    <Wallet className="h-5 w-5" />
+                  </Link>
+                )}
               </>
             )}
 

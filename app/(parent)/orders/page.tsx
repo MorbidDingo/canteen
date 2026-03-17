@@ -215,7 +215,7 @@ export default function OrdersPage() {
           name: session?.user?.name || "",
           email: session?.user?.email || "",
         },
-        theme: { color: "#1a3a8f" },
+        theme: { color: "#d4891a" },
         modal: {
           ondismiss: () => {
             setPayingId(null);

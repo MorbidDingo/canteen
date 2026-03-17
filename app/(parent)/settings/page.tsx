@@ -16,6 +16,37 @@ import { Bell, ChevronRight, Shield, Users, Wallet, Sparkles, CheckCircle, Loade
 import { toast } from "sonner";
 import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS } from "@/lib/constants";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import { useSession } from "@/lib/auth-client";
+
+declare global {
+  interface Window {
+    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
+  }
+}
+
+interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  handler: (response: RazorpayResponse) => void;
+  prefill?: { name?: string; email?: string; contact?: string };
+  theme?: { color?: string };
+  modal?: { ondismiss?: () => void };
+}
+
+interface RazorpayResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
+interface RazorpayInstance {
+  open: () => void;
+  close: () => void;
+}
 
 const settingItems = [
   {
@@ -50,6 +81,7 @@ type ChildInfo = {
 };
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const certePlus = useCertePlusStore((s) => s.status);
   const refreshCertePlusStatus = useCertePlusStore((s) => s.refresh);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
@@ -57,6 +89,7 @@ export default function SettingsPage() {
   const [children, setChildren] = useState<ChildInfo[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
+  const isGeneralAccount = session?.user?.role === "GENERAL";
 
   const fetchChildren = useCallback(async () => {
     try {
@@ -79,9 +112,106 @@ export default function SettingsPage() {
     void fetchChildren();
   }, [ensureCertePlusFresh, fetchChildren]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && !window.Razorpay) {
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const openRazorpay = useCallback(
+    ({
+      razorpayOrderId,
+      amount,
+      keyId,
+    }: {
+      razorpayOrderId: string;
+      amount: number;
+      keyId: string;
+    }) =>
+      new Promise<RazorpayResponse>((resolve, reject) => {
+        if (!window.Razorpay) {
+          reject(new Error("Payment SDK not loaded. Please refresh and try again."));
+          return;
+        }
+
+        const instance = new window.Razorpay({
+          key: keyId,
+          amount: amount * 100,
+          currency: "INR",
+          name: "certe",
+          description: "Certe+ subscription",
+          order_id: razorpayOrderId,
+          handler: (response) => resolve(response),
+          prefill: {
+            name: session?.user?.name || "",
+            email: session?.user?.email || "",
+          },
+          theme: { color: "#d97706" },
+          modal: {
+            ondismiss: () => reject(new Error("Payment cancelled")),
+          },
+        });
+
+        instance.open();
+      }),
+    [session?.user?.email, session?.user?.name],
+  );
+
   const handleSubscribe = async () => {
     setSubscribing(true);
     try {
+      if (isGeneralAccount) {
+        const startRes = await fetch("/api/certe-plus", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentMethod: "RAZORPAY",
+            plan: selectedPlan,
+          }),
+        });
+        const startData = await startRes.json();
+        if (!startRes.ok) {
+          toast.error(startData.error || "Subscription failed");
+          return;
+        }
+
+        if (!startData.requiresPayment) {
+          toast.success("Welcome to Certe+! Your subscription is now active.");
+          await refreshCertePlusStatus({ silent: true });
+          return;
+        }
+
+        const payment = await openRazorpay({
+          razorpayOrderId: startData.razorpayOrderId,
+          amount: startData.amount,
+          keyId: startData.keyId,
+        });
+
+        const finalizeRes = await fetch("/api/certe-plus", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentMethod: "RAZORPAY",
+            plan: selectedPlan,
+            razorpay_payment_id: payment.razorpay_payment_id,
+            razorpay_order_id: payment.razorpay_order_id,
+            razorpay_signature: payment.razorpay_signature,
+          }),
+        });
+        const finalizeData = await finalizeRes.json();
+        if (!finalizeRes.ok) {
+          toast.error(finalizeData.error || "Subscription verification failed");
+          return;
+        }
+
+        toast.success("Welcome to Certe+! Your subscription is now active.");
+        await refreshCertePlusStatus({ silent: true });
+        return;
+      }
+
       const res = await fetch("/api/certe-plus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -98,8 +228,12 @@ export default function SettingsPage() {
       }
       toast.success("Welcome to Certe+! Your subscription is now active.");
       await refreshCertePlusStatus({ silent: true });
-    } catch {
-      toast.error("Failed to subscribe");
+    } catch (error) {
+      if (error instanceof Error && error.message === "Payment cancelled") {
+        toast.info("Payment cancelled");
+      } else {
+        toast.error("Failed to subscribe");
+      }
     } finally {
       setSubscribing(false);
     }
@@ -111,6 +245,9 @@ export default function SettingsPage() {
   const selectedChildPenaltyUsed = selectedChildId ? penaltyUsedByChild[selectedChildId] ?? 0 : 0;
   const selectedChildPenaltyLeft = Math.max(0, 5 - selectedChildPenaltyUsed);
   const certePlusResolved = certePlus !== null;
+  const visibleSettingItems = isGeneralAccount
+    ? settingItems.filter((item) => item.href === "/notifications")
+    : settingItems;
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-6 space-y-4">
@@ -154,7 +291,7 @@ export default function SettingsPage() {
             </div>
           ) : certePlus?.active && certePlus.subscription ? (
             <div className="space-y-2">
-              {children.length > 0 && (
+              {!isGeneralAccount && children.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">View subscription for child</p>
                   <Select value={selectedChildId} onValueChange={setSelectedChildId}>
@@ -197,7 +334,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <ul className="text-xs text-muted-foreground space-y-1">
                 <li>Use food subscriptions (pre-order daily meals)</li>
-                <li>Rs200 wallet overdraft if balance is low at kiosk</li>
+                {!isGeneralAccount && <li>Rs200 wallet overdraft if balance is low at kiosk</li>}
                 <li>5 free library late-return penalties per child per active plan</li>
               </ul>
 
@@ -222,7 +359,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Child selector for wallet payment */}
-              {children.length > 1 && (
+              {!isGeneralAccount && children.length > 1 && (
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Pay from wallet of</p>
                   <Select value={selectedChildId} onValueChange={setSelectedChildId}>
@@ -249,11 +386,16 @@ export default function SettingsPage() {
                 {subscribing ? (
                   <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Subscribing...</>
                 ) : (
-                  <><Sparkles className="h-3.5 w-3.5 mr-1" /> Subscribe - Rs{currentPlanInfo.price} / {currentPlanInfo.label}</>
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    {isGeneralAccount ? "Subscribe Online" : "Subscribe"} - Rs{currentPlanInfo.price} / {currentPlanInfo.label}
+                  </>
                 )}
               </Button>
               <p className="text-[10px] text-center text-muted-foreground">
-                Payment will be deducted from your family wallet balance.
+                {isGeneralAccount
+                  ? "Payment will be collected using Razorpay."
+                  : "Payment will be deducted from your family wallet balance."}
               </p>
             </div>
           )}
@@ -262,7 +404,7 @@ export default function SettingsPage() {
 
       <CardContent className="p-0">
         <div className="flex flex-col flex-1 justify-around">
-          {settingItems.map(({ href, label, description, icon: Icon }) => (
+          {visibleSettingItems.map(({ href, label, description, icon: Icon }) => (
             <Link
               key={href}
               href={href}

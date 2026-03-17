@@ -222,7 +222,7 @@ export default function AdminOrdersPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatusCountCard title="Placed" value={placedOrders.length} colorClass="text-[#2eab57]" />
         <StatusCountCard title="Preparing" value={preparingOrders.length} colorClass="text-[#f58220]" />
-        <StatusCountCard title="Served" value={servedCount} colorClass="text-[#1a3a8f]" />
+        <StatusCountCard title="Served" value={servedCount} colorClass="text-[#d4891a]" />
         <StatusCountCard title="Cancelled" value={cancelledCount} colorClass="text-[#e32726]" />
       </div>
 
@@ -302,7 +302,7 @@ export default function AdminOrdersPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-[#1a3a8f]">{item.quantity}</p>
+                    <p className="text-2xl font-bold text-[#d4891a]">{item.quantity}</p>
                     <p className="text-xs text-muted-foreground">to make</p>
                   </div>
                 </div>
@@ -486,7 +486,7 @@ function OrderOperationCard({
           <Button
             size="sm"
             disabled={isLoading}
-            className="h-8 text-xs bg-[#1a3a8f] hover:bg-[#143073]"
+            className="h-8 text-xs bg-[#d4891a] hover:bg-[#b87314]"
             onClick={() => onUpdateStatus(order.id, "SERVED")}
           >
             <CheckCircle className="mr-1 h-3.5 w-3.5" />
