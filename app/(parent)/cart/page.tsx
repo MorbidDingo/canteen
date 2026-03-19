@@ -269,9 +269,6 @@ export default function CartPage() {
   };
 
   const childTotals = getChildTotals();
-  const hasMissingWalletForAssignedChild = [...childTotals.keys()].some(
-    (childId) => !wallets.some((w) => w.childId === childId)
-  );
   const familyWalletBalance = wallets[0]?.balance ?? 0;
   const familyWalletRequired = [...childTotals.values()].reduce(
     (sum, amount) => sum + amount,
@@ -279,7 +276,6 @@ export default function CartPage() {
   );
   const hasEnoughBalance =
     familyWalletRequired > 0 &&
-    !hasMissingWalletForAssignedChild &&
     familyWalletBalance >= familyWalletRequired;
 
   const buildChildOrderGroups = () => {
@@ -976,13 +972,14 @@ export default function CartPage() {
                                 Required per child wallet
                               </p>
                               {[...childTotals.entries()].map(([childId, amount]) => {
+                                const childName = children.find((c) => c.id === childId)?.name;
                                 const wallet = wallets.find((w) => w.childId === childId);
                                 return (
                                   <div
                                     key={childId}
                                     className="flex items-center justify-between text-sm"
                                   >
-                                    <span>{wallet?.childName || "Child"}</span>
+                                    <span>{childName || wallet?.childName || "Child"}</span>
                                     <span
                                       className={
                                         familyWalletBalance >= amount
