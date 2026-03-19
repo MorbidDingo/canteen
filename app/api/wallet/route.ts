@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet } from "@/lib/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
 
 // GET /api/wallet — return a single family wallet for the parent
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let access;
+  try {
+    access = await requireLinkedAccount();
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  const session = access.session;
 
   if (session.user.role === "GENERAL") {
     return NextResponse.json([]);

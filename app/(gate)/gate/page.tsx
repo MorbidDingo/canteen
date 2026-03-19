@@ -34,6 +34,14 @@ type TapError = {
   student?: Pick<StudentInfo, "name" | "image" | "grNumber" | "className" | "section">;
 } | null;
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 const DISPLAY_DURATION_MS = 5000; // show result for 5 seconds then reset
 
 export default function GatePage() {
@@ -43,6 +51,9 @@ export default function GatePage() {
   const [result, setResult] = useState<TapResult>(null);
   const [error, setError] = useState<TapError>(null);
   const [offlineId, setOfflineId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("");
+  const [deviceLabel, setDeviceLabel] = useState<string>("Gate Terminal");
+  const [selectedGateDeviceCode, setSelectedGateDeviceCode] = useState<string>("");
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -88,7 +99,10 @@ export default function GatePage() {
         const res = await fetch("/api/gate/tap", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rfidCardId: rfidCardId.trim() }),
+          body: JSON.stringify({
+            rfidCardId: rfidCardId.trim(),
+            deviceCode: selectedGateDeviceCode || undefined,
+          }),
         });
 
         const data = await res.json();
@@ -123,7 +137,7 @@ export default function GatePage() {
       // Auto-reset after display duration
       resetTimerRef.current = setTimeout(resetToIdle, DISPLAY_DURATION_MS);
     },
-    [resetToIdle],
+    [resetToIdle, selectedGateDeviceCode],
   );
 
   const handleKeyDown = useCallback(
@@ -141,6 +155,41 @@ export default function GatePage() {
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const loadContext = async () => {
+      try {
+        const res = await fetch("/api/org/context", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setOrgName(data.organization?.name || "");
+        const availableGateDevices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "GATE" && d.status === "ACTIVE",
+        );
+
+        const queryCode = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("deviceCode")?.trim().toUpperCase() ?? null
+          : null;
+        const storedCode = typeof window !== "undefined" ? localStorage.getItem("selectedGateDeviceCode") : null;
+        const selected =
+          availableGateDevices.find((d) => d.deviceCode === queryCode) ||
+          availableGateDevices.find((d) => d.deviceCode === storedCode) ||
+          availableGateDevices[0] ||
+          null;
+
+        if (selected) {
+          setSelectedGateDeviceCode(selected.deviceCode);
+          setDeviceLabel(selected.deviceName || selected.deviceCode || "Gate Terminal");
+          if (typeof window !== "undefined") {
+            localStorage.setItem("selectedGateDeviceCode", selected.deviceCode);
+          }
+        }
+      } catch {
+        // non-blocking
+      }
+    };
+    void loadContext();
   }, []);
 
   return (
@@ -162,6 +211,7 @@ export default function GatePage() {
           <Shield className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold text-foreground">Gate Check</h1>
         </div>
+        <p className="text-sm text-muted-foreground">{orgName || "Organization"} • {deviceLabel}</p>
         <p className="text-muted-foreground">
           {currentTime.toLocaleDateString("en-IN", {
             weekday: "long",

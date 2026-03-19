@@ -2,10 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, bookIssuance, bookCopy, book, parentControl } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
 // POST /api/library/student — look up child by RFID, return issued books
 export async function POST(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json({ success: false, reason: "Organization context is required" }, { status: 400 });
+    }
+
     const { rfidCardId } = (await request.json()) as { rfidCardId: string };
 
     if (!rfidCardId) {
@@ -15,7 +26,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up child by RFID
+    const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
+    if (!resolved) {
+      return NextResponse.json(
+        { success: false, reason: "Unknown card. Please ask the school office to register your card." },
+        { status: 200 }
+      );
+    }
+
+    // Look up child by resolved ID
     const children = await db
       .select({
         id: child.id,
@@ -29,7 +48,7 @@ export async function POST(request: NextRequest) {
       })
       .from(child)
       .leftJoin(parentControl, eq(parentControl.childId, child.id))
-      .where(eq(child.rfidCardId, rfidCardId))
+      .where(and(eq(child.id, resolved.child.id), eq(child.organizationId, requestOrgId)))
       .limit(1);
 
     if (children.length === 0) {
@@ -70,7 +89,7 @@ export async function POST(request: NextRequest) {
             category: book.category,
           })
           .from(book)
-          .where(eq(book.id, studentChild.preIssueBookId))
+          .where(and(eq(book.id, studentChild.preIssueBookId), eq(book.organizationId, requestOrgId)))
           .limit(1);
 
         if (books.length > 0) {
@@ -111,6 +130,8 @@ export async function POST(request: NextRequest) {
       .where(
         and(
           eq(bookIssuance.childId, studentChild.id),
+          eq(bookCopy.organizationId, requestOrgId),
+          eq(book.organizationId, requestOrgId),
           inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"])
         )
       );

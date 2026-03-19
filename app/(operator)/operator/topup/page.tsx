@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Card,
@@ -57,6 +58,14 @@ type TemporaryCardRecord = {
   isActive: boolean;
 };
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 function formatDateTime(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -92,6 +101,7 @@ export default function OperatorTopupPage() {
   const [temporaryCards, setTemporaryCards] = useState<TemporaryCardRecord[]>([]);
   const [cardsLoading, setCardsLoading] = useState(false);
   const [revokeLoadingId, setRevokeLoadingId] = useState<string | null>(null);
+  const [assignedKioskDevices, setAssignedKioskDevices] = useState<OrgContextDevice[]>([]);
 
   const rfidRef = useRef<HTMLInputElement>(null);
   const studentLookupRef = useRef<HTMLInputElement>(null);
@@ -125,6 +135,24 @@ export default function OperatorTopupPage() {
   useEffect(() => {
     void fetchTemporaryCards();
   }, [fetchTemporaryCards]);
+
+  useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "KIOSK" && d.status === "ACTIVE",
+        );
+        setAssignedKioskDevices(devices);
+      } catch {
+        // non-blocking
+      }
+    };
+
+    void fetchOrgContext();
+  }, []);
 
   const lookupCard = useCallback(async (cardId: string) => {
     if (!cardId.trim()) return;
@@ -365,6 +393,26 @@ export default function OperatorTopupPage() {
       </header>
 
       <main className="container mx-auto max-w-6xl space-y-4 px-4 py-4 pb-8 sm:space-y-6 sm:py-6">
+        {assignedKioskDevices.length > 0 ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Open Assigned Canteen Terminal</CardTitle>
+              <CardDescription>Select device here, then continue in kiosk flow.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {assignedKioskDevices.map((device) => (
+                  <Link key={device.id} href={`/kiosk?deviceCode=${encodeURIComponent(device.deviceCode)}`}>
+                    <Button type="button" variant="outline" size="sm">
+                      {device.deviceName} ({device.deviceCode})
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="h-5 w-full justify-start overflow-y-hidden bg-muted/60">
   <TabsTrigger

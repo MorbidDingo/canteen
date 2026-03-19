@@ -36,6 +36,27 @@ import { motion, useInView } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { useSession } from "@/lib/auth-client";
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+};
+
+function getTerminalRoute(devices: OrgContextDevice[]): string | null {
+  if (devices.some((d) => d.deviceType === "GATE")) {
+    return "/gate";
+  }
+
+  if (devices.some((d) => d.deviceType === "LIBRARY")) {
+    return "/library";
+  }
+
+  if (devices.some((d) => d.deviceType === "KIOSK")) {
+    return "/kiosk";
+  }
+
+  return null;
+}
+
 /* ─── Scroll-animated section wrapper ──────────────────────── */
 function ScrollSection({
   children,
@@ -119,13 +140,35 @@ export default function Home() {
 
   useEffect(() => {
     if (isPending || !session?.user?.role) return;
-    const role = session.user.role;
-    if (role === "ADMIN") router.replace("/admin/orders");
-    else if (role === "OPERATOR") router.replace("/operator/topup");
-    else if (role === "MANAGEMENT") router.replace("/management");
-    else if (role === "LIB_OPERATOR") router.replace("/lib-operator/dashboard");
-    else if (role === "ATTENDANCE") router.replace("/attendance");
-    else router.replace("/menu");
+    const resolveAndRedirect = async () => {
+      const role = session.user.role;
+
+      if (["OPERATOR", "LIB_OPERATOR", "ATTENDANCE", "DEVICE"].includes(role || "")) {
+        try {
+          const res = await fetch("/api/org/context", { cache: "no-store" });
+          if (res.ok) {
+            const data = (await res.json()) as { devices?: OrgContextDevice[] };
+            const terminalRoute = getTerminalRoute(data.devices || []);
+            if (terminalRoute) {
+              router.replace(terminalRoute);
+              return;
+            }
+          }
+        } catch {
+          // Fall back to role route when org context is unavailable.
+        }
+      }
+
+      if (role === "OWNER") router.replace("/owner");
+      else if (role === "ADMIN") router.replace("/admin/orders");
+      else if (role === "OPERATOR") router.replace("/operator/topup");
+      else if (role === "MANAGEMENT") router.replace("/management");
+      else if (role === "LIB_OPERATOR") router.replace("/lib-operator/dashboard");
+      else if (role === "ATTENDANCE") router.replace("/attendance");
+      else router.replace("/menu");
+    };
+
+    void resolveAndRedirect();
   }, [session, isPending, router]);
 
   if (session?.user) {

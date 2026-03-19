@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { book, child, parentControl } from "@/lib/db/schema";
-import { or, ilike, eq } from "drizzle-orm";
+import { and, or, ilike, eq } from "drizzle-orm";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
 function safeParseJSON(val: string | null): string[] {
   if (!val) return [];
@@ -15,6 +16,16 @@ function safeParseJSON(val: string | null): string[] {
 // GET /api/library/search?q=keyword — search books by title/author/ISBN
 export async function GET(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json({ success: false, reason: "Organization context is required" }, { status: 400 });
+    }
+
     const q = request.nextUrl.searchParams.get("q")?.trim();
     const rfidCardId = request.nextUrl.searchParams.get("rfidCardId")?.trim();
 
@@ -43,15 +54,26 @@ export async function GET(request: NextRequest) {
       })
       .from(book)
       .where(
-        or(
-          ilike(book.title, pattern),
-          ilike(book.author, pattern),
-          ilike(book.isbn, pattern)
+        and(
+          eq(book.organizationId, requestOrgId),
+          or(
+            ilike(book.title, pattern),
+            ilike(book.author, pattern),
+            ilike(book.isbn, pattern)
+          )
         )
       )
       .limit(30);
 
     if (rfidCardId) {
+      const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
+      if (!resolved) {
+        return NextResponse.json({
+          success: false,
+          reason: "Unknown card. Please ask the school office to register your card.",
+        });
+      }
+
       const controls = await db
         .select({
           blockedBookCategories: parentControl.blockedBookCategories,
@@ -61,7 +83,7 @@ export async function GET(request: NextRequest) {
         })
         .from(child)
         .leftJoin(parentControl, eq(parentControl.childId, child.id))
-        .where(eq(child.rfidCardId, rfidCardId))
+        .where(and(eq(child.id, resolved.child.id), eq(child.organizationId, requestOrgId)))
         .limit(1);
 
       if (controls.length > 0) {

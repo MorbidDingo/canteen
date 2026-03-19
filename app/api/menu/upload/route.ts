@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 import { db } from "@/lib/db";
 import { menuItem } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 /**
  * POST /api/menu/upload
@@ -16,6 +17,11 @@ import { eq } from "drizzle-orm";
  */
 export async function POST(request: Request) {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
+    });
+
     const cfg = configureCloudinary();
     if (!cfg.ok) {
       return NextResponse.json(
@@ -23,12 +29,6 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
-
-    // TODO: Add auth check - verify user is ADMIN or OPERATOR
-    // const session = await auth();
-    // if (!session?.user || !['ADMIN', 'OPERATOR'].includes(session.user.role)) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    // }
 
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const [itemExists] = await db
       .select({ id: menuItem.id })
       .from(menuItem)
-      .where(eq(menuItem.id, itemId))
+      .where(and(eq(menuItem.id, itemId), eq(menuItem.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!itemExists) {
@@ -100,7 +100,7 @@ export async function POST(request: Request) {
         imageUrl: uploadedResult.secure_url,
         updatedAt: new Date(),
       })
-      .where(eq(menuItem.id, itemId));
+      .where(and(eq(menuItem.id, itemId), eq(menuItem.organizationId, access.activeOrganizationId!)));
 
     return NextResponse.json({
       success: true,
@@ -108,6 +108,9 @@ export async function POST(request: Request) {
       message: "Image uploaded successfully",
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Menu image upload error:", error);
     return NextResponse.json(
       { error: "Failed to upload image" },

@@ -64,6 +64,34 @@
       "when": 1774000000000,
       "tag": "0008_certe_penalty_per_child",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773833771478,
+      "tag": "0009_faithful_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773835000000,
+      "tag": "0011_org_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773835400000,
+      "tag": "0012_drop_legacy_global_uniques",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1773907545956,
+      "tag": "0012_chief_marvex",
+      "breakpoints": true
     }
   ]
 }

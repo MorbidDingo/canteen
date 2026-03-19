@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order } from "@/lib/db/schema";
+import { child, order } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
-import { getRazorpay } from "@/lib/razorpay";
+import { getRazorpayForOrganization, getRazorpayPublicKeyForOrganization } from "@/lib/razorpay";
 
 const createPaymentSchema = z.object({
   orderId: z.string().min(1, "Order ID is required"),
@@ -53,7 +53,17 @@ export async function POST(request: NextRequest) {
     // Amount in paise (smallest currency unit) — Razorpay expects integer paise
     const amountInPaise = Math.round(existingOrder.totalAmount * 100);
 
-    const razorpay = getRazorpay();
+    let organizationId: string | null = null;
+    if (existingOrder.childId) {
+      const [childRow] = await db
+        .select({ organizationId: child.organizationId })
+        .from(child)
+        .where(eq(child.id, existingOrder.childId))
+        .limit(1);
+      organizationId = childRow?.organizationId ?? null;
+    }
+
+    const razorpay = await getRazorpayForOrganization(organizationId);
     const razorpayOrder = await razorpay.orders.create({
       amount: amountInPaise,
       currency: "INR",
@@ -78,7 +88,7 @@ export async function POST(request: NextRequest) {
       razorpayOrderId: razorpayOrder.id,
       amount: amountInPaise,
       currency: "INR",
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      keyId: await getRazorpayPublicKeyForOrganization(organizationId),
     });
   } catch (error) {
     console.error("Razorpay order creation error:", error);

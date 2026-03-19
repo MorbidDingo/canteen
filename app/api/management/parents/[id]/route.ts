@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { user, child, wallet, account, session as sessionTable } from "@/lib/db/schema";
+import { user, child, wallet, account, session as sessionTable, organizationMembership } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // PATCH — update parent password
@@ -10,10 +10,20 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  const session = access.session;
 
   const { id } = await params;
 
@@ -32,6 +42,15 @@ export async function PATCH(
     const [parent] = await db
       .select({ id: user.id, name: user.name, role: user.role })
       .from(user)
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
       .where(and(eq(user.id, id), eq(user.role, "PARENT")))
       .limit(1);
 
@@ -92,10 +111,20 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  const session = access.session;
 
   const { id } = await params;
 
@@ -107,6 +136,15 @@ export async function DELETE(
     const [parent] = await db
       .select({ id: user.id, name: user.name, role: user.role })
       .from(user)
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
       .where(and(eq(user.id, id), eq(user.role, "PARENT")))
       .limit(1);
 
@@ -145,6 +183,15 @@ export async function DELETE(
       const [newParent] = await db
         .select({ id: user.id, role: user.role })
         .from(user)
+        .innerJoin(
+          organizationMembership,
+          and(
+            eq(organizationMembership.userId, user.id),
+            eq(organizationMembership.organizationId, access.activeOrganizationId!),
+            eq(organizationMembership.role, "PARENT"),
+            eq(organizationMembership.status, "ACTIVE"),
+          ),
+        )
         .where(and(eq(user.id, newParentId), eq(user.role, "PARENT")))
         .limit(1);
 

@@ -2,13 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auditLog, user } from "@/lib/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "ADMIN"].includes(session.user.role)) {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Audit controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const { searchParams } = new URL(request.url);
   const page = Math.max(parseInt(searchParams.get("page") || "1"), 1);
@@ -18,6 +35,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const conditions = [];
+    conditions.push(eq(auditLog.organizationId, organizationId));
     if (actionFilter) {
       conditions.push(eq(auditLog.action, actionFilter));
     }

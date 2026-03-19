@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { menuItem } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const updateMenuItemSchema = z.object({
@@ -24,6 +24,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
+    });
+
     const { id } = await params;
     const body = await request.json();
     const parsed = updateMenuItemSchema.safeParse(body);
@@ -39,7 +44,7 @@ export async function PATCH(
     const [existing] = await db
       .select()
       .from(menuItem)
-      .where(eq(menuItem.id, id));
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
 
     if (!existing) {
       return NextResponse.json(
@@ -67,25 +72,32 @@ export async function PATCH(
     const [updated] = await db
       .update(menuItem)
       .set(updateData)
-      .where(eq(menuItem.id, id))
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)))
       .returning();
 
-    const session = await getSession();
-    if (session?.user) {
+    if (access.session?.user) {
       const action = parsed.data.resetUnits ? AUDIT_ACTIONS.UNITS_RESET
         : parsed.data.availableUnits !== undefined ? AUDIT_ACTIONS.UNITS_UPDATED
         : AUDIT_ACTIONS.MENU_ITEM_UPDATED;
       logAudit({
-        userId: session.user.id,
-        userRole: session.user.role,
+        userId: access.session.user.id,
+        userRole: access.membershipRole || access.session.user.role,
         action,
-        details: { menuItemId: id, name: existing.name, changes: parsed.data },
+        details: {
+          organizationId: access.activeOrganizationId,
+          menuItemId: id,
+          name: existing.name,
+          changes: parsed.data,
+        },
         request,
       });
     }
 
     return NextResponse.json({ item: updated });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update menu item error:", error);
     return NextResponse.json(
       { error: "Failed to update menu item" },
@@ -100,12 +112,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
+    });
+
     const { id } = await params;
 
     const [existing] = await db
       .select()
       .from(menuItem)
-      .where(eq(menuItem.id, id));
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
 
     if (!existing) {
       return NextResponse.json(
@@ -114,21 +131,25 @@ export async function DELETE(
       );
     }
 
-    await db.delete(menuItem).where(eq(menuItem.id, id));
+    await db
+      .delete(menuItem)
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
 
-    const session = await getSession();
-    if (session?.user) {
+    if (access.session?.user) {
       logAudit({
-        userId: session.user.id,
-        userRole: session.user.role,
+        userId: access.session.user.id,
+        userRole: access.membershipRole || access.session.user.role,
         action: AUDIT_ACTIONS.MENU_ITEM_DELETED,
-        details: { menuItemId: id, name: existing.name },
+        details: { organizationId: access.activeOrganizationId, menuItemId: id, name: existing.name },
         request,
       });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Delete menu item error:", error);
     return NextResponse.json(
       { error: "Failed to delete menu item" },

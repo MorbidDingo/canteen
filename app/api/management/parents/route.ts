@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { user, child, wallet, account } from "@/lib/db/schema";
+import { user, child, wallet, account, organizationMembership } from "@/lib/db/schema";
 import { eq, ilike, and, sql } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
 
   const { searchParams } = new URL(request.url);
@@ -27,6 +35,15 @@ export async function GET(request: NextRequest) {
         createdAt: user.createdAt,
       })
       .from(user)
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
       .where(
         q && q.length >= 2
           ? and(eq(user.role, "PARENT"), ilike(user.name, `%${q}%`))
@@ -72,6 +89,15 @@ export async function GET(request: NextRequest) {
       phone: user.phone,
     })
     .from(user)
+    .innerJoin(
+      organizationMembership,
+      and(
+        eq(organizationMembership.userId, user.id),
+        eq(organizationMembership.organizationId, access.activeOrganizationId!),
+        eq(organizationMembership.role, "PARENT"),
+        eq(organizationMembership.status, "ACTIVE"),
+      ),
+    )
     .where(
       and(
         eq(user.role, "PARENT"),
@@ -85,10 +111,20 @@ export async function GET(request: NextRequest) {
 
 // POST — create a new parent account
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  const session = access.session;
 
   try {
     const body = await request.json();
@@ -139,6 +175,18 @@ export async function POST(request: NextRequest) {
       providerId: "credential",
       userId,
       password: hashedPassword,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(organizationMembership).values({
+      id: crypto.randomUUID(),
+      organizationId: access.activeOrganizationId!,
+      userId,
+      role: "PARENT",
+      status: "ACTIVE",
+      invitedByUserId: access.actorUserId,
+      joinedAt: now,
       createdAt: now,
       updatedAt: now,
     });

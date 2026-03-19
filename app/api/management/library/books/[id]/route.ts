@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { book, bookCopy, bookIssuance } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — single book with copies
@@ -10,30 +10,38 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
+    const { id } = await params;
+
+    const [foundBook] = await db
+      .select()
+      .from(book)
+      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
+      .limit(1);
+
+    if (!foundBook) {
+      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+    }
+
+    const copies = await db
+      .select()
+      .from(bookCopy)
+      .where(and(eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)))
+      .orderBy(bookCopy.accessionNumber);
+
+    return NextResponse.json({ book: foundBook, copies });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    console.error("Management library book detail error:", error);
+    return NextResponse.json({ error: "Failed to fetch book" }, { status: 500 });
   }
-
-  const { id } = await params;
-
-  const [foundBook] = await db
-    .select()
-    .from(book)
-    .where(eq(book.id, id))
-    .limit(1);
-
-  if (!foundBook) {
-    return NextResponse.json({ error: "Book not found" }, { status: 404 });
-  }
-
-  const copies = await db
-    .select()
-    .from(bookCopy)
-    .where(eq(bookCopy.bookId, id))
-    .orderBy(bookCopy.accessionNumber);
-
-  return NextResponse.json({ book: foundBook, copies });
 }
 
 // PATCH — update book details
@@ -41,12 +49,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const { id } = await params;
     const body = await request.json();
     const { title, author, isbn, publisher, edition, category, description } = body;
@@ -54,7 +62,7 @@ export async function PATCH(
     const [existing] = await db
       .select({ id: book.id })
       .from(book)
-      .where(eq(book.id, id))
+      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!existing) {
@@ -66,7 +74,7 @@ export async function PATCH(
       const [dup] = await db
         .select({ id: book.id })
         .from(book)
-        .where(and(eq(book.isbn, isbn.trim())))
+        .where(and(eq(book.isbn, isbn.trim()), eq(book.organizationId, access.activeOrganizationId!)))
         .limit(1);
       if (dup && dup.id !== id) {
         return NextResponse.json(
@@ -88,19 +96,26 @@ export async function PATCH(
     const [updated] = await db
       .update(book)
       .set(updates)
-      .where(eq(book.id, id))
+      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .returning();
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_UPDATED,
-      details: { bookId: id, changes: Object.keys(updates).filter((k) => k !== "updatedAt") },
+      details: {
+        organizationId: access.activeOrganizationId,
+        bookId: id,
+        changes: Object.keys(updates).filter((k) => k !== "updatedAt"),
+      },
       request,
     });
 
     return NextResponse.json({ book: updated });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update book error:", error);
     return NextResponse.json({ error: "Failed to update book" }, { status: 500 });
   }
@@ -111,18 +126,18 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const { id } = await params;
 
     const [foundBook] = await db
       .select()
       .from(book)
-      .where(eq(book.id, id))
+      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!foundBook) {
@@ -133,7 +148,7 @@ export async function DELETE(
     const copies = await db
       .select({ id: bookCopy.id })
       .from(bookCopy)
-      .where(eq(bookCopy.bookId, id));
+      .where(and(eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)));
 
     if (copies.length > 0) {
       const copyIds = copies.map((c) => c.id);
@@ -172,15 +187,23 @@ export async function DELETE(
     });
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_ARCHIVED,
-      details: { bookId: id, title: foundBook.title, copiesRetired: copies.length },
+      details: {
+        organizationId: access.activeOrganizationId,
+        bookId: id,
+        title: foundBook.title,
+        copiesRetired: copies.length,
+      },
       request,
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Archive book error:", error);
     return NextResponse.json({ error: "Failed to archive book" }, { status: 500 });
   }

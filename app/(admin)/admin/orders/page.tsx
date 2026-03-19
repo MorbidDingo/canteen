@@ -95,6 +95,14 @@ type PreOrderSummary = {
   totalPlannedItems: number;
 };
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [subscriptions, setSubscriptions] = useState<AdminPreOrder[]>([]);
@@ -102,6 +110,7 @@ export default function AdminOrdersPage() {
   const [prepSummary, setPrepSummary] = useState<PreOrderSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [assignedKioskDevices, setAssignedKioskDevices] = useState<OrgContextDevice[]>([]);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -132,6 +141,24 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "KIOSK" && d.status === "ACTIVE",
+        );
+        setAssignedKioskDevices(devices);
+      } catch {
+        // non-blocking
+      }
+    };
+
+    void fetchOrgContext();
+  }, []);
 
   useRealtimeData(fetchAll, "orders-updated");
 
@@ -218,6 +245,26 @@ export default function AdminOrdersPage() {
           </Link>
         </div>
       </div>
+
+      {assignedKioskDevices.length > 0 ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Open Assigned Canteen Terminal</CardTitle>
+            <CardDescription>Select device here, then continue in kiosk flow.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {assignedKioskDevices.map((device) => (
+                <Link key={device.id} href={`/kiosk?deviceCode=${encodeURIComponent(device.deviceCode)}`}>
+                  <Button type="button" variant="outline" size="sm">
+                    {device.deviceName} ({device.deviceCode})
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatusCountCard title="Placed" value={placedOrders.length} colorClass="text-[#2eab57]" />

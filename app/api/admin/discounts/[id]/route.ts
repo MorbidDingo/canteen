@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { discount } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { discount, menuItem } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 const updateSchema = z.object({
   active: z.boolean().optional(),
@@ -21,10 +21,19 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Discount controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const body = await request.json();
     const parsed = updateSchema.safeParse(body);
@@ -39,7 +48,8 @@ export async function PATCH(
     const [existing] = await db
       .select()
       .from(discount)
-      .where(eq(discount.id, id))
+      .innerJoin(menuItem, eq(discount.menuItemId, menuItem.id))
+      .where(and(eq(discount.id, id), eq(menuItem.organizationId, organizationId)))
       .limit(1);
 
     if (!existing) {
@@ -66,6 +76,9 @@ export async function PATCH(
 
     return NextResponse.json({ discount: updated });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update discount error:", error);
     return NextResponse.json(
       { error: "Failed to update discount" },
@@ -81,15 +94,25 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Discount controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const [existing] = await db
       .select()
       .from(discount)
-      .where(eq(discount.id, id))
+      .innerJoin(menuItem, eq(discount.menuItemId, menuItem.id))
+      .where(and(eq(discount.id, id), eq(menuItem.organizationId, organizationId)))
       .limit(1);
 
     if (!existing) {
@@ -100,6 +123,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Delete discount error:", error);
     return NextResponse.json(
       { error: "Failed to delete discount" },

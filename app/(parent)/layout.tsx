@@ -49,6 +49,7 @@ export default function ParentLayout({
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [cartBounce, setCartBounce] = useState(false);
   const [navDimmed, setNavDimmed] = useState(false);
+  const [activeOrganizationName, setActiveOrganizationName] = useState("");
   const prevCartCount = useRef(cartCount);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -59,6 +60,7 @@ export default function ParentLayout({
   // Animate cart icon when items are added
   useEffect(() => {
     if (cartCount > prevCartCount.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartBounce(true);
       const t = setTimeout(() => setCartBounce(false), 400);
       return () => clearTimeout(t);
@@ -80,6 +82,41 @@ export default function ParentLayout({
   useEffect(() => {
     void ensureCertePlusFresh(45_000);
   }, [ensureCertePlusFresh]);
+
+  // Resolve active organization name for visibility in the parent UI.
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const [membershipsRes, activeRes] = await Promise.all([
+          fetch("/api/org/memberships", { cache: "no-store" }),
+          fetch("/api/org/active", { cache: "no-store" }),
+        ]);
+
+        if (!membershipsRes.ok || !activeRes.ok || cancelled) return;
+
+        const membershipsData = (await membershipsRes.json()) as {
+          memberships?: Array<{ organizationId: string; organizationName: string }>;
+        };
+        const activeData = (await activeRes.json()) as { activeOrganizationId: string | null };
+
+        const memberships = membershipsData.memberships ?? [];
+        const activeId = activeData.activeOrganizationId ?? memberships[0]?.organizationId;
+        const active = memberships.find((m) => m.organizationId === activeId) ?? memberships[0];
+
+        if (!cancelled) {
+          setActiveOrganizationName(active?.organizationName ?? "");
+        }
+      } catch {
+        // Keep UI functional even if org lookup fails.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Dim content area below bottom nav while scrolling
   useEffect(() => {
@@ -113,7 +150,14 @@ export default function ParentLayout({
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             <CerteLogo size={36} />
-            <CerteWordmark className="text-lg" showPlus={certePlusActive} />
+            <div className="flex flex-col leading-tight">
+              <CerteWordmark className="text-lg" showPlus={certePlusActive} />
+              {activeOrganizationName && (
+                <span className="text-[10px] font-medium text-muted-foreground truncate max-w-[200px]">
+                  {activeOrganizationName}
+                </span>
+              )}
+            </div>
           </Link>
 
           {/* Right: cart + wallet + avatar */}

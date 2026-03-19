@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet } from "@/lib/db/schema";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { resolveChildByRfid } from "@/lib/rfid-access";
 
 export async function GET(request: NextRequest) {
+  const requestOrgId =
+    request.headers.get("x-organization-id")?.trim() ||
+    request.headers.get("x-org-id")?.trim() ||
+    request.cookies.get("activeOrganizationId")?.value?.trim() ||
+    null;
+
+  if (!requestOrgId) {
+    return NextResponse.json({ error: "Organization context is required" }, { status: 400 });
+  }
+
   const rfid = request.nextUrl.searchParams.get("rfid");
   if (!rfid) {
     return NextResponse.json({ error: "Missing rfid parameter" }, { status: 400 });
   }
 
-  const resolved = await resolveChildByRfid(rfid);
+  const resolved = await resolveChildByRfid(rfid, requestOrgId);
   if (!resolved) {
     return NextResponse.json({ error: "Card not found or not assigned to any student" }, { status: 404 });
   }
@@ -19,7 +29,7 @@ export async function GET(request: NextRequest) {
   const siblingRows = await db
     .select({ id: child.id })
     .from(child)
-    .where(eq(child.parentId, row.parentId));
+    .where(and(eq(child.parentId, row.parentId), eq(child.organizationId, requestOrgId)));
   const siblingIds = siblingRows.map((s) => s.id);
   const [familyWallet] = siblingIds.length
     ? await db

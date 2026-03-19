@@ -1,15 +1,17 @@
 import { db } from "@/lib/db";
-import { order, orderItem, menuItem, user, preOrder, preOrderItem } from "@/lib/db/schema";
+import { order, orderItem, menuItem, user, preOrder, preOrderItem, child } from "@/lib/db/schema";
 import { gte, eq, and, lte, or, isNull, ne, inArray } from "drizzle-orm";
 
-async function getTodayPreOrderDemand() {
+async function getTodayPreOrderDemand(organizationId: string) {
   const today = new Date().toISOString().slice(0, 10);
 
   const activeToday = await db
     .select({ id: preOrder.id, mode: preOrder.mode })
     .from(preOrder)
+    .innerJoin(child, eq(preOrder.childId, child.id))
     .where(
       and(
+        eq(child.organizationId, organizationId),
         eq(preOrder.status, "PENDING"),
         or(
           and(eq(preOrder.mode, "ONE_DAY"), eq(preOrder.scheduledDate, today)),
@@ -69,12 +71,24 @@ async function getTodayPreOrderDemand() {
   };
 }
 
-export async function getStatistics(days: number) {
+export async function getStatistics(options: { days: number; organizationId: string; deviceId?: string | null }) {
+  const { days, organizationId, deviceId } = options;
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
 
   // ─── 1. Daily order breakdown ────────────────────────
-  const allOrders = await db.select().from(order).where(gte(order.createdAt, startDate));
+  const allOrders = await db
+    .select()
+    .from(order)
+    .innerJoin(child, eq(order.childId, child.id))
+    .where(
+      and(
+        gte(order.createdAt, startDate),
+        eq(child.organizationId, organizationId),
+        deviceId ? eq(order.deviceId, deviceId) : undefined,
+      ),
+    )
+    .then((rows) => rows.map((row) => row.order));
 
   const dailyMap = new Map<string, {
     date: string;
@@ -134,8 +148,15 @@ export async function getStatistics(days: number) {
     })
     .from(orderItem)
     .innerJoin(order, eq(orderItem.orderId, order.id))
+    .innerJoin(child, eq(order.childId, child.id))
     .innerJoin(menuItem, eq(orderItem.menuItemId, menuItem.id))
-    .where(gte(order.createdAt, startDate));
+    .where(
+      and(
+        gte(order.createdAt, startDate),
+        eq(child.organizationId, organizationId),
+        deviceId ? eq(order.deviceId, deviceId) : undefined,
+      ),
+    );
 
   const itemMap = new Map<string, {
     id: string; name: string; category: string; currentPrice: number;
@@ -196,7 +217,7 @@ export async function getStatistics(days: number) {
 
   // ─── 3. Overall summary ──────────────────────────────
   const activeOrders = allOrders.filter((o) => o.status !== "CANCELLED");
-  const preOrderDemand = await getTodayPreOrderDemand();
+  const preOrderDemand = await getTodayPreOrderDemand(organizationId);
 
   const overallSummary = {
     totalOrders: allOrders.length,
@@ -231,7 +252,7 @@ export async function getStatistics(days: number) {
 
   let topParents: { name: string; childName: string | null; orderCount: number; totalSpent: number }[] = [];
   if (topParentIds.length > 0) {
-    const users = await db.select().from(user);
+    const users = await db.select().from(user).where(inArray(user.id, topParentIds.map((p) => p.userId)));
     const userMap = new Map(users.map((u) => [u.id, u]));
     topParents = topParentIds.map((p) => {
       const u = userMap.get(p.userId);
@@ -247,7 +268,8 @@ export async function getStatistics(days: number) {
   return { dailyStats, itemStats, overallSummary, topParents };
 }
 
-export async function getSummary() {
+export async function getSummary(options: { organizationId: string; deviceId?: string | null }) {
+  const { organizationId, deviceId } = options;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart);
@@ -258,7 +280,16 @@ export async function getSummary() {
   const orders = await db
     .select()
     .from(order)
-    .where(and(gte(order.createdAt, todayStart), lt(order.createdAt, todayEnd)));
+    .innerJoin(child, eq(order.childId, child.id))
+    .where(
+      and(
+        gte(order.createdAt, todayStart),
+        lt(order.createdAt, todayEnd),
+        eq(child.organizationId, organizationId),
+        deviceId ? eq(order.deviceId, deviceId) : undefined,
+      ),
+    )
+    .then((rows) => rows.map((row) => row.order));
 
   const totalOrders = orders.length;
   const totalRevenue = orders.filter((o) => o.status !== "CANCELLED").reduce((sum, o) => sum + o.totalAmount, 0);
@@ -274,7 +305,7 @@ export async function getSummary() {
   const unpaidCount = orders.filter((o) => o.paymentStatus === "UNPAID" && o.status !== "CANCELLED").length;
   const paidAmount = orders.filter((o) => o.paymentStatus === "PAID" && o.status !== "CANCELLED").reduce((sum, o) => sum + o.totalAmount, 0);
   const unpaidAmount = orders.filter((o) => o.paymentStatus === "UNPAID" && o.status !== "CANCELLED").reduce((sum, o) => sum + o.totalAmount, 0);
-  const preOrderDemand = await getTodayPreOrderDemand();
+  const preOrderDemand = await getTodayPreOrderDemand(organizationId);
 
   return {
     summary: {

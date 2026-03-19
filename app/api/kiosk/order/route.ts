@@ -21,6 +21,7 @@ import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { getCurrentBreakSlot, parseBreakSlots } from "@/lib/break-slots";
 import { resolveChildByRfid } from "@/lib/rfid-access";
+import { resolveOrganizationDeviceFromRequest, touchOrganizationDevice } from "@/lib/device-context";
 
 type IncomingItem = { menuItemId: string; quantity: number };
 
@@ -51,8 +52,11 @@ function formatItemSummary(items: { name: string; quantity: number }[]) {
   return items.map((item) => `${item.name} x${item.quantity}`).join(", ");
 }
 
-async function getAppSettings(): Promise<Record<string, string>> {
-  const rows = await db.select().from(appSetting);
+async function getAppSettings(organizationId: string): Promise<Record<string, string>> {
+  const rows = await db
+    .select()
+    .from(appSetting)
+    .where(eq(appSetting.organizationId, organizationId));
   const settings: Record<string, string> = { ...APP_SETTINGS_DEFAULTS };
   for (const row of rows) {
     settings[row.key] = row.value;
@@ -61,15 +65,17 @@ async function getAppSettings(): Promise<Record<string, string>> {
 }
 
 async function placeOrderFromItems(
+  organizationId: string,
   rfidCardId: string,
   items: IncomingItem[],
   sourceLabel: string,
+  deviceId?: string | null,
 ): Promise<PlaceOrderResult> {
   if (!rfidCardId || !items || !Array.isArray(items) || items.length === 0) {
     return { success: false, reason: "Invalid request" };
   }
 
-  const resolved = await resolveChildByRfid(rfidCardId);
+  const resolved = await resolveChildByRfid(rfidCardId, organizationId);
   if (!resolved) {
     return {
       success: false,
@@ -96,7 +102,12 @@ async function placeOrderFromItems(
   const siblingRows = await db
     .select({ id: child.id })
     .from(child)
-    .where(eq(child.parentId, studentChild.parentId));
+    .where(
+      and(
+        eq(child.parentId, studentChild.parentId),
+        eq(child.organizationId, organizationId),
+      ),
+    );
   const siblingIds = siblingRows.map((s) => s.id);
 
   const wallets = await db
@@ -128,10 +139,13 @@ async function placeOrderFromItems(
     .select()
     .from(menuItem)
     .where(
-      sql`${menuItem.id} IN (${sql.join(
-        menuItemIds.map((id) => sql`${id}`),
-        sql`, `
-      )})`
+      and(
+        eq(menuItem.organizationId, organizationId),
+        sql`${menuItem.id} IN (${sql.join(
+          menuItemIds.map((id) => sql`${id}`),
+          sql`, `
+        )})`,
+      )
     );
 
   if (menuItems.length !== menuItemIds.length) {
@@ -311,6 +325,7 @@ async function placeOrderFromItems(
     .values({
       userId: studentChild.parentId,
       childId: studentChild.id,
+      deviceId: deviceId ?? null,
       tokenCode,
       status: "PLACED",
       totalAmount: total,
@@ -435,18 +450,43 @@ async function resolvePreOrderItemsForToday(childId: string, currentBreakName: s
 // Supports manual cart order and AUTO_PREORDER on card tap
 export async function POST(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json(
+        { success: false, reason: "Organization context is required" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
-    const { rfidCardId, items, mode } = body as {
+    const { rfidCardId, items, mode, deviceCode } = body as {
       rfidCardId: string;
       items?: IncomingItem[];
       mode?: "MANUAL" | "AUTO_PREORDER";
+      deviceCode?: string;
     };
+
+    const resolvedDevice = await resolveOrganizationDeviceFromRequest({
+      request,
+      organizationId: requestOrgId,
+      allowedDeviceTypes: ["KIOSK"],
+      fallbackDeviceCode: deviceCode,
+    });
+
+    if (resolvedDevice) {
+      await touchOrganizationDevice(resolvedDevice.id, request);
+    }
 
     if (!rfidCardId) {
       return NextResponse.json({ success: false, reason: "Invalid request" }, { status: 400 });
     }
 
-    const resolved = await resolveChildByRfid(rfidCardId);
+    const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
 
     if (!resolved) {
       return NextResponse.json(
@@ -458,7 +498,7 @@ export async function POST(request: NextRequest) {
     const studentChild = resolved.child;
 
     if (mode === "AUTO_PREORDER") {
-      const settings = await getAppSettings();
+      const settings = await getAppSettings(requestOrgId);
       const breakSlots = parseBreakSlots(settings.subscription_breaks_json);
       const currentBreak = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
 
@@ -483,11 +523,13 @@ export async function POST(request: NextRequest) {
       }
 
       const placed = await placeOrderFromItems(
+        requestOrgId,
         rfidCardId,
         resolved.items,
         resolved.preOrder.mode === "SUBSCRIPTION"
           ? `Subscription pre-order (${currentBreak.name})`
-          : `Pre-order (${currentBreak.name})`
+          : `Pre-order (${currentBreak.name})`,
+        resolvedDevice?.id,
       );
 
       if (!placed.success) {
@@ -544,7 +586,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const placed = await placeOrderFromItems(rfidCardId, items || [], "Kiosk order");
+    const placed = await placeOrderFromItems(requestOrgId, rfidCardId, items || [], "Kiosk order", resolvedDevice?.id);
     return NextResponse.json(placed, { status: 200 });
   } catch (error) {
     console.error("Kiosk order error:", error);

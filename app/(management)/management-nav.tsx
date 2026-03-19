@@ -26,14 +26,17 @@ import {
   Upload,
   Users,
   ShieldCheck,
+  MonitorCog,
   ChevronsLeft,
   ChevronsRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OrgSwitcher } from "@/components/org-switcher";
 
 const links = [
   { href: "/management", label: "Home", icon: LayoutGrid },
   { href: "/management/accounts", label: "Accounts", icon: ShieldCheck },
+  { href: "/management/device-accounts", label: "Device Accounts", icon: MonitorCog },
   { href: "/management/parents", label: "Parents", icon: Users },
   { href: "/management/students", label: "Students", icon: GraduationCap },
   { href: "/management/cards", label: "Cards", icon: CreditCard },
@@ -83,6 +86,7 @@ export function ManagementNav() {
         <div className="h-full px-3 flex items-center justify-between">
           <p className="font-semibold text-amber-900">Management</p>
           <div className="flex items-center gap-2">
+            <OrgSwitcher />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="border-amber-200">
@@ -131,6 +135,12 @@ export function ManagementNav() {
               {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
             </Button>
           </div>
+
+          {!collapsed && (
+            <div className="mb-3 rounded-xl border border-amber-200/70 bg-white/60 p-2">
+              <OrgSwitcher />
+            </div>
+          )}
 
           <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
             {links.map(({ href, label, icon: Icon }) => {

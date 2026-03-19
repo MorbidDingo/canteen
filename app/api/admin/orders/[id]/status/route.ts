@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { child, order, orderItem, wallet, walletTransaction } from "@/lib/db/schema";
-import { eq, inArray, asc } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { child, order, orderItem, organizationDevice, wallet, walletTransaction } from "@/lib/db/schema";
+import { and, eq, inArray, asc, or } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { incrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
@@ -25,6 +25,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Order controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
+    }
+
+    const organizationId = access.activeOrganizationId!;
+
     const { id } = await params;
     const body = await request.json();
     const parsed = statusSchema.safeParse(body);
@@ -40,11 +54,28 @@ export async function PATCH(
 
     // Fetch the order
     const [existingOrder] = await db
-      .select()
+      .select({
+        id: order.id,
+        userId: order.userId,
+        childId: order.childId,
+        tokenCode: order.tokenCode,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        paymentStatus: order.paymentStatus,
+        childOrganizationId: child.organizationId,
+        deviceOrganizationId: organizationDevice.organizationId,
+      })
       .from(order)
-      .where(eq(order.id, id));
+      .leftJoin(child, eq(order.childId, child.id))
+      .leftJoin(organizationDevice, eq(order.deviceId, organizationDevice.id))
+      .where(eq(order.id, id))
+      .limit(1);
 
-    if (!existingOrder) {
+    if (
+      !existingOrder ||
+      (existingOrder.childOrganizationId !== organizationId &&
+        existingOrder.deviceOrganizationId !== organizationId)
+    ) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -78,7 +109,7 @@ export async function PATCH(
             ? await tx
               .select({ id: child.id })
               .from(child)
-              .where(eq(child.parentId, orderChild.parentId))
+              .where(and(eq(child.parentId, orderChild.parentId), eq(child.organizationId, organizationId)))
             : [];
           const siblingIds = siblingRows.map((s) => s.id);
 
@@ -132,16 +163,13 @@ export async function PATCH(
       .from(order)
       .where(eq(order.id, id));
 
-    const session = await getSession();
-    if (session?.user) {
-      logAudit({
-        userId: session.user.id,
-        userRole: session.user.role,
-        action: AUDIT_ACTIONS.ORDER_STATUS_CHANGED,
-        details: { orderId: id, from: existingOrder.status, to: newStatus },
-        request,
-      });
-    }
+    logAudit({
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "UNKNOWN",
+      action: AUDIT_ACTIONS.ORDER_STATUS_CHANGED,
+      details: { orderId: id, from: existingOrder.status, to: newStatus },
+      request,
+    });
 
     broadcast("orders-updated");
 
@@ -172,6 +200,9 @@ export async function PATCH(
 
     return NextResponse.json({ order: updatedOrder });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update order status error:", error);
     return NextResponse.json(
       { error: "Failed to update order status" },

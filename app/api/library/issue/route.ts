@@ -13,12 +13,14 @@ import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { resolveChildByRfid } from "@/lib/rfid-access";
+import { resolveOrganizationDeviceFromRequest, touchOrganizationDevice } from "@/lib/device-context";
 
-async function getSetting(key: string): Promise<string> {
+async function getSetting(key: string, organizationId: string): Promise<string> {
   const rows = await db
     .select({ value: librarySetting.value })
     .from(librarySetting)
-    .where(eq(librarySetting.key, key))
+    .where(and(eq(librarySetting.key, key), eq(librarySetting.organizationId, organizationId)))
     .limit(1);
   return rows[0]?.value ?? LIBRARY_SETTINGS_DEFAULTS[key] ?? "";
 }
@@ -35,12 +37,34 @@ function safeParseJSON(val: string | null): string[] {
 // POST /api/library/issue — issue a book copy to a child (RFID + accession#/ISBN)
 export async function POST(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json({ success: false, reason: "Organization context is required" }, { status: 400 });
+    }
+
     const body = await request.json();
-    const { rfidCardId, scanInput, preIssueAccepted } = body as {
+    const { rfidCardId, scanInput, preIssueAccepted, deviceCode } = body as {
       rfidCardId: string;
       scanInput?: string;
       preIssueAccepted?: boolean;
+      deviceCode?: string;
     };
+
+    const resolvedDevice = await resolveOrganizationDeviceFromRequest({
+      request,
+      organizationId: requestOrgId,
+      allowedDeviceTypes: ["LIBRARY"],
+      fallbackDeviceCode: deviceCode,
+    });
+
+    if (resolvedDevice) {
+      await touchOrganizationDevice(resolvedDevice.id, request);
+    }
 
     // ── Basic validation ──────────────────────────────
     if (!rfidCardId || (!scanInput && !preIssueAccepted)) {
@@ -51,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Check self-service is allowed ──────────────
-    const allowSelfService = await getSetting("allow_self_service_issue");
+    const allowSelfService = await getSetting("allow_self_service_issue", requestOrgId);
     if (allowSelfService === "false") {
       return NextResponse.json(
         { success: false, reason: "Self-service issue is disabled. Please visit the library desk." },
@@ -60,10 +84,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Look up child by RFID ─────────────────────
+    const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
+    if (!resolved) {
+      return NextResponse.json(
+        { success: false, reason: "Unknown card. Please ask the school office to register your card." },
+        { status: 200 }
+      );
+    }
+
     const children = await db
       .select()
       .from(child)
-      .where(eq(child.rfidCardId, rfidCardId))
+      .where(and(eq(child.id, resolved.child.id), eq(child.organizationId, requestOrgId)))
       .limit(1);
 
     if (children.length === 0) {
@@ -116,15 +148,17 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 3. Check max books per student ────────────────
-    const maxBooksStr = await getSetting("max_books_per_student");
+    const maxBooksStr = await getSetting("max_books_per_student", requestOrgId);
     const maxBooks = parseInt(maxBooksStr, 10) || 3;
 
     const activeIssuances = await db
       .select({ id: bookIssuance.id, dueDate: bookIssuance.dueDate, status: bookIssuance.status })
       .from(bookIssuance)
+      .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
       .where(
         and(
           eq(bookIssuance.childId, studentChild.id),
+          eq(bookCopy.organizationId, requestOrgId),
           inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"])
         )
       );
@@ -137,7 +171,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 4. Check if student has overdue books ─────────
-    const blockIfOverdue = await getSetting("block_issue_if_overdue");
+    const blockIfOverdue = await getSetting("block_issue_if_overdue", requestOrgId);
     if (blockIfOverdue === "true") {
       const hasOverdue = activeIssuances.some(
         (i) => i.status === "ISSUED" && new Date(i.dueDate) < now
@@ -159,7 +193,7 @@ export async function POST(request: NextRequest) {
       const preIssueBookRows = await db
         .select({ title: book.title })
         .from(book)
-        .where(eq(book.id, activePreIssueBookId))
+        .where(and(eq(book.id, activePreIssueBookId), eq(book.organizationId, requestOrgId)))
         .limit(1);
 
       const preIssueTitle = preIssueBookRows[0]?.title ?? "requested book";
@@ -176,7 +210,7 @@ export async function POST(request: NextRequest) {
       const books = await db
         .select()
         .from(book)
-        .where(eq(book.id, activePreIssueBookId))
+        .where(and(eq(book.id, activePreIssueBookId), eq(book.organizationId, requestOrgId)))
         .limit(1);
       resolvedBook = books[0] ?? null;
 
@@ -191,7 +225,11 @@ export async function POST(request: NextRequest) {
         .select()
         .from(bookCopy)
         .where(
-          and(eq(bookCopy.bookId, resolvedBook.id), eq(bookCopy.status, "AVAILABLE"))
+          and(
+            eq(bookCopy.bookId, resolvedBook.id),
+            eq(bookCopy.organizationId, requestOrgId),
+            eq(bookCopy.status, "AVAILABLE")
+          )
         )
         .limit(1);
 
@@ -213,7 +251,7 @@ export async function POST(request: NextRequest) {
       const copyByAccession = await db
         .select()
         .from(bookCopy)
-        .where(eq(bookCopy.accessionNumber, scanInput ?? ""))
+        .where(and(eq(bookCopy.accessionNumber, scanInput ?? ""), eq(bookCopy.organizationId, requestOrgId)))
         .limit(1);
 
       if (copyByAccession.length > 0) {
@@ -221,7 +259,7 @@ export async function POST(request: NextRequest) {
         const books = await db
           .select()
           .from(book)
-          .where(eq(book.id, resolvedCopy.bookId))
+          .where(and(eq(book.id, resolvedCopy.bookId), eq(book.organizationId, requestOrgId)))
           .limit(1);
         resolvedBook = books[0] ?? null;
       }
@@ -231,7 +269,7 @@ export async function POST(request: NextRequest) {
         const booksByIsbn = await db
           .select()
           .from(book)
-          .where(eq(book.isbn, scanInput ?? ""))
+          .where(and(eq(book.isbn, scanInput ?? ""), eq(book.organizationId, requestOrgId)))
           .limit(1);
 
         if (booksByIsbn.length > 0) {
@@ -242,6 +280,7 @@ export async function POST(request: NextRequest) {
             .where(
               and(
                 eq(bookCopy.bookId, resolvedBook.id),
+                eq(bookCopy.organizationId, requestOrgId),
                 eq(bookCopy.status, "AVAILABLE")
               )
             )
@@ -350,6 +389,7 @@ export async function POST(request: NextRequest) {
             and(
               eq(bookIssuance.childId, studentChild.id),
               eq(bookCopy.bookId, resolvedBook.id),
+              eq(bookCopy.organizationId, requestOrgId),
               inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"])
             )
           )
@@ -364,7 +404,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 8. Calculate due date ─────────────────────────
-    const issueDurationStr = await getSetting("issue_duration_days");
+    const issueDurationStr = await getSetting("issue_duration_days", requestOrgId);
     const issueDurationDays = parseInt(issueDurationStr, 10) || 7;
     const dueDate = new Date(now);
     dueDate.setDate(dueDate.getDate() + issueDurationDays);
@@ -379,13 +419,14 @@ export async function POST(request: NextRequest) {
       issuedAt: now,
       dueDate,
       status: "ISSUED",
+      deviceId: resolvedDevice?.id ?? null,
       issuedBy: "SELF_SERVICE",
     });
 
     await db
       .update(bookCopy)
       .set({ status: "ISSUED", updatedAt: now })
-      .where(eq(bookCopy.id, resolvedCopy.id));
+      .where(and(eq(bookCopy.id, resolvedCopy.id), eq(bookCopy.organizationId, requestOrgId)));
 
     await db
       .update(book)
@@ -393,7 +434,7 @@ export async function POST(request: NextRequest) {
         availableCopies: sql`${book.availableCopies} - 1`,
         updatedAt: now,
       })
-      .where(eq(book.id, resolvedBook.id));
+      .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
 
     if (activePreIssueBookId && resolvedBook.id === activePreIssueBookId) {
       await db

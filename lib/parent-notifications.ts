@@ -1,7 +1,8 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { child, parentNotification } from "@/lib/db/schema";
+import { child, parentNotification, user } from "@/lib/db/schema";
 import { broadcast } from "@/lib/sse";
+import { sendMessage } from "@/lib/messaging-service";
 
 export type ParentNotificationType =
   | "KIOSK_ORDER_GIVEN"
@@ -68,6 +69,44 @@ export async function notifyParentForChild(input: {
   };
 
   broadcast("parent-notification", payload);
+
+  // ─── Send SMS/WhatsApp Message ──────────────────────
+  // Fetch parent's phone number and send message asynchronously
+  // This should not block the notification creation
+  try {
+    const parentUser = await db
+      .select({
+        phone: user.phone,
+      })
+      .from(user)
+      .where(eq(user.id, parentId))
+      .limit(1);
+
+    if (parentUser.length > 0 && parentUser[0].phone) {
+      // Send message asynchronously without awaiting
+      sendMessage({
+        parentId,
+        childId: input.childId,
+        phoneNumber: parentUser[0].phone,
+        notificationType: input.type,
+        title: input.title,
+        message: input.message,
+        metadata: input.metadata,
+      }).catch((error) => {
+        console.error(
+          `[Messaging] Failed to send ${input.type} notification to parent ${parentId}:`,
+          error,
+        );
+      });
+    }
+  } catch (error) {
+    // Log error but don't fail the notification creation
+    console.error(
+      `[Messaging] Error sending SMS/WhatsApp for notification ${input.type}:`,
+      error,
+    );
+  }
+
   return payload;
 }
 

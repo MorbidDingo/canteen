@@ -1,24 +1,66 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, gte, inArray, isNotNull, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { isMissingRelationError } from "@/lib/db-errors";
 import { sanitizeImageUrl } from "@/lib/image-url";
 import { formatSeconds } from "@/lib/attendance-utils";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 type StudentLog = {
   childId: string;
   direction: "ENTRY" | "EXIT";
+  gateId: string | null;
   tappedAt: Date;
   isValid: boolean;
 };
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session?.user || !["MANAGEMENT", "ATTENDANCE"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ATTENDANCE"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Attendance controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
+    }
+
+    const organizationId = access.activeOrganizationId!;
+    const scopedGateDeviceIds =
+      access.membershipRole === "ATTENDANCE"
+        ? await getUserAccessibleDeviceIds({
+            organizationId,
+            userId: access.actorUserId,
+            allowedDeviceTypes: ["GATE"],
+          })
+        : null;
+
+    if (scopedGateDeviceIds && scopedGateDeviceIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        stats: {
+          totalStudents: 0,
+          insideCount: 0,
+          outsideCount: 0,
+          totalTapEvents: 0,
+          tapsLast24h: 0,
+          anomalyCount: 0,
+          overstayCount: 0,
+          withPhotoCount: 0,
+          withoutPhotoCount: 0,
+          entriesLast24h: 0,
+          exitsLast24h: 0,
+          gateBreakdown: [],
+        },
+        students: [],
+        totalMatched: 0,
+        query: "",
+      });
     }
 
     const { searchParams } = new URL(request.url);
@@ -38,17 +80,20 @@ export async function GET(request: Request) {
         lastGateTapAt: child.lastGateTapAt,
       })
       .from(child)
+      .where(eq(child.organizationId, organizationId))
       .orderBy(child.name);
 
+    const scopedStudents = allStudents;
+
     const filteredStudents = q
-      ? allStudents.filter((s) => {
+      ? scopedStudents.filter((s) => {
           const name = (s.name || "").toLowerCase();
           const gr = (s.grNumber || "").toLowerCase();
           const className = (s.className || "").toLowerCase();
           const section = (s.section || "").toLowerCase();
           return name.includes(q) || gr.includes(q) || className.includes(q) || section.includes(q);
         })
-      : allStudents;
+      : scopedStudents;
 
     const selectedStudents = filteredStudents.slice(0, limit);
     const selectedIds = selectedStudents.map((s) => s.id);
@@ -65,22 +110,34 @@ export async function GET(request: Request) {
         .select({
           childId: gateLog.childId,
           direction: gateLog.direction,
+          gateId: gateLog.gateId,
           tappedAt: gateLog.tappedAt,
           isValid: gateLog.isValid,
         })
         .from(gateLog)
-        .where(gte(gateLog.tappedAt, last24h));
+        .where(
+          and(
+            gte(gateLog.tappedAt, last24h),
+            scopedGateDeviceIds ? inArray(gateLog.gateId, scopedGateDeviceIds) : undefined,
+          ),
+        );
 
       if (selectedIds.length > 0) {
         allLogsForSelected = await db
           .select({
             childId: gateLog.childId,
             direction: gateLog.direction,
+            gateId: gateLog.gateId,
             tappedAt: gateLog.tappedAt,
             isValid: gateLog.isValid,
           })
           .from(gateLog)
-          .where(inArray(gateLog.childId, selectedIds))
+          .where(
+            and(
+              inArray(gateLog.childId, selectedIds),
+              scopedGateDeviceIds ? inArray(gateLog.gateId, scopedGateDeviceIds) : undefined,
+            ),
+          )
           .orderBy(desc(gateLog.tappedAt));
       }
     } catch (err) {
@@ -124,23 +181,27 @@ export async function GET(request: Request) {
       };
     });
 
-    const insideCount = allStudents.filter((s) => s.presenceStatus === "INSIDE").length;
-    const totalStudents = allStudents.length;
+    const insideCount = scopedStudents.filter((s) => s.presenceStatus === "INSIDE").length;
+    const totalStudents = scopedStudents.length;
 
-    const overstayRows = await db
-      .select({ id: child.id })
-      .from(child)
-      .where(
-        and(
-          eq(child.presenceStatus, "INSIDE"),
-          isNotNull(child.lastGateTapAt),
-          lte(child.lastGateTapAt, overstayThreshold),
-        ),
-      );
+    const overstayRows = scopedStudents.filter(
+      (s) =>
+        s.presenceStatus === "INSIDE" &&
+        s.lastGateTapAt &&
+        new Date(s.lastGateTapAt).getTime() <= overstayThreshold.getTime(),
+    );
 
-    const withPhotoCount = allStudents.filter((s) => Boolean(s.image)).length;
+    const withPhotoCount = scopedStudents.filter((s) => Boolean(s.image)).length;
     const entriesLast24h = logsLast24h.filter((l) => l.direction === "ENTRY").length;
     const exitsLast24h = logsLast24h.filter((l) => l.direction === "EXIT").length;
+    const gateBreakdown = Array.from(
+      logsLast24h.reduce((acc, row) => {
+        const key = row.gateId?.trim() || "UNASSIGNED_GATE";
+        const count = acc.get(key) ?? 0;
+        acc.set(key, count + 1);
+        return acc;
+      }, new Map<string, number>()),
+    ).map(([gateId, count]) => ({ gateId, count }));
 
     return NextResponse.json({
       success: true,
@@ -156,12 +217,16 @@ export async function GET(request: Request) {
         withoutPhotoCount: totalStudents - withPhotoCount,
         entriesLast24h,
         exitsLast24h,
+        gateBreakdown,
       },
       students,
       totalMatched: filteredStudents.length,
       query: q,
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Attendance reports error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
+import { maskIdentifier, maskName } from "@/lib/privacy";
 
 // PATCH /api/children/[id] — update a child's info
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let access;
+  try {
+    access = await requireLinkedAccount();
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  const session = access.session;
 
   if (session.user.role === "GENERAL") {
     return NextResponse.json(
@@ -43,8 +51,8 @@ export async function PATCH(
   await db
     .update(child)
     .set({
-      name: name.trim(),
-      grNumber: grNumber?.trim() || null,
+      name: maskName(name),
+      grNumber: maskIdentifier(grNumber),
       className: className?.trim() || null,
       section: section?.trim() || null,
       updatedAt: new Date(),

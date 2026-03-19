@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { book, bookCopy } from "@/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { runParallelForEach, type RowProgressLog } from "@/lib/bulk-upload-engine";
 import type { BookCategory, BookCopyCondition } from "@/lib/constants";
@@ -98,10 +98,22 @@ async function processUpload(
   emit?: (log: RowProgressLog, processed: number, total: number) => void,
   emitStage?: (stage: string, message: string, progress?: number) => void,
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        response: NextResponse.json({ error: error.message, code: error.code }, { status: error.status }),
+      };
+    }
+    throw error;
   }
+
+  const organizationId = access.activeOrganizationId!;
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
@@ -154,7 +166,7 @@ async function processUpload(
     ? await db
         .select({ accessionNumber: bookCopy.accessionNumber })
         .from(bookCopy)
-        .where(inArray(bookCopy.accessionNumber, accessionNumbers))
+        .where(and(inArray(bookCopy.accessionNumber, accessionNumbers), eq(bookCopy.organizationId, organizationId)))
     : [];
   const existingAccessions = new Set(existingCopies.map((c) => c.accessionNumber));
 
@@ -165,7 +177,7 @@ async function processUpload(
     const booksByIsbn = await db
       .select({ id: book.id, isbn: book.isbn })
       .from(book)
-      .where(inArray(book.isbn, isbnList));
+      .where(and(inArray(book.isbn, isbnList), eq(book.organizationId, organizationId)));
     for (const b of booksByIsbn) {
       if (b.isbn) isbnToBookId.set(b.isbn, b.id);
     }
@@ -183,7 +195,13 @@ async function processUpload(
     const found = await db
       .select({ id: book.id, title: book.title, author: book.author })
       .from(book)
-      .where(and(eq(book.title, title), eq(book.author, author)))
+      .where(
+        and(
+          eq(book.organizationId, organizationId),
+          sql`lower(${book.title}) = ${title}`,
+          sql`lower(${book.author}) = ${author}`,
+        ),
+      )
       .limit(1);
     if (found[0]) {
       titleAuthorToBookId.set(key, found[0].id);
@@ -242,6 +260,7 @@ async function processUpload(
         const [newBook] = await db
           .insert(book)
           .values({
+            organizationId,
             title: row.title,
             author: row.author,
             isbn: row.isbn,
@@ -260,6 +279,7 @@ async function processUpload(
       }
 
       await db.insert(bookCopy).values({
+        organizationId,
         bookId,
         accessionNumber: row.accessionNumber,
         condition: row.condition as BookCopyCondition,
@@ -317,7 +337,7 @@ async function processUpload(
         available: sql<number>`count(*) filter (where ${bookCopy.status} = 'AVAILABLE')`,
       })
       .from(bookCopy)
-      .where(inArray(bookCopy.bookId, ids))
+      .where(and(inArray(bookCopy.bookId, ids), eq(bookCopy.organizationId, organizationId)))
       .groupBy(bookCopy.bookId);
 
     const countMap = new Map<string, { total: number; available: number }>();
@@ -335,7 +355,7 @@ async function processUpload(
       await db
         .update(book)
         .set({ totalCopies: counts.total, availableCopies: counts.available, updatedAt: new Date() })
-        .where(eq(book.id, id));
+        .where(and(eq(book.id, id), eq(book.organizationId, organizationId)));
 
       recountProcessed += 1;
       const pct = Math.round((recountProcessed / ids.length) * 100);
@@ -359,10 +379,11 @@ async function processUpload(
 
   emitStage?.("finalizing", "Writing audit and preparing response", 40);
   await logAudit({
-    userId: session.user.id,
-    userRole: session.user.role,
+    userId: access.actorUserId,
+    userRole: access.membershipRole || access.session.user.role,
     action: AUDIT_ACTIONS.LIBRARY_BULK_UPLOAD,
     details: {
+      organizationId,
       ...summary,
       bookConcurrency: BOOK_CREATE_CONCURRENCY,
       copyConcurrency: COPY_CREATE_CONCURRENCY,

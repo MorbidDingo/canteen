@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, gte, lte, or, isNull, ne, desc, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { child, menuItem, preOrder, preOrderItem, user } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 function todayISODate() {
   return new Date().toISOString().slice(0, 10);
@@ -10,10 +10,19 @@ function todayISODate() {
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Pre-order controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const today = todayISODate();
 
@@ -36,6 +45,7 @@ export async function GET() {
       .innerJoin(user, eq(user.id, preOrder.parentId))
       .where(
         and(
+          eq(child.organizationId, organizationId),
           eq(preOrder.status, "PENDING"),
           or(
             and(eq(preOrder.mode, "ONE_DAY"), eq(preOrder.scheduledDate, today)),
@@ -64,7 +74,7 @@ export async function GET() {
           })
           .from(preOrderItem)
           .innerJoin(menuItem, eq(menuItem.id, preOrderItem.menuItemId))
-          .where(inArray(preOrderItem.preOrderId, ids))
+            .where(and(inArray(preOrderItem.preOrderId, ids), eq(menuItem.organizationId, organizationId)))
       : [];
 
     const itemsByPreOrder = new Map<
@@ -148,6 +158,9 @@ export async function GET() {
       },
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Admin pre-orders fetch error:", error);
     return NextResponse.json({ error: "Failed to fetch pre-orders" }, { status: 500 });
   }

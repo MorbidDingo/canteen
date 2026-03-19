@@ -24,7 +24,10 @@ export type ResolvedRfidChild = {
   };
 };
 
-export async function resolveChildByRfid(cardId: string): Promise<ResolvedRfidChild | null> {
+export async function resolveChildByRfid(
+  cardId: string,
+  organizationId?: string,
+): Promise<ResolvedRfidChild | null> {
   const trimmed = cardId.trim();
   if (!trimmed) return null;
 
@@ -42,7 +45,11 @@ export async function resolveChildByRfid(cardId: string): Promise<ResolvedRfidCh
       permanentRfidCardId: child.rfidCardId,
     })
     .from(child)
-    .where(eq(child.rfidCardId, trimmed))
+    .where(
+      organizationId
+        ? and(eq(child.rfidCardId, trimmed), eq(child.organizationId, organizationId))
+        : eq(child.rfidCardId, trimmed),
+    )
     .limit(1);
 
   if (byPermanent) {
@@ -76,6 +83,12 @@ export async function resolveChildByRfid(cardId: string): Promise<ResolvedRfidCh
       and(
         eq(temporaryRfidAccess.temporaryRfidCardId, trimmed),
         isNull(temporaryRfidAccess.revokedAt),
+        ...(organizationId
+          ? [
+              eq(temporaryRfidAccess.organizationId, organizationId),
+              eq(child.organizationId, organizationId),
+            ]
+          : []),
       ),
     )
     .limit(1);

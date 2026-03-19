@@ -1,17 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { wallet, walletTransaction, child } from "@/lib/db/schema";
+import { wallet, walletTransaction, child, user } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
+import { sendMessage } from "@/lib/messaging-service";
+import { getRazorpaySecretForOrganization } from "@/lib/razorpay";
 
 // POST /api/wallet/verify — verify Razorpay payment and credit the wallet
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let access;
+    try {
+      access = await requireLinkedAccount();
+    } catch (error) {
+      if (error instanceof AccessDeniedError) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+      }
+      throw error;
     }
+
+    const session = access.session;
 
     const body = await request.json();
     const {
@@ -38,6 +47,7 @@ export async function POST(request: NextRequest) {
         id: wallet.id,
         childId: wallet.childId,
         balance: wallet.balance,
+        organizationId: child.organizationId,
       })
       .from(wallet)
       .innerJoin(child, eq(child.id, wallet.childId))
@@ -49,7 +59,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify signature
-    const secret = process.env.RAZORPAY_KEY_SECRET;
+    const secret = await getRazorpaySecretForOrganization(
+      walletRow[0].organizationId ?? access.activeOrganizationId,
+    );
     if (!secret) {
       return NextResponse.json(
         { error: "Payment verification not configured" },
@@ -75,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Credit the wallet
     const w = walletRow[0];
-    const topupAmount = amount / 100; // paise to rupees
+    const topupAmount = amount / 100; // paise to credits (1:1)
     const newBalance = w.balance + topupAmount;
 
     const siblingChildRows = await db
@@ -104,6 +116,42 @@ export async function POST(request: NextRequest) {
       description: "Online top-up via Razorpay",
       razorpayPaymentId: razorpay_payment_id,
     });
+
+    // ─── Send SMS/WhatsApp Notification ────────────────────
+    try {
+      const parentData = await db
+        .select({ name: user.name, phone: user.phone })
+        .from(user)
+        .where(eq(user.id, session.user.id))
+        .limit(1);
+
+      if (parentData.length > 0 && parentData[0].phone) {
+        const childData = await db
+          .select({ name: child.name })
+          .from(child)
+          .where(eq(child.id, w.childId))
+          .limit(1);
+
+        const childName = childData.length > 0 ? childData[0].name : "Child";
+        sendMessage({
+          parentId: session.user.id,
+          childId: w.childId,
+          phoneNumber: parentData[0].phone,
+          notificationType: "WALLET_TOPUP",
+          title: "Wallet Credit Successful",
+          message: `${topupAmount.toFixed(2)} credits have been added to ${childName}'s wallet. New balance: ${newBalance.toFixed(2)} credits`,
+          metadata: {
+            childName,
+            amount: topupAmount,
+            newBalance,
+          },
+        }).catch((error) => {
+          console.error("[Messaging] Failed to send wallet top-up notification:", error);
+        });
+      }
+    } catch (error) {
+      console.error("[Messaging] Error sending wallet top-up notification:", error);
+    }
 
     return NextResponse.json({ newBalance });
   } catch (error) {

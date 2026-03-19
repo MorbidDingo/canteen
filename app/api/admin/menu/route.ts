@@ -3,16 +3,22 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { menuItem, discount } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sanitizeImageUrl } from "@/lib/image-url";
 
 // GET — list all menu items (including unavailable ones for admin)
 export async function GET() {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
+    });
+
     const items = await db
       .select()
       .from(menuItem)
+      .where(eq(menuItem.organizationId, access.activeOrganizationId!))
       .orderBy(desc(menuItem.createdAt));
 
     // Join active discounts
@@ -47,6 +53,9 @@ export async function GET() {
 
     return NextResponse.json({ items: enriched });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Admin fetch menu error:", error);
     return NextResponse.json(
       { error: "Failed to fetch menu items" },
@@ -69,6 +78,11 @@ const createMenuItemSchema = z.object({
 // POST — create a new menu item
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
+    });
+
     const body = await request.json();
     const parsed = createMenuItemSchema.safeParse(body);
 
@@ -84,6 +98,7 @@ export async function POST(request: NextRequest) {
     const [created] = await db
       .insert(menuItem)
       .values({
+        organizationId: access.activeOrganizationId!,
         name: data.name,
         description: data.description || null,
         price: data.price,
@@ -95,19 +110,27 @@ export async function POST(request: NextRequest) {
       })
       .returning();
 
-    const session = await getSession();
-    if (session?.user) {
+    if (access.session?.user) {
       logAudit({
-        userId: session.user.id,
-        userRole: session.user.role,
+        userId: access.session.user.id,
+        userRole: access.membershipRole || access.session.user.role,
         action: AUDIT_ACTIONS.MENU_ITEM_CREATED,
-        details: { menuItemId: created.id, name: data.name, price: data.price, category: data.category },
+        details: {
+          organizationId: access.activeOrganizationId,
+          menuItemId: created.id,
+          name: data.name,
+          price: data.price,
+          category: data.category,
+        },
         request,
       });
     }
 
     return NextResponse.json({ item: created }, { status: 201 });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Create menu item error:", error);
     return NextResponse.json(
       { error: "Failed to create menu item" },

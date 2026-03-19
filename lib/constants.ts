@@ -88,6 +88,7 @@ export const USER_ROLES = {
   MANAGEMENT: "MANAGEMENT",
   LIB_OPERATOR: "LIB_OPERATOR",
   ATTENDANCE: "ATTENDANCE",
+  DEVICE: "DEVICE",
 } as const;
 
 export type UserRole = (typeof USER_ROLES)[keyof typeof USER_ROLES];
@@ -100,6 +101,7 @@ export const USER_ROLE_LABELS: Record<UserRole, string> = {
   MANAGEMENT: "Management",
   LIB_OPERATOR: "Library Operator",
   ATTENDANCE: "Attendance",
+  DEVICE: "Device Account",
 };
 
 // ─── Wallet Transaction Types ────────────────────────────
@@ -331,6 +333,9 @@ export const MAX_ACTIVE_PREORDERS_PER_CHILD = 1;
 /** Legacy alias kept for compatibility */
 export const MAX_ACTIVE_PREORDERS = MAX_ACTIVE_PREORDERS_PER_CHILD;
 
+/** Maximum number of children allowed per parent account */
+export const MAX_CHILDREN_PER_PARENT = 4;
+
 // ─── Certe+ Premium Subscription ─────────────────────────
 
 export const CERTE_PLUS_PLANS = {
@@ -349,6 +354,38 @@ export const CERTE_PLUS = {
   WALLET_OVERDRAFT_LIMIT: 200,
   LIBRARY_PENALTY_ALLOWANCE: 5,
 } as const;
+
+// ─── Organization Owner Subscription Plans ──────────────
+
+export const OWNER_ORG_PLANS = {
+  BASIC: {
+    key: "BASIC",
+    label: "Basic",
+    price: 499,
+    orgLimit: 1,
+    durationDays: 30,
+    description: "Best for a single school campus.",
+  },
+  PREMIUM: {
+    key: "PREMIUM",
+    label: "Premium",
+    price: 1499,
+    orgLimit: 3,
+    durationDays: 30,
+    description: "For growing groups with up to three organizations.",
+  },
+  MEGA: {
+    key: "MEGA",
+    label: "Mega",
+    price: 3999,
+    orgLimit: 10,
+    durationDays: 30,
+    description: "For large networks managing up to ten organizations.",
+  },
+} as const;
+
+export type OwnerOrgPlan = keyof typeof OWNER_ORG_PLANS;
+export const OWNER_ORG_PLAN_LIST = Object.values(OWNER_ORG_PLANS);
 
 // ─── Gate Direction ─────────────────────────────────────
 

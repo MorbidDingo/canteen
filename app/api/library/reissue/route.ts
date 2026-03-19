@@ -12,12 +12,13 @@ import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
-async function getSetting(key: string): Promise<string> {
+async function getSetting(key: string, organizationId: string): Promise<string> {
   const rows = await db
     .select({ value: librarySetting.value })
     .from(librarySetting)
-    .where(eq(librarySetting.key, key))
+    .where(and(eq(librarySetting.key, key), eq(librarySetting.organizationId, organizationId)))
     .limit(1);
   return rows[0]?.value ?? LIBRARY_SETTINGS_DEFAULTS[key] ?? "";
 }
@@ -25,6 +26,16 @@ async function getSetting(key: string): Promise<string> {
 // POST /api/library/reissue — reissue/extend a book (issuanceId + RFID)
 export async function POST(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json({ success: false, reason: "Organization context is required" }, { status: 400 });
+    }
+
     const body = await request.json();
     const { rfidCardId, issuanceId } = body as {
       rfidCardId: string;
@@ -39,10 +50,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Look up child by RFID ─────────────────────
+    const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
+    if (!resolved) {
+      return NextResponse.json(
+        { success: false, reason: "Unknown card." },
+        { status: 200 }
+      );
+    }
+
     const children = await db
       .select()
       .from(child)
-      .where(eq(child.rfidCardId, rfidCardId))
+      .where(and(eq(child.id, resolved.child.id), eq(child.organizationId, requestOrgId)))
       .limit(1);
 
     if (children.length === 0) {
@@ -56,11 +75,19 @@ export async function POST(request: NextRequest) {
 
     // ── 2. Look up active issuance ───────────────────
     const issuances = await db
-      .select()
+      .select({
+        id: bookIssuance.id,
+        bookCopyId: bookIssuance.bookCopyId,
+        childId: bookIssuance.childId,
+        dueDate: bookIssuance.dueDate,
+        reissueCount: bookIssuance.reissueCount,
+      })
       .from(bookIssuance)
+      .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
       .where(
         and(
           eq(bookIssuance.id, issuanceId),
+          eq(bookCopy.organizationId, requestOrgId),
           eq(bookIssuance.status, "ISSUED")
         )
       )
@@ -93,7 +120,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 5. Check max reissues ────────────────────────
-    const maxReissuesStr = await getSetting("max_reissues");
+    const maxReissuesStr = await getSetting("max_reissues", requestOrgId);
     const maxReissues = parseInt(maxReissuesStr, 10) || 3;
 
     if (issuance.reissueCount >= maxReissues) {
@@ -104,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 6. Extend due date ───────────────────────────
-    const reissueDaysStr = await getSetting("reissue_duration_days");
+    const reissueDaysStr = await getSetting("reissue_duration_days", requestOrgId);
     const reissueDays = parseInt(reissueDaysStr, 10) || 7;
 
     const newDueDate = new Date(issuance.dueDate);
@@ -123,7 +150,7 @@ export async function POST(request: NextRequest) {
     const copies = await db
       .select({ bookId: bookCopy.bookId, accessionNumber: bookCopy.accessionNumber })
       .from(bookCopy)
-      .where(eq(bookCopy.id, issuance.bookCopyId))
+      .where(and(eq(bookCopy.id, issuance.bookCopyId), eq(bookCopy.organizationId, requestOrgId)))
       .limit(1);
 
     let bookTitle = "";
@@ -132,7 +159,7 @@ export async function POST(request: NextRequest) {
       const books = await db
         .select({ title: book.title, author: book.author })
         .from(book)
-        .where(eq(book.id, copies[0].bookId))
+        .where(and(eq(book.id, copies[0].bookId), eq(book.organizationId, requestOrgId)))
         .limit(1);
       bookTitle = books[0]?.title ?? "";
       bookAuthor = books[0]?.author ?? "";

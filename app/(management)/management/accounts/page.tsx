@@ -62,7 +62,6 @@ type CreatedCredential = {
 };
 
 const STAFF_ROLES = [
-  { value: "ADMIN", label: "Admin" },
   { value: "OPERATOR", label: "Canteen Operator" },
   { value: "LIB_OPERATOR", label: "Library Operator" },
   { value: "ATTENDANCE", label: "Attendance" },
@@ -154,7 +153,7 @@ export default function ManagementAccountsPage() {
   const [formEmail, setFormEmail] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formPassword, setFormPassword] = useState("");
-  const [staffRole, setStaffRole] = useState("ADMIN");
+  const [staffRole, setStaffRole] = useState("OPERATOR");
 
   const [bulkFileName, setBulkFileName] = useState("");
   const [bulkRows, setBulkRows] = useState<Array<{ name: string; email: string; phone?: string; password?: string }>>(
@@ -175,7 +174,7 @@ export default function ManagementAccountsPage() {
   const description =
     kind === "general"
       ? "Users can order, pre-order (with Certe+), and use library workflows without child-control setup."
-      : "Create and manage operator/admin/library/attendance/management credentials.";
+      : "Create and manage canteen/library/attendance/management staff credentials.";
 
   const fetchAccounts = useCallback(
     async (query?: string) => {
@@ -219,7 +218,7 @@ export default function ManagementAccountsPage() {
     setFormEmail("");
     setFormPhone("");
     setFormPassword("");
-    setStaffRole("ADMIN");
+    setStaffRole("OPERATOR");
     setCreateMode("manual");
     setBulkRows([]);
     setBulkFileName("");

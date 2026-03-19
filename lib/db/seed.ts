@@ -1,13 +1,23 @@
 import "dotenv/config";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./index";
 import * as schema from "./schema";
+
+type AppRole =
+  | "PARENT"
+  | "GENERAL"
+  | "OWNER"
+  | "ADMIN"
+  | "OPERATOR"
+  | "MANAGEMENT"
+  | "LIB_OPERATOR"
+  | "ATTENDANCE";
 
 async function createUserWithRole(
   email: string,
   password: string,
   name: string,
-  role: "PARENT" | "GENERAL" | "ADMIN" | "OPERATOR" | "MANAGEMENT" | "LIB_OPERATOR" | "ATTENDANCE"
+  role: AppRole,
 ) {
   const existing = await db
     .select()
@@ -15,8 +25,14 @@ async function createUserWithRole(
     .where(eq(schema.user.email, email));
 
   if (existing.length > 0) {
+    if (existing[0].role !== role) {
+      await db
+        .update(schema.user)
+        .set({ role, updatedAt: new Date() })
+        .where(eq(schema.user.id, existing[0].id));
+    }
     console.log(`  ⏭️  ${role} user (${email}) already exists, skipping...`);
-    return existing[0];
+    return { ...existing[0], role };
   }
 
   const { auth } = await import("../auth");
@@ -34,6 +50,83 @@ async function createUserWithRole(
   }
   console.log(`  ⚠️  Failed to create ${role} user`);
   return null;
+}
+
+async function ensureDefaultOrganization(createdByUserId: string) {
+  const [existingOrg] = await db
+    .select()
+    .from(schema.organization)
+    .where(eq(schema.organization.slug, "default-org"))
+    .limit(1);
+
+  if (existingOrg) {
+    return existingOrg;
+  }
+
+  const now = new Date();
+  const [insertedOrg] = await db
+    .insert(schema.organization)
+    .values({
+      name: "Default Organization",
+      slug: "default-org",
+      type: "SCHOOL",
+      status: "ACTIVE",
+      createdByUserId,
+      approvedByUserId: createdByUserId,
+      approvedAt: now,
+      defaultTimezone: "Asia/Kolkata",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  return insertedOrg;
+}
+
+async function ensureMembership(userId: string, organizationId: string, role: AppRole) {
+  const [existingMembership] = await db
+    .select({ id: schema.organizationMembership.id })
+    .from(schema.organizationMembership)
+    .where(
+      and(
+        eq(schema.organizationMembership.organizationId, organizationId),
+        eq(schema.organizationMembership.userId, userId),
+        eq(schema.organizationMembership.role, role),
+      ),
+    )
+    .limit(1);
+
+  if (existingMembership) {
+    return;
+  }
+
+  await db.insert(schema.organizationMembership).values({
+    organizationId,
+    userId,
+    role,
+    status: "ACTIVE",
+    joinedAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+}
+
+async function ensurePlatformOwnerRole(userId: string) {
+  const [ownerRole] = await db
+    .select({ id: schema.platformUserRole.id })
+    .from(schema.platformUserRole)
+    .where(eq(schema.platformUserRole.userId, userId))
+    .limit(1);
+
+  if (ownerRole) return;
+
+  await db.insert(schema.platformUserRole).values({
+    userId,
+    role: "PLATFORM_OWNER",
+    status: "ACTIVE",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
 }
 
 async function seed() {
@@ -82,6 +175,51 @@ async function seed() {
     "ATTENDANCE"
   );
 
+  const tenantOwner = await createUserWithRole(
+    "tenant.owner@schoolcafe.com",
+    "TenantOwner@123",
+    "Tenant Owner",
+    "OWNER"
+  );
+
+  const personalOwnerEmail = process.env.MY_ACCOUNT_EMAIL?.trim().toLowerCase() || "owner@certe.in";
+  const personalOwnerPassword = process.env.MY_ACCOUNT_PASSWORD || "Owner@123";
+  const personalOwnerName = process.env.MY_ACCOUNT_NAME || "Certe Owner";
+  const personalOwner = await createUserWithRole(
+    personalOwnerEmail,
+    personalOwnerPassword,
+    personalOwnerName,
+    "OWNER"
+  );
+
+  // ─── Create Default Organization + Memberships ─────────
+  if (!management && !admin) {
+    throw new Error("Cannot create default organization without admin or management user.");
+  }
+
+  const orgOwnerUserId = management?.id ?? admin!.id;
+  const defaultOrg = await ensureDefaultOrganization(orgOwnerUserId);
+  console.log(`\n🏫 Using organization: ${defaultOrg.name} (${defaultOrg.slug})`);
+
+  if (admin) await ensureMembership(admin.id, defaultOrg.id, "ADMIN");
+  if (tenantOwner) await ensureMembership(tenantOwner.id, defaultOrg.id, "OWNER");
+  if (personalOwner) await ensureMembership(personalOwner.id, defaultOrg.id, "OWNER");
+  if (operator) await ensureMembership(operator.id, defaultOrg.id, "OPERATOR");
+  if (management) await ensureMembership(management.id, defaultOrg.id, "MANAGEMENT");
+  if (libOperator) await ensureMembership(libOperator.id, defaultOrg.id, "LIB_OPERATOR");
+  if (attendance) await ensureMembership(attendance.id, defaultOrg.id, "ATTENDANCE");
+  if (parent) await ensureMembership(parent.id, defaultOrg.id, "PARENT");
+
+  if (admin) {
+    await ensurePlatformOwnerRole(admin.id);
+    console.log("  ✅ Platform owner role assigned to admin user");
+  }
+
+  if (personalOwner) {
+    await ensurePlatformOwnerRole(personalOwner.id);
+    console.log(`  ✅ Platform owner role assigned to personal account (${personalOwnerEmail})`);
+  }
+
   // ─── Create Test Children + Wallets ───────────────────
   if (parent) {
     console.log("\n👧 Creating test children...");
@@ -96,6 +234,7 @@ async function seed() {
     } else {
       const testChildren = [
         {
+          organizationId: defaultOrg.id,
           parentId: parent.id,
           name: "Arjun Sharma",
           grNumber: "GR-2024-001",
@@ -104,6 +243,7 @@ async function seed() {
           rfidCardId: "CARD001",
         },
         {
+          organizationId: defaultOrg.id,
           parentId: parent.id,
           name: "Priya Sharma",
           grNumber: "GR-2024-002",
@@ -312,7 +452,10 @@ async function seed() {
     console.log(`  ⏭️  ${existingItems.length} menu items already exist, skipping...`);
   } else {
     for (const item of menuItems) {
-      await db.insert(schema.menuItem).values(item);
+      await db.insert(schema.menuItem).values({
+        ...item,
+        organizationId: defaultOrg.id,
+      });
       console.log(`  ✅ ${item.name} (${item.category}) — ₹${item.price}`);
     }
     console.log(`\n🎉 Seeded ${menuItems.length} menu items successfully!`);

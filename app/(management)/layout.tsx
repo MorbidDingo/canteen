@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { ManagementNav } from "./management-nav";
 
 export default async function ManagementLayout({
@@ -7,14 +7,21 @@ export default async function ManagementLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-
-  if (!session?.user) {
-    redirect("/login");
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError && error.code === "UNAUTHENTICATED") {
+      redirect("/login");
+    }
+    redirect("/");
   }
 
-  if (session.user.role !== "MANAGEMENT") {
-    redirect("/");
+  if (access.deviceLoginProfile) {
+    redirect(access.deviceLoginProfile.terminalPath);
   }
 
   return (

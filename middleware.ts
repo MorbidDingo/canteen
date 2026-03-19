@@ -15,7 +15,9 @@ export async function middleware(request: NextRequest) {
       path.startsWith("/api/operator") ||
       path.startsWith("/api/management") ||
       path.startsWith("/api/lib-operator") ||
-      path.startsWith("/api/attendance")
+      path.startsWith("/api/attendance") ||
+      path.startsWith("/api/owner") ||
+      path.startsWith("/api/platform")
     ) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -38,5 +40,9 @@ export const config = {
     "/api/lib-operator/:path*",
     "/attendance/:path*",
     "/api/attendance/:path*",
+    "/owner/:path*",
+    "/api/owner/:path*",
+    "/platform/:path*",
+    "/api/platform/:path*",
   ],
 };

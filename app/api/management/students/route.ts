@@ -1,17 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, user, wallet, parentControl } from "@/lib/db/schema";
-import { eq, or, and, ilike, sql } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { child, user, wallet, parentControl, organizationMembership } from "@/lib/db/schema";
+import { eq, or, and, ilike, count } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sanitizeImageUrl } from "@/lib/image-url";
+import { MAX_CHILDREN_PER_PARENT } from "@/lib/constants";
+import { maskEmail, maskIdentifier, maskName, maskPhone } from "@/lib/privacy";
 
 // GET — list/search students
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Student management controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q")?.trim();
@@ -36,8 +55,18 @@ export async function GET(request: NextRequest) {
       })
       .from(child)
       .innerJoin(user, eq(child.parentId, user.id))
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
       .where(
         and(
+          eq(child.organizationId, organizationId),
           eq(user.role, "PARENT"),
           or(
             ilike(child.name, `%${q}%`),
@@ -65,7 +94,16 @@ export async function GET(request: NextRequest) {
       })
       .from(child)
       .innerJoin(user, eq(child.parentId, user.id))
-      .where(eq(user.role, "PARENT"))
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
+      .where(and(eq(child.organizationId, organizationId), eq(user.role, "PARENT")))
       .orderBy(child.name)
       .limit(50);
   }
@@ -73,6 +111,11 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     students: students.map((student) => ({
       ...student,
+      name: maskName(student.name),
+      grNumber: maskIdentifier(student.grNumber),
+      parentName: maskName(student.parentName),
+      parentEmail: maskEmail(student.parentEmail),
+      parentPhone: maskPhone(student.parentPhone),
       image: sanitizeImageUrl(student.image),
     })),
   });
@@ -80,10 +123,29 @@ export async function GET(request: NextRequest) {
 
 // POST — create a new student
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Student management controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
+
+  const session = access.session;
 
   try {
     const body = await request.json();
@@ -101,6 +163,15 @@ export async function POST(request: NextRequest) {
     const [parentUser] = await db
       .select({ id: user.id, role: user.role, name: user.name })
       .from(user)
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, access.activeOrganizationId!),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
       .where(eq(user.id, parentId))
       .limit(1);
 
@@ -108,12 +179,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid parent" }, { status: 400 });
     }
 
+    const [childrenCount] = await db
+      .select({ total: count() })
+      .from(child)
+      .where(and(eq(child.parentId, parentId), eq(child.organizationId, organizationId)));
+
+    if ((childrenCount?.total ?? 0) >= MAX_CHILDREN_PER_PARENT) {
+      return NextResponse.json(
+        { error: `A parent can have at most ${MAX_CHILDREN_PER_PARENT} children` },
+        { status: 409 },
+      );
+    }
+
     // Check for duplicate GR number
     if (grNumber?.trim()) {
       const [existingGr] = await db
         .select({ id: child.id })
         .from(child)
-        .where(eq(child.grNumber, grNumber.trim()))
+        .where(and(eq(child.grNumber, grNumber.trim()), eq(child.organizationId, organizationId)))
         .limit(1);
 
       if (existingGr) {
@@ -126,9 +209,10 @@ export async function POST(request: NextRequest) {
       const [created] = await tx
         .insert(child)
         .values({
+          organizationId,
           parentId,
-          name: name.trim(),
-          grNumber: grNumber?.trim() || null,
+          name: maskName(name),
+          grNumber: maskIdentifier(grNumber),
           className: className?.trim() || null,
           section: section?.trim() || null,
         })
@@ -154,7 +238,7 @@ export async function POST(request: NextRequest) {
       userId: session.user.id,
       userRole: session.user.role,
       action: AUDIT_ACTIONS.STUDENT_CREATED,
-      details: { studentId: newChild.id, name: name.trim(), parentId, parentName: parentUser.name },
+      details: { studentId: newChild.id, name: maskName(name), parentId, parentName: maskName(parentUser.name) },
       request,
     });
 

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { order, orderItem, menuItem } from "@/lib/db/schema";
+import { child, order, orderItem, menuItem } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
 import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { getRazorpaySecretForOrganization } from "@/lib/razorpay";
 
 const verifyPaymentSchema = z.object({
   razorpay_order_id: z.string().min(1),
@@ -55,7 +56,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the payment signature using Razorpay's utility
-    const secret = process.env.RAZORPAY_KEY_SECRET;
+    let organizationId: string | null = null;
+    if (existingOrder.childId) {
+      const [childRow] = await db
+        .select({ organizationId: child.organizationId })
+        .from(child)
+        .where(eq(child.id, existingOrder.childId))
+        .limit(1);
+      organizationId = childRow?.organizationId ?? null;
+    }
+
+    const secret = await getRazorpaySecretForOrganization(organizationId);
     if (!secret) {
       return NextResponse.json(
         { error: "Payment verification not configured" },

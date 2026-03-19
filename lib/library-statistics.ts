@@ -2,13 +2,18 @@ import { db } from "@/lib/db";
 import { book, bookCopy, bookIssuance, child } from "@/lib/db/schema";
 import { gte, eq, and, inArray, sql } from "drizzle-orm";
 
-export async function getLibraryStatistics(days: number) {
+export async function getLibraryStatistics(options: {
+  days: number;
+  organizationId: string;
+  deviceId?: string | null;
+}) {
+  const { days, organizationId, deviceId } = options;
   const now = new Date();
   const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
 
   // ─── 1. Overview counts ──────────────────────────────
-  const allBooks = await db.select().from(book);
-  const allCopies = await db.select().from(bookCopy);
+  const allBooks = await db.select().from(book).where(eq(book.organizationId, organizationId));
+  const allCopies = await db.select().from(bookCopy).where(eq(bookCopy.organizationId, organizationId));
 
   const totalBooks = allBooks.length;
   const totalCopies = allCopies.filter((c) => c.status !== "RETIRED").length;
@@ -19,7 +24,15 @@ export async function getLibraryStatistics(days: number) {
   const activeIssuances = await db
     .select()
     .from(bookIssuance)
-    .where(inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"]));
+    .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+    .where(
+      and(
+        inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"]),
+        eq(bookCopy.organizationId, organizationId),
+        deviceId ? eq(bookIssuance.deviceId, deviceId) : undefined,
+      ),
+    )
+    .then((rows) => rows.map((row) => row.book_issuance));
 
   const overdueCount = activeIssuances.filter(
     (i) => i.status === "ISSUED" && new Date(i.dueDate) < now,
@@ -32,7 +45,14 @@ export async function getLibraryStatistics(days: number) {
       returnedAt: bookIssuance.returnedAt,
     })
     .from(bookIssuance)
-    .where(eq(bookIssuance.status, "RETURNED"));
+    .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+    .where(
+      and(
+        eq(bookIssuance.status, "RETURNED"),
+        eq(bookCopy.organizationId, organizationId),
+        deviceId ? eq(bookIssuance.deviceId, deviceId) : undefined,
+      ),
+    );
 
   const totalFinesCollected = returnedIssuances.reduce(
     (sum, i) => sum + (i.fineAmount ?? 0),
@@ -43,7 +63,15 @@ export async function getLibraryStatistics(days: number) {
   const issuancesInRange = await db
     .select()
     .from(bookIssuance)
-    .where(gte(bookIssuance.createdAt, startDate));
+    .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+    .where(
+      and(
+        gte(bookIssuance.createdAt, startDate),
+        eq(bookCopy.organizationId, organizationId),
+        deviceId ? eq(bookIssuance.deviceId, deviceId) : undefined,
+      ),
+    )
+    .then((rows) => rows.map((row) => row.book_issuance));
 
   const dailyMap = new Map<
     string,
@@ -91,7 +119,14 @@ export async function getLibraryStatistics(days: number) {
     .select({
       bookCopyId: bookIssuance.bookCopyId,
     })
-    .from(bookIssuance);
+    .from(bookIssuance)
+    .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+    .where(
+      and(
+        eq(bookCopy.organizationId, organizationId),
+        deviceId ? eq(bookIssuance.deviceId, deviceId) : undefined,
+      ),
+    );
 
   // Map copyId → bookId
   const copyToBook = new Map<string, string>();
@@ -125,12 +160,23 @@ export async function getLibraryStatistics(days: number) {
   // ─── 6. Class-wise issuance ──────────────────────────
   const childrenData = await db
     .select({ id: child.id, className: child.className })
-    .from(child);
+    .from(child)
+    .where(eq(child.organizationId, organizationId));
 
   const childClassMap = new Map(childrenData.map((c) => [c.id, c.className]));
 
   const classIssueCount = new Map<string, number>();
-  const allIssuancesFull = await db.select().from(bookIssuance);
+  const allIssuancesFull = await db
+    .select()
+    .from(bookIssuance)
+    .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+    .where(
+      and(
+        eq(bookCopy.organizationId, organizationId),
+        deviceId ? eq(bookIssuance.deviceId, deviceId) : undefined,
+      ),
+    )
+    .then((rows) => rows.map((row) => row.book_issuance));
   for (const iss of allIssuancesFull) {
     const cls = childClassMap.get(iss.childId) || "Unknown";
     classIssueCount.set(cls, (classIssueCount.get(cls) || 0) + 1);

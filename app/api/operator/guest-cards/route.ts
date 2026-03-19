@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { child, temporaryRfidAccess, user, wallet } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 const MIN_GUEST_HOURS = 1;
 const MAX_GUEST_HOURS = 5 * 24;
@@ -12,10 +12,27 @@ function sanitizeToken(value: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "OPERATOR") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Guest card controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const body = await request.json();
   const {
@@ -44,7 +61,7 @@ export async function POST(request: NextRequest) {
   const [duplicatePermanent] = await db
     .select({ id: child.id })
     .from(child)
-    .where(eq(child.rfidCardId, tempCard))
+    .where(and(eq(child.organizationId, organizationId), eq(child.rfidCardId, tempCard)))
     .limit(1);
 
   if (duplicatePermanent) {
@@ -57,6 +74,7 @@ export async function POST(request: NextRequest) {
     .from(temporaryRfidAccess)
     .where(
       and(
+        eq(temporaryRfidAccess.organizationId, organizationId),
         eq(temporaryRfidAccess.temporaryRfidCardId, tempCard),
         isNull(temporaryRfidAccess.revokedAt),
         gt(temporaryRfidAccess.validUntil, now),
@@ -87,6 +105,7 @@ export async function POST(request: NextRequest) {
   const [guestChild] = await db
     .insert(child)
     .values({
+      organizationId,
       parentId: guestUser.id,
       name,
       grNumber: null,
@@ -111,13 +130,14 @@ export async function POST(request: NextRequest) {
   const [temporaryCard] = await db
     .insert(temporaryRfidAccess)
     .values({
+      organizationId,
       childId: guestChild.id,
       temporaryRfidCardId: tempCard,
       accessType: "GUEST_TEMP",
       validFrom: now,
       validUntil,
       notes: notes?.trim() || null,
-      createdByOperatorId: session.user.id,
+      createdByOperatorId: access.actorUserId,
     })
     .returning({
       id: temporaryRfidAccess.id,

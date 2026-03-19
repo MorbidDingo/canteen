@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
 import { eq, desc, gte, lte, and } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 /**
  * GET /api/attendance
@@ -20,10 +20,19 @@ import { getSession } from "@/lib/auth-server";
  */
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session?.user || !["MANAGEMENT", "ATTENDANCE"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ATTENDANCE"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Attendance controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const { searchParams } = new URL(request.url);
     const childId = searchParams.get("childId");
@@ -36,6 +45,8 @@ export async function GET(request: Request) {
 
     // Build query conditions
     const conditions: any[] = [];
+
+    conditions.push(eq(child.organizationId, organizationId));
 
     if (childId) {
       conditions.push(eq(child.id, childId));
@@ -184,6 +195,9 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Attendance query error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

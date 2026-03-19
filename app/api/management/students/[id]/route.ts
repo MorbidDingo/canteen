@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet, walletTransaction, parentControl, order, orderItem } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq, inArray } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // DELETE — remove a student and cascade delete related records
@@ -10,10 +10,27 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Student management controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   try {
     const { id } = await params;
@@ -22,7 +39,7 @@ export async function DELETE(
     const [student] = await db
       .select({ id: child.id, name: child.name, parentId: child.parentId })
       .from(child)
-      .where(eq(child.id, id))
+      .where(and(eq(child.id, id), eq(child.organizationId, organizationId)))
       .limit(1);
 
     if (!student) {
@@ -63,8 +80,8 @@ export async function DELETE(
     });
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "UNKNOWN",
       action: AUDIT_ACTIONS.STUDENT_DELETED,
       details: { studentId: id, name: student.name },
       request,

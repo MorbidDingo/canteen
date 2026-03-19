@@ -8,9 +8,13 @@ import {
   child,
 } from "@/lib/db/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
 import { CERTE_PLUS, CERTE_PLUS_PLANS, type CertePlusPlan } from "@/lib/constants";
-import { getRazorpay } from "@/lib/razorpay";
+import {
+  getRazorpayForOrganization,
+  getRazorpayPublicKeyForOrganization,
+  getRazorpaySecretForOrganization,
+} from "@/lib/razorpay";
 import crypto from "crypto";
 
 function noStoreJson(body: unknown, init?: Omit<ResponseInit, "headers"> & { headers?: HeadersInit }) {
@@ -26,20 +30,27 @@ function noStoreJson(body: unknown, init?: Omit<ResponseInit, "headers"> & { hea
 // GET — check current Certe+ subscription status
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session?.user) {
-      return noStoreJson({
-        active: false,
-        subscription: null,
-        benefits: {
-          walletOverdraftLimit: 0,
-          libraryPenaltyAllowance: 0,
-          libraryPenaltiesUsed: 0,
-          walletOverdraftUsed: 0,
-          libraryPenaltiesUsedByChild: {},
-        },
-      });
+    let access;
+    try {
+      access = await requireLinkedAccount();
+    } catch (error) {
+      if (error instanceof AccessDeniedError) {
+        return noStoreJson({
+          active: false,
+          subscription: null,
+          benefits: {
+            walletOverdraftLimit: 0,
+            libraryPenaltyAllowance: 0,
+            libraryPenaltiesUsed: 0,
+            walletOverdraftUsed: 0,
+            libraryPenaltiesUsedByChild: {},
+          },
+        }, { status: error.status });
+      }
+      throw error;
     }
+
+    const session = access.session;
 
     const now = new Date();
     const [active] = await db
@@ -111,10 +122,17 @@ export async function GET() {
 // POST — subscribe to Certe+ (via wallet or create Razorpay order)
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let access;
+    try {
+      access = await requireLinkedAccount();
+    } catch (error) {
+      if (error instanceof AccessDeniedError) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+      }
+      throw error;
     }
+
+    const session = access.session;
 
     const body = await request.json();
     const { paymentMethod, childId, plan: planKey, razorpay_payment_id, razorpay_order_id, razorpay_signature } = body;
@@ -150,7 +168,7 @@ export async function POST(request: NextRequest) {
     if (paymentMethod === "RAZORPAY") {
       // If no payment details, create a Razorpay order
       if (!razorpay_payment_id) {
-        const razorpay = getRazorpay();
+        const razorpay = await getRazorpayForOrganization(access.activeOrganizationId);
         const order = await razorpay.orders.create({
           amount: amount * 100, // paise
           currency: "INR",
@@ -163,13 +181,13 @@ export async function POST(request: NextRequest) {
           razorpayOrderId: order.id,
           amount,
           currency: "INR",
-          keyId: process.env.RAZORPAY_KEY_ID,
+          keyId: await getRazorpayPublicKeyForOrganization(access.activeOrganizationId),
         });
       }
 
       // Verify Razorpay payment
       const expectedSignature = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
+        .createHmac("sha256", await getRazorpaySecretForOrganization(access.activeOrganizationId))
         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
         .digest("hex");
 
@@ -232,7 +250,7 @@ export async function POST(request: NextRequest) {
 
       if (walletRow.balance < amount) {
         return NextResponse.json({
-          error: `Insufficient wallet balance. Need ₹${amount}, available ₹${walletRow.balance.toFixed(2)}. Please top up your wallet first.`,
+          error: `Insufficient wallet balance. Need ${amount} credits, available ${walletRow.balance.toFixed(2)} credits. Please top up your wallet first.`,
         }, { status: 400 });
       }
 

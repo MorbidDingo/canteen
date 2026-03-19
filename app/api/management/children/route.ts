@@ -2,13 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, user } from "@/lib/db/schema";
 import { or, ilike, eq, and, isNull, isNotNull, asc } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Child management controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const params = request.nextUrl.searchParams;
 
@@ -18,7 +35,7 @@ export async function GET(request: NextRequest) {
       .select({ className: child.className, section: child.section })
       .from(child)
       .innerJoin(user, eq(user.id, child.parentId))
-      .where(and(isNotNull(child.className), eq(user.role, "PARENT")))
+      .where(and(eq(child.organizationId, organizationId), isNotNull(child.className), eq(user.role, "PARENT")))
       .groupBy(child.className, child.section)
       .orderBy(asc(child.className), asc(child.section));
     return NextResponse.json(rows);
@@ -30,7 +47,7 @@ export async function GET(request: NextRequest) {
     const sectionParam = params.get("section");
     const noCard = params.get("noCard") === "true";
 
-    const conditions = [eq(child.className, className)];
+    const conditions = [eq(child.organizationId, organizationId), eq(child.className, className)];
     if (sectionParam) conditions.push(eq(child.section, sectionParam));
     if (noCard) conditions.push(isNull(child.rfidCardId));
 
@@ -74,6 +91,7 @@ export async function GET(request: NextRequest) {
     .innerJoin(user, eq(user.id, child.parentId))
     .where(
       and(
+        eq(child.organizationId, organizationId),
         eq(user.role, "PARENT"),
         or(
           ilike(child.name, pattern),

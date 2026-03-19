@@ -65,6 +65,14 @@ type OrderResult = {
   currentBreakName?: string | null;
 };
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 export default function KioskPage() {
   const MAX_SAME_CARD_TAPS = 2;
   const [phase, setPhase] = useState<KioskPhase>("tap");
@@ -85,6 +93,9 @@ export default function KioskPage() {
   const [currentBreakName, setCurrentBreakName] = useState<string | null>(null);
   const [lastTappedCard, setLastTappedCard] = useState("");
   const [sameCardTapCount, setSameCardTapCount] = useState(0);
+  const [orgName, setOrgName] = useState<string>("Organization");
+  const [deviceLabel, setDeviceLabel] = useState<string>("Kiosk");
+  const [selectedDeviceCode, setSelectedDeviceCode] = useState<string>("");
 
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +159,42 @@ export default function KioskPage() {
     };
 
     void syncBreakInfo();
+  }, []);
+
+  useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context");
+        if (!res.ok) return;
+        const data = await res.json();
+        setOrgName(data.organization?.name || "Organization");
+        // Find first KIOSK device
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "KIOSK" && d.status === "ACTIVE",
+        );
+
+        const queryCode = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("deviceCode")?.trim().toUpperCase() ?? null
+          : null;
+        const storedCode = typeof window !== "undefined" ? localStorage.getItem("selectedKioskDeviceCode") : null;
+        const selected =
+          devices.find((d) => d.deviceCode === queryCode) ||
+          devices.find((d) => d.deviceCode === storedCode) ||
+          devices[0] ||
+          null;
+        if (selected) {
+          setSelectedDeviceCode(selected.deviceCode);
+          setDeviceLabel(selected.deviceName || selected.deviceCode || "Kiosk");
+          if (typeof window !== "undefined") {
+            localStorage.setItem("selectedKioskDeviceCode", selected.deviceCode);
+          }
+        }
+      } catch {
+        // non-blocking on kiosk
+      }
+    };
+
+    void fetchOrgContext();
   }, []);
 
   useEffect(() => {
@@ -301,7 +348,11 @@ export default function KioskPage() {
       const res = await fetch("/api/kiosk/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfidCardId: card, mode: "AUTO_PREORDER" }),
+        body: JSON.stringify({
+          rfidCardId: card,
+          mode: "AUTO_PREORDER",
+          deviceCode: selectedDeviceCode || undefined,
+        }),
       });
       const data = await res.json();
       if ("currentBreakName" in data) {
@@ -369,6 +420,7 @@ export default function KioskPage() {
     const payload = {
       rfidCardId: activeRfid,
       mode: "MANUAL",
+      deviceCode: selectedDeviceCode || undefined,
       items: cart.map((c) => ({
         menuItemId: c.menuItem.id,
         quantity: c.quantity,
@@ -511,53 +563,56 @@ export default function KioskPage() {
   if (phase === "browse") {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
-        <div className="shrink-0 flex items-center justify-between gap-4 px-5 py-3 bg-white border-b shadow-sm">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search menu items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-9 text-base h-11"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  searchInputRef.current?.focus();
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        <div className="shrink-0 flex flex-col px-5 py-3 bg-white border-b shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search menu items..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9 text-base h-11"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {activeChildName && (
+              <Badge variant="secondary" className="whitespace-nowrap">
+                {activeChildName}
+              </Badge>
             )}
-          </div>
 
-          {activeChildName && (
-            <Badge variant="secondary" className="whitespace-nowrap">
-              {activeChildName}
+            <Badge variant={currentBreakName ? "default" : "outline"} className="whitespace-nowrap">
+              {currentBreakName ? currentBreakName : "No active break"}
             </Badge>
-          )}
 
-          <Badge variant={currentBreakName ? "default" : "outline"} className="whitespace-nowrap">
-            {currentBreakName ? currentBreakName : "No active break"}
-          </Badge>
+            <Badge
+              variant={browseTimer <= 5 ? "destructive" : "outline"}
+              className="whitespace-nowrap flex items-center gap-1 tabular-nums"
+            >
+              <Timer className="h-3.5 w-3.5" />
+              {browseTimer}s
+            </Badge>
 
-          <Badge
-            variant={browseTimer <= 5 ? "destructive" : "outline"}
-            className="whitespace-nowrap flex items-center gap-1 tabular-nums"
-          >
-            <Timer className="h-3.5 w-3.5" />
-            {browseTimer}s
-          </Badge>
-
-          <CerteLogo size={48} />
-          <Link href="/kiosk/offline">
-            <Button variant="outline" size="sm">Offline Ops</Button>
-          </Link>
-          <PrinterStatusBadge />
+            <CerteLogo size={48} />
+            <Link href="/kiosk/offline">
+              <Button variant="outline" size="sm">Offline Ops</Button>
+            </Link>
+            <PrinterStatusBadge />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">{orgName} • {deviceLabel}</p>
         </div>
 
         <div

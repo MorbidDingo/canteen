@@ -2,16 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { discount, menuItem } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq, desc } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 // GET — list all discounts with menu item info
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "MANAGEMENT")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Discount controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const discounts = await db
       .select({
@@ -31,10 +40,14 @@ export async function GET() {
       })
       .from(discount)
       .innerJoin(menuItem, eq(discount.menuItemId, menuItem.id))
+      .where(eq(menuItem.organizationId, organizationId))
       .orderBy(desc(discount.createdAt));
 
     return NextResponse.json({ discounts });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Fetch discounts error:", error);
     return NextResponse.json(
       { error: "Failed to fetch discounts" },
@@ -57,10 +70,19 @@ const createDiscountSchema = z.object({
 // POST — create a new discount
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Discount controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
+
+    const organizationId = access.activeOrganizationId!;
 
     const body = await request.json();
     const parsed = createDiscountSchema.safeParse(body);
@@ -78,7 +100,7 @@ export async function POST(request: NextRequest) {
     const [item] = await db
       .select()
       .from(menuItem)
-      .where(eq(menuItem.id, data.menuItemId))
+      .where(and(eq(menuItem.id, data.menuItemId), eq(menuItem.organizationId, organizationId)))
       .limit(1);
 
     if (!item) {
@@ -120,6 +142,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ discount: created }, { status: 201 });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Create discount error:", error);
     return NextResponse.json(
       { error: "Failed to create discount" },

@@ -5,13 +5,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Bell, ChevronRight, Shield, Users, Wallet, Sparkles, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS } from "@/lib/constants";
@@ -87,7 +80,6 @@ export default function SettingsPage() {
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [subscribing, setSubscribing] = useState(false);
   const [children, setChildren] = useState<ChildInfo[]>([]);
-  const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
   const isGeneralAccount = session?.user?.role === "GENERAL";
 
@@ -98,14 +90,11 @@ export default function SettingsPage() {
         const data = await res.json();
         const kids = data.children || data;
         setChildren(kids);
-        if (kids.length > 0 && !selectedChildId) {
-          setSelectedChildId(kids[0].id);
-        }
       }
     } catch {
       // silently fail
     }
-  }, [selectedChildId]);
+  }, []);
 
   useEffect(() => {
     void ensureCertePlusFresh(45_000);
@@ -217,7 +206,6 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paymentMethod: "WALLET",
-          childId: selectedChildId || undefined,
           plan: selectedPlan,
         }),
       });
@@ -240,10 +228,10 @@ export default function SettingsPage() {
   };
 
   const currentPlanInfo = CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ?? CERTE_PLUS_PLANS.MONTHLY;
-  const selectedChildName = children.find((c) => c.id === selectedChildId)?.name;
   const penaltyUsedByChild = certePlus?.subscription?.libraryPenaltiesUsedByChild ?? {};
-  const selectedChildPenaltyUsed = selectedChildId ? penaltyUsedByChild[selectedChildId] ?? 0 : 0;
-  const selectedChildPenaltyLeft = Math.max(0, 5 - selectedChildPenaltyUsed);
+  const totalPenaltyUsed = Object.values(penaltyUsedByChild).reduce((sum, value) => sum + value, 0);
+  const totalPenaltyAllowance = children.length > 0 ? children.length * 5 : 5;
+  const totalPenaltyLeft = Math.max(0, totalPenaltyAllowance - totalPenaltyUsed);
   const certePlusResolved = certePlus !== null;
   const visibleSettingItems = isGeneralAccount
     ? settingItems.filter((item) => item.href === "/notifications")
@@ -273,7 +261,7 @@ export default function SettingsPage() {
                 </Badge>
               ) : (
                 <Badge variant="outline" className="border-amber-300 text-amber-700">
-                  From Rs79/week
+                  From 79 credits/week
                 </Badge>
               )
             ) : (
@@ -292,26 +280,9 @@ export default function SettingsPage() {
           ) : certePlus?.active && certePlus.subscription ? (
             <div className="space-y-2">
               {!isGeneralAccount && children.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">View subscription for child</p>
-                  <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-                    <SelectTrigger className="h-8 text-xs bg-white/70 dark:bg-white/10">
-                      <SelectValue placeholder="Select child" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {children.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedChildName && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {selectedChildName} is covered under your Certe+ plan. Penalty waivers are tracked per child.
-                    </p>
-                  )}
-                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Family plan active for {children.length} child{children.length === 1 ? "" : "ren"}. Benefits are shared across all children.
+                </p>
               )}
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
@@ -320,13 +291,11 @@ export default function SettingsPage() {
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Overdraft</p>
-                  <p className="text-xs font-semibold">Rs{(200 - certePlus.subscription.walletOverdraftUsed).toFixed(0)} left</p>
+                  <p className="text-xs font-semibold">{(200 - certePlus.subscription.walletOverdraftUsed).toFixed(0)} credits left</p>
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
-                  <p className="text-xs text-muted-foreground">
-                    Penalties {selectedChildName ? `(${selectedChildName})` : "(per child)"}
-                  </p>
-                  <p className="text-xs font-semibold">{selectedChildPenaltyLeft} left</p>
+                  <p className="text-xs text-muted-foreground">Penalty waivers</p>
+                  <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
                 </div>
               </div>
             </div>
@@ -334,7 +303,7 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <ul className="text-xs text-muted-foreground space-y-1">
                 <li>Use food subscriptions (pre-order daily meals)</li>
-                {!isGeneralAccount && <li>Rs200 wallet overdraft if balance is low at kiosk</li>}
+                {!isGeneralAccount && <li>200-credit wallet overdraft if balance is low at kiosk</li>}
                 <li>5 free library late-return penalties per child per active plan</li>
               </ul>
 
@@ -352,30 +321,11 @@ export default function SettingsPage() {
                     }`}
                   >
                     <p className="text-xs font-semibold">{plan.label}</p>
-                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Rs{plan.price}</p>
+                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{plan.price} credits</p>
                     <p className="text-[10px] text-muted-foreground">{plan.duration}</p>
                   </button>
                 ))}
               </div>
-
-              {/* Child selector for wallet payment */}
-              {!isGeneralAccount && children.length > 1 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Pay from wallet of</p>
-                  <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue placeholder="Select child" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {children.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
 
               <Button
                 size="sm"
@@ -388,7 +338,7 @@ export default function SettingsPage() {
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5 mr-1" />
-                    {isGeneralAccount ? "Subscribe Online" : "Subscribe"} - Rs{currentPlanInfo.price} / {currentPlanInfo.label}
+                    {isGeneralAccount ? "Subscribe Online" : "Subscribe"} - {currentPlanInfo.price} credits / {currentPlanInfo.label}
                   </>
                 )}
               </Button>

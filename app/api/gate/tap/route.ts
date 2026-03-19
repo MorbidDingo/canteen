@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, gateLog } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { child, gateLog, organizationMembership } from "@/lib/db/schema";
+import { and, eq, desc } from "drizzle-orm";
 import { GATE_TAP_COOLDOWN_MS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { isMissingRelationError } from "@/lib/db-errors";
 import { sanitizeImageUrl } from "@/lib/image-url";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { resolveChildByRfid } from "@/lib/rfid-access";
+import { getSession } from "@/lib/auth-server";
+import { resolveOrganizationDeviceFromRequest, touchOrganizationDevice } from "@/lib/device-context";
 
 /**
  * POST /api/gate/tap
@@ -28,13 +30,57 @@ import { resolveChildByRfid } from "@/lib/rfid-access";
  * 6. Update presence status & gate log
  * 7. Return result with warnings if needed
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    let requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      const session = await getSession();
+      if (session?.user?.id) {
+        const [firstMembership] = await db
+          .select({ organizationId: organizationMembership.organizationId })
+          .from(organizationMembership)
+          .where(
+            and(
+              eq(organizationMembership.userId, session.user.id),
+              eq(organizationMembership.status, "ACTIVE"),
+            ),
+          )
+          .limit(1);
+        requestOrgId = firstMembership?.organizationId ?? null;
+      }
+    }
+
+    if (!requestOrgId) {
+      return NextResponse.json(
+        { error: "Organization context is required for gate tap" },
+        { status: 400 },
+      );
+    }
+
     const body = await request.json();
-    const { rfidCardId, gateId } = body as {
+    const { rfidCardId, gateId, deviceCode } = body as {
       rfidCardId?: string;
       gateId?: string;
+      deviceCode?: string;
     };
+
+    const resolvedDevice = await resolveOrganizationDeviceFromRequest({
+      request,
+      organizationId: requestOrgId,
+      allowedDeviceTypes: ["GATE"],
+      fallbackDeviceCode: deviceCode || gateId || null,
+    });
+
+    if (resolvedDevice) {
+      await touchOrganizationDevice(resolvedDevice.id, request);
+    }
+
+    const persistedGateId = resolvedDevice?.id ?? gateId?.trim() ?? null;
 
     if (!rfidCardId || typeof rfidCardId !== "string" || !rfidCardId.trim()) {
       return NextResponse.json(
@@ -47,7 +93,7 @@ export async function POST(request: Request) {
     const now = new Date();
 
     // 1. Look up child by permanent/temporary RFID card with presence status
-    const resolved = await resolveChildByRfid(trimmedCardId);
+    const resolved = await resolveChildByRfid(trimmedCardId, requestOrgId);
     const student = resolved?.child;
 
     if (!student) {
@@ -135,7 +181,7 @@ export async function POST(request: Request) {
       await db.insert(gateLog).values({
         childId: student.id,
         direction: expectedDirection,
-        gateId: gateId?.trim() || null,
+        gateId: persistedGateId,
         tappedAt: now,
         isValid: !anomalyReason, // Mark as invalid if anomaly detected
         anomalyReason,
@@ -192,7 +238,7 @@ export async function POST(request: Request) {
       message: `${student.name} ${expectedDirection === "ENTRY" ? "entered" : "exited"} campus at ${now.toLocaleTimeString()}.`,
       metadata: {
         direction: expectedDirection,
-        gateId: gateId?.trim() || null,
+        gateId: persistedGateId,
         tappedAt: now.toISOString(),
         grNumber: student.grNumber,
       },

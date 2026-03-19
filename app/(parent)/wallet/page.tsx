@@ -20,7 +20,6 @@ import {
   ArrowDownCircle,
   RotateCcw,
   Loader2,
-  IndianRupee,
   Plus,
   ArrowLeft,
   ChevronLeft,
@@ -416,7 +415,7 @@ export default function WalletPage() {
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
     if (isNaN(amount) || amount < 10 || amount > 5000) {
-      toast.error("Enter an amount between ₹10 and ₹5,000"); return;
+      toast.error("Enter an amount between 10 and 5,000 credits"); return;
     }
     if (!selectedChildId) { toast.error("Select a child first"); return; }
     setTopUpLoading(true);
@@ -433,7 +432,7 @@ export default function WalletPage() {
       const { razorpayOrderId, amount: amountPaise, keyId, walletId } = await res.json();
       const childName = wallets.find((w) => w.childId === selectedChildId)?.childName || "";
       const { newBalance } = await handleRazorpayTopUp(razorpayOrderId, amountPaise, keyId, walletId, childName);
-      toast.success(`₹${amount.toFixed(0)} added to wallet!`);
+      toast.success(`${amount.toFixed(0)} credits added to wallet!`);
       setTopUpAmount("");
       setTopUpOpen(false);
       setWallets((prev) => prev.map((w) => w.childId === selectedChildId ? { ...w, balance: newBalance } : w));
@@ -482,10 +481,9 @@ export default function WalletPage() {
 
       {/* Balance */}
       <div>
-        <p className="w-hint mb-1">Available Balance</p>
+        <p className="w-hint mb-1">Available Credits</p>
         <p className="text-[2.05rem] font-bold flex items-center gap-0.5 wt-silver leading-none">
-          <IndianRupee className="h-6 w-6 shrink-0" />
-          {w.balance.toFixed(2)}
+          CR {w.balance.toFixed(2)}
         </p>
       </div>
 
@@ -573,7 +571,7 @@ export default function WalletPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <WalletIcon className="h-6 w-6 text-primary" /> Wallet
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage wallet balance and add money online</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage wallet credits and add credits online</p>
       </div>
 
       {/* ── Card section ──────────────────────────────────────────────────── */}
@@ -744,16 +742,16 @@ export default function WalletPage() {
                       : "border-orange-200 text-orange-700 bg-white hover:bg-orange-50"
                   }
                 >
-                  ₹{amt}
+                  {amt} cr
                 </Button>
               ))}
             </div>
 
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">CR</span>
                 <Input
-                  type="number" min={10} max={5000} placeholder="Enter amount"
+                  type="number" min={10} max={5000} placeholder="Enter credits"
                   value={topUpAmount}
                   onChange={(e) => setTopUpAmount(e.target.value)}
                   className="pl-7"
@@ -766,11 +764,11 @@ export default function WalletPage() {
               >
                 {topUpLoading
                   ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <><IndianRupee className="h-4 w-4 mr-1" />Pay</>
+                  : <>Pay</>
                 }
               </Button>
             </div>
-            <p className="text-xs text-orange-700/70">Min ₹10 · Max ₹5,000</p>
+            <p className="text-xs text-orange-700/70">Min 10 credits · Max 5,000 credits</p>
           </div>
         )}
       </div>
@@ -812,9 +810,9 @@ export default function WalletPage() {
                     </div>
                     <div className="text-right">
                       <p className={`font-semibold ${tx.type === "DEBIT" ? "text-destructive" : "text-emerald-500"}`}>
-                        {tx.type === "DEBIT" ? "-" : "+"}₹{tx.amount.toFixed(2)}
+                        {tx.type === "DEBIT" ? "-" : "+"}{tx.amount.toFixed(2)} cr
                       </p>
-                      <p className="text-xs text-muted-foreground">Bal: ₹{tx.balanceAfter.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Bal: {tx.balanceAfter.toFixed(2)} cr</p>
                     </div>
                   </div>
                   <Separator className="mt-3" />

@@ -1,14 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, wallet, walletTransaction } from "@/lib/db/schema";
-import { asc, eq, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "OPERATOR") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Top-up controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const body = await request.json();
   const { childId, amount } = body;
@@ -24,7 +41,7 @@ export async function POST(request: NextRequest) {
   const [childRow] = await db
     .select({ parentId: child.parentId })
     .from(child)
-    .where(eq(child.id, childId))
+    .where(and(eq(child.id, childId), eq(child.organizationId, organizationId)))
     .limit(1);
 
   if (!childRow?.parentId) {
@@ -34,7 +51,7 @@ export async function POST(request: NextRequest) {
   const siblingRows = await db
     .select({ id: child.id })
     .from(child)
-    .where(eq(child.parentId, childRow.parentId));
+    .where(and(eq(child.parentId, childRow.parentId), eq(child.organizationId, organizationId)));
   const siblingIds = siblingRows.map((s) => s.id);
 
   // Find the family's primary wallet
@@ -64,7 +81,7 @@ export async function POST(request: NextRequest) {
     amount,
     balanceAfter: newBalance,
     description: `Cash top-up by operator`,
-    operatorId: session.user.id,
+    operatorId: access.actorUserId,
   });
 
   return NextResponse.json({ newBalance });

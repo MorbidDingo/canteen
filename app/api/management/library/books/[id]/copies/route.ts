@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { book, bookCopy } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list copies for a book
@@ -10,20 +10,28 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
+    const { id } = await params;
+
+    const copies = await db
+      .select()
+      .from(bookCopy)
+      .where(and(eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)))
+      .orderBy(bookCopy.accessionNumber);
+
+    return NextResponse.json({ copies });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    console.error("Management library copies list error:", error);
+    return NextResponse.json({ error: "Failed to fetch copies" }, { status: 500 });
   }
-
-  const { id } = await params;
-
-  const copies = await db
-    .select()
-    .from(bookCopy)
-    .where(eq(bookCopy.bookId, id))
-    .orderBy(bookCopy.accessionNumber);
-
-  return NextResponse.json({ copies });
 }
 
 // POST — add a new copy
@@ -31,12 +39,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const { id } = await params;
     const body = await request.json();
     const { accessionNumber, condition, location } = body;
@@ -49,7 +57,7 @@ export async function POST(
     const [parentBook] = await db
       .select({ id: book.id, title: book.title })
       .from(book)
-      .where(eq(book.id, id))
+      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!parentBook) {
@@ -60,7 +68,7 @@ export async function POST(
     const [dup] = await db
       .select({ id: bookCopy.id })
       .from(bookCopy)
-      .where(eq(bookCopy.accessionNumber, accessionNumber.trim()))
+      .where(and(eq(bookCopy.accessionNumber, accessionNumber.trim()), eq(bookCopy.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (dup) {
@@ -74,6 +82,7 @@ export async function POST(
       const [copy] = await tx
         .insert(bookCopy)
         .values({
+          organizationId: access.activeOrganizationId!,
           bookId: id,
           accessionNumber: accessionNumber.trim(),
           condition: condition || "NEW",
@@ -95,7 +104,7 @@ export async function POST(
       const allCopies = await tx
         .select({ status: bookCopy.status })
         .from(bookCopy)
-        .where(eq(bookCopy.bookId, id));
+        .where(and(eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)));
 
       const total = allCopies.filter((c) => c.status !== "RETIRED").length;
       const available = allCopies.filter((c) => c.status === "AVAILABLE").length;
@@ -109,10 +118,11 @@ export async function POST(
     });
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_ADDED,
       details: {
+        organizationId: access.activeOrganizationId,
         bookId: id,
         bookTitle: parentBook.title,
         copyId: created.id,
@@ -123,6 +133,9 @@ export async function POST(
 
     return NextResponse.json({ copy: created }, { status: 201 });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Add copy error:", error);
     return NextResponse.json({ error: "Failed to add copy" }, { status: 500 });
   }

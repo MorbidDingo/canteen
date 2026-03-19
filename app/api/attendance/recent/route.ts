@@ -1,16 +1,38 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { isMissingRelationError } from "@/lib/db-errors";
 import { sanitizeImageUrl } from "@/lib/image-url";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session?.user || !["MANAGEMENT", "ATTENDANCE"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ATTENDANCE"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Attendance controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
+    }
+
+    const organizationId = access.activeOrganizationId!;
+    const scopedGateDeviceIds =
+      access.membershipRole === "ATTENDANCE"
+        ? await getUserAccessibleDeviceIds({
+            organizationId,
+            userId: access.actorUserId,
+            allowedDeviceTypes: ["GATE"],
+          })
+        : null;
+
+    if (scopedGateDeviceIds && scopedGateDeviceIds.length === 0) {
+      return NextResponse.json({ success: true, gates: [], records: [] });
     }
 
     const { searchParams } = new URL(request.url);
@@ -23,6 +45,7 @@ export async function GET(request: Request) {
       id: string;
       childId: string;
       direction: "ENTRY" | "EXIT";
+      gateId: string | null;
       tappedAt: Date;
       isValid: boolean;
       anomalyReason: string | null;
@@ -38,6 +61,7 @@ export async function GET(request: Request) {
           id: gateLog.id,
           childId: gateLog.childId,
           direction: gateLog.direction,
+          gateId: gateLog.gateId,
           tappedAt: gateLog.tappedAt,
           isValid: gateLog.isValid,
           anomalyReason: gateLog.anomalyReason,
@@ -48,6 +72,12 @@ export async function GET(request: Request) {
         })
         .from(gateLog)
         .innerJoin(child, eq(gateLog.childId, child.id))
+        .where(
+          and(
+            eq(child.organizationId, organizationId),
+            scopedGateDeviceIds ? inArray(gateLog.gateId, scopedGateDeviceIds) : undefined,
+          ),
+        )
         .orderBy(desc(gateLog.tappedAt))
         .limit(limit);
     } catch (err) {
@@ -61,14 +91,37 @@ export async function GET(request: Request) {
       throw err;
     }
 
+    const gateRows = await db
+      .select({ gateId: gateLog.gateId })
+      .from(gateLog)
+      .innerJoin(child, eq(gateLog.childId, child.id))
+      .where(
+        and(
+          eq(child.organizationId, organizationId),
+          scopedGateDeviceIds ? inArray(gateLog.gateId, scopedGateDeviceIds) : undefined,
+        ),
+      )
+      .orderBy(desc(gateLog.tappedAt))
+      .limit(200);
+
+    const gates = Array.from(
+      new Set(
+        gateRows
+          .map((row) => row.gateId)
+          .filter((value): value is string => Boolean(value && value.trim())),
+      ),
+    );
+
     return NextResponse.json({
       success: true,
+      gates,
       records: logs.map((log) => ({
         id: log.id,
         childId: log.childId,
         name: log.name,
         grNumber: log.grNumber,
         direction: log.direction,
+        gateId: log.gateId,
         tappedAt: log.tappedAt,
         image: sanitizeImageUrl(log.image),
         presenceStatus: log.presenceStatus,
@@ -77,6 +130,9 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Recent attendance fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

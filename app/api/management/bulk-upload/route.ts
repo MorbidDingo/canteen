@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { user, account, child, wallet, parentControl } from "@/lib/db/schema";
-import { inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { user, account, child, wallet, parentControl, organizationMembership } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { runParallelForEach, type RowProgressLog } from "@/lib/bulk-upload-engine";
 import * as XLSX from "xlsx";
@@ -80,10 +80,22 @@ async function processUpload(
   emit?: (log: RowProgressLog, processed: number, total: number) => void,
   emitStage?: (stage: string, message: string, progress?: number) => void,
 ) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
-    return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["MANAGEMENT", "OWNER"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        response: NextResponse.json({ error: error.message, code: error.code }, { status: error.status }),
+      };
+    }
+    throw error;
   }
+
+  const organizationId = access.activeOrganizationId!;
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
@@ -136,7 +148,10 @@ async function processUpload(
 
   const grNumbers = [...new Set(rows.map((r) => r.gr))];
   const existingGrRows = grNumbers.length
-    ? await db.select({ grNumber: child.grNumber }).from(child).where(inArray(child.grNumber, grNumbers))
+    ? await db
+        .select({ grNumber: child.grNumber })
+        .from(child)
+        .where(and(eq(child.organizationId, organizationId), inArray(child.grNumber, grNumbers)))
     : [];
   const existingGrSet = new Set(existingGrRows.map((r) => r.grNumber).filter(Boolean) as string[]);
 
@@ -150,7 +165,19 @@ async function processUpload(
 
   const existingParents = new Map<string, string>();
   if (uniqueEmails.length > 0) {
-    const existingUsers = await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.email, uniqueEmails));
+    const existingUsers = await db
+      .select({ id: user.id, email: user.email })
+      .from(user)
+      .innerJoin(
+        organizationMembership,
+        and(
+          eq(organizationMembership.userId, user.id),
+          eq(organizationMembership.organizationId, organizationId),
+          eq(organizationMembership.role, "PARENT"),
+          eq(organizationMembership.status, "ACTIVE"),
+        ),
+      )
+      .where(inArray(user.email, uniqueEmails));
     for (const u of existingUsers) existingParents.set(u.email.toLowerCase(), u.id);
   }
   emitStage?.("preloading", "Preload complete", 100);
@@ -176,6 +203,18 @@ async function processUpload(
         email,
         emailVerified: false,
         role: "PARENT",
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await db.insert(organizationMembership).values({
+        id: crypto.randomUUID(),
+        organizationId,
+        userId: newParentId,
+        role: "PARENT",
+        status: "ACTIVE",
+        invitedByUserId: access.actorUserId,
+        joinedAt: now,
         createdAt: now,
         updatedAt: now,
       });
@@ -249,6 +288,34 @@ async function processUpload(
         isNewParent = true;
       } else if (existingParents.has(email)) {
         parentId = existingParents.get(email)!;
+
+        const [existingMembership] = await db
+          .select({ id: organizationMembership.id })
+          .from(organizationMembership)
+          .where(
+            and(
+              eq(organizationMembership.organizationId, organizationId),
+              eq(organizationMembership.userId, parentId),
+              eq(organizationMembership.role, "PARENT"),
+              eq(organizationMembership.status, "ACTIVE"),
+            ),
+          )
+          .limit(1);
+
+        if (!existingMembership) {
+          const now = new Date();
+          await db.insert(organizationMembership).values({
+            id: crypto.randomUUID(),
+            organizationId,
+            userId: parentId,
+            role: "PARENT",
+            status: "ACTIVE",
+            invitedByUserId: access.actorUserId,
+            joinedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       }
     }
 
@@ -281,6 +348,7 @@ async function processUpload(
         const [created] = await tx
           .insert(child)
           .values({
+            organizationId,
             parentId,
             name: row.student.trim(),
             grNumber: row.gr.trim(),
@@ -352,10 +420,11 @@ async function processUpload(
 
   emitStage?.("finalizing", "Writing audit and preparing response", 40);
   await logAudit({
-    userId: session.user.id,
-    userRole: session.user.role,
+    userId: access.actorUserId,
+    userRole: access.membershipRole || access.session.user.role,
     action: AUDIT_ACTIONS.BULK_UPLOAD,
     details: {
+      organizationId,
       totalRows: rows.length,
       created,
       skipped,

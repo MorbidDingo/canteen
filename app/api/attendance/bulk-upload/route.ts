@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bulkPhotoUpload, child, photoUploadBatch } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { configureCloudinary, cloudinary } from "@/lib/cloudinary";
 import { runParallelForEach, type RowProgressLog } from "@/lib/bulk-upload-engine";
 
@@ -126,10 +126,31 @@ async function processUpload(
   emit?: (log: RowProgressLog, processed: number, total: number) => void,
   emitStage?: (stage: string, message: string, progress?: number) => void,
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "ATTENDANCE"].includes(session.user.role)) {
-    return { response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ATTENDANCE"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return {
+        response: NextResponse.json({ error: error.message, code: error.code }, { status: error.status }),
+      };
+    }
+    throw error;
   }
+
+  if (access.deviceLoginProfile) {
+    return {
+      response: NextResponse.json(
+        { error: "Attendance controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const cloudinaryState = configureCloudinary();
   if (!cloudinaryState.ok) {
@@ -185,7 +206,7 @@ async function processUpload(
   const [upload] = await db
     .insert(bulkPhotoUpload)
     .values({
-      uploadedBy: session.user.id,
+      uploadedBy: access.actorUserId,
       fileName: file.name,
       fileSize: file.size,
       totalFiles: rows.length,
@@ -198,11 +219,11 @@ async function processUpload(
 
   emitStage?.("preloading", "Matching GR numbers", 20);
   const uniqueGRs = [...new Set(rows.map((r) => r.grNumber))];
-  const students = await db
+  const orgStudents = await db
     .select({ id: child.id, grNumber: child.grNumber })
     .from(child)
-    .where(inArray(child.grNumber, uniqueGRs));
-  const childByGr = new Map(students.map((s) => [String(s.grNumber), s.id]));
+    .where(and(eq(child.organizationId, organizationId), inArray(child.grNumber, uniqueGRs)));
+  const orgChildByGr = new Map(orgStudents.map((s) => [String(s.grNumber), s.id]));
   emitStage?.("preloading", "Student lookup complete", 100);
 
   const results: UploadResult[] = new Array(rows.length);
@@ -215,7 +236,7 @@ async function processUpload(
 
   emitStage?.("uploading", "Uploading photos", 0);
   await runParallelForEach(rows, CONCURRENCY, async (row, idx) => {
-    const childId = childByGr.get(row.grNumber);
+    const childId = orgChildByGr.get(row.grNumber);
 
     if (!childId) {
       const result: UploadResult = {

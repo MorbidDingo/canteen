@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Card,
@@ -78,6 +79,14 @@ type PendingReturn = {
 type OperatorMode = "issue" | "return";
 type ActiveTab = "issue-return" | "pending-returns";
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 // ─── Main Page ───────────────────────────────────────────
 
 export default function LibOperatorDashboardPage() {
@@ -98,6 +107,7 @@ export default function LibOperatorDashboardPage() {
   // Pending returns
   const [pendingReturns, setPendingReturns] = useState<PendingReturn[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [assignedLibraryDevices, setAssignedLibraryDevices] = useState<OrgContextDevice[]>([]);
 
   const rfidRef = useRef<HTMLInputElement>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
@@ -120,6 +130,22 @@ export default function LibOperatorDashboardPage() {
   }, []);
 
   useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "LIBRARY" && d.status === "ACTIVE",
+        );
+        setAssignedLibraryDevices(devices);
+      } catch {
+        // non-blocking
+      }
+    };
+
+    void fetchOrgContext();
+
     if (activeTab === "pending-returns") {
       fetchPendingReturns();
     }
@@ -347,6 +373,21 @@ export default function LibOperatorDashboardPage() {
               )}
             </Button>
           </div>
+
+          {assignedLibraryDevices.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Open Assigned Library Terminal</p>
+              <div className="flex flex-wrap gap-2">
+                {assignedLibraryDevices.map((device) => (
+                  <Link key={device.id} href={`/library?deviceCode=${encodeURIComponent(device.deviceCode)}`}>
+                    <Button variant="outline" size="sm">
+                      {device.deviceName} ({device.deviceCode})
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 

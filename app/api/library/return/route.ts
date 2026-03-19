@@ -16,12 +16,13 @@ import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS, CERTE_PLUS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { resolveChildByRfid } from "@/lib/rfid-access";
 
-async function getSetting(key: string): Promise<string> {
+async function getSetting(key: string, organizationId: string): Promise<string> {
   const rows = await db
     .select({ value: librarySetting.value })
     .from(librarySetting)
-    .where(eq(librarySetting.key, key))
+    .where(and(eq(librarySetting.key, key), eq(librarySetting.organizationId, organizationId)))
     .limit(1);
   return rows[0]?.value ?? LIBRARY_SETTINGS_DEFAULTS[key] ?? "";
 }
@@ -29,6 +30,16 @@ async function getSetting(key: string): Promise<string> {
 // POST /api/library/return — return a book (accession# + RFID for verification)
 export async function POST(request: NextRequest) {
   try {
+    const requestOrgId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim() ||
+      null;
+
+    if (!requestOrgId) {
+      return NextResponse.json({ success: false, reason: "Organization context is required" }, { status: 400 });
+    }
+
     const body = await request.json();
     const { rfidCardId, scanInput } = body as {
       rfidCardId: string;
@@ -43,10 +54,18 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Look up child by RFID ─────────────────────
+    const resolved = await resolveChildByRfid(rfidCardId, requestOrgId);
+    if (!resolved) {
+      return NextResponse.json(
+        { success: false, reason: "Unknown card." },
+        { status: 200 }
+      );
+    }
+
     const children = await db
       .select()
       .from(child)
-      .where(eq(child.rfidCardId, rfidCardId))
+      .where(and(eq(child.id, resolved.child.id), eq(child.organizationId, requestOrgId)))
       .limit(1);
 
     if (children.length === 0) {
@@ -65,7 +84,7 @@ export async function POST(request: NextRequest) {
     const copyByAccession = await db
       .select()
       .from(bookCopy)
-      .where(eq(bookCopy.accessionNumber, scanInput))
+      .where(and(eq(bookCopy.accessionNumber, scanInput), eq(bookCopy.organizationId, requestOrgId)))
       .limit(1);
 
     if (copyByAccession.length > 0) {
@@ -81,6 +100,8 @@ export async function POST(request: NextRequest) {
           and(
             eq(bookIssuance.childId, studentChild.id),
             eq(book.isbn, scanInput),
+            eq(bookCopy.organizationId, requestOrgId),
+            eq(book.organizationId, requestOrgId),
             eq(bookIssuance.status, "ISSUED")
           )
         )
@@ -90,7 +111,7 @@ export async function POST(request: NextRequest) {
         const copies = await db
           .select()
           .from(bookCopy)
-          .where(eq(bookCopy.id, issuanceByIsbn[0].copyId))
+          .where(and(eq(bookCopy.id, issuanceByIsbn[0].copyId), eq(bookCopy.organizationId, requestOrgId)))
           .limit(1);
         resolvedCopy = copies[0] ?? null;
       }
@@ -141,10 +162,10 @@ export async function POST(request: NextRequest) {
       const overdueDays = Math.ceil(
         (now.getTime() - new Date(issuance.dueDate).getTime()) / (1000 * 60 * 60 * 24)
       );
-      const fineMode = (await getSetting("fine_mode")).toUpperCase() === "WEEK" ? "WEEK" : "DAY";
-      const finePerDay = parseFloat(await getSetting("fine_per_day")) || 0;
-      const finePerWeek = parseFloat(await getSetting("fine_per_week")) || 0;
-      const maxFine = parseFloat(await getSetting("max_fine_per_book")) || 100;
+      const fineMode = (await getSetting("fine_mode", requestOrgId)).toUpperCase() === "WEEK" ? "WEEK" : "DAY";
+      const finePerDay = parseFloat(await getSetting("fine_per_day", requestOrgId)) || 0;
+      const finePerWeek = parseFloat(await getSetting("fine_per_week", requestOrgId)) || 0;
+      const maxFine = parseFloat(await getSetting("max_fine_per_book", requestOrgId)) || 100;
 
       if (fineMode === "WEEK") {
         const overdueWeeks = Math.ceil(overdueDays / 7);
@@ -159,13 +180,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 6. Check operator confirmation requirement ───
-    const requireConfirmation = await getSetting("require_operator_return_confirmation");
+    const requireConfirmation = await getSetting("require_operator_return_confirmation", requestOrgId);
 
     // Get the book info for the response
     const bookInfo = await db
       .select({ title: book.title, author: book.author })
       .from(book)
-      .where(eq(book.id, resolvedCopy.bookId))
+      .where(and(eq(book.id, resolvedCopy.bookId), eq(book.organizationId, requestOrgId)))
       .limit(1);
 
     if (requireConfirmation === "true") {
@@ -238,7 +259,7 @@ export async function POST(request: NextRequest) {
     await db
       .update(bookCopy)
       .set({ status: "AVAILABLE", updatedAt: now })
-      .where(eq(bookCopy.id, resolvedCopy.id));
+      .where(and(eq(bookCopy.id, resolvedCopy.id), eq(bookCopy.organizationId, requestOrgId)));
 
     await db
       .update(book)
@@ -246,7 +267,7 @@ export async function POST(request: NextRequest) {
         availableCopies: sql`${book.availableCopies} + 1`,
         updatedAt: now,
       })
-      .where(eq(book.id, resolvedCopy.bookId));
+      .where(and(eq(book.id, resolvedCopy.bookId), eq(book.organizationId, requestOrgId)));
 
     // ── 8. Deduct fine from wallet if applicable (with Certe+ penalty allowance) ─────
     let fineDeducted = false;

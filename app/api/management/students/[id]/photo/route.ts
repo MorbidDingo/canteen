@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 import { db } from "@/lib/db";
 import { child } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 /**
@@ -16,10 +16,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Student management controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const { id } = await params;
 
@@ -33,7 +50,7 @@ export async function POST(
     const [student] = await db
       .select({ id: child.id, name: child.name })
       .from(child)
-      .where(eq(child.id, id))
+      .where(and(eq(child.id, id), eq(child.organizationId, organizationId)))
       .limit(1);
 
     if (!student) {
@@ -110,11 +127,11 @@ export async function POST(
     await db
       .update(child)
       .set({ image: imageUrl, updatedAt: new Date() })
-      .where(eq(child.id, id));
+      .where(and(eq(child.id, id), eq(child.organizationId, organizationId)));
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "UNKNOWN",
       action: AUDIT_ACTIONS.STUDENT_PHOTO_UPDATED,
       details: { studentId: id, studentName: student.name, imageUrl },
       request,

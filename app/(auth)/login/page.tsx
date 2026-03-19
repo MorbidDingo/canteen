@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn, authClient } from "@/lib/auth-client";
+import { signIn, signOut, authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,8 @@ export default function LoginPage() {
 
   const getDefaultRouteForRole = useCallback((role?: string | null) => {
     switch (role) {
+      case "OWNER":
+        return "/owner";
       case "ADMIN":
         return "/admin/orders";
       case "OPERATOR":
@@ -38,23 +40,87 @@ export default function LoginPage() {
         return "/lib-operator/dashboard";
       case "ATTENDANCE":
         return "/attendance";
+      case "DEVICE":
+        return "/";
       default:
         return "/menu";
     }
   }, []);
+
+  async function initializeActiveOrganization() {
+    try {
+      await fetch("/api/org/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+    } catch {
+      // Ignore if user has no org memberships (e.g. parent account)
+    }
+  }
+
+  const resolvePostLoginRoute = useCallback(async (role?: string | null) => {
+    try {
+      const platformRes = await fetch("/api/platform/me", { cache: "no-store" });
+      if (platformRes.ok) {
+        return "/platform";
+      }
+    } catch {
+      // Ignore and fallback to org/default route
+    }
+
+    return getDefaultRouteForRole(role);
+  }, [getDefaultRouteForRole]);
+
+  const hasActiveOrganizationMembership = useCallback(async () => {
+    try {
+      const membershipsRes = await fetch("/api/org/memberships", { cache: "no-store" });
+      if (!membershipsRes.ok) return false;
+      const data = (await membershipsRes.json()) as { memberships?: Array<{ organizationId: string }> };
+      return (data.memberships?.length ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const enforceOrganizationLinkOrSignOut = useCallback(async () => {
+    const platformRes = await fetch("/api/platform/me", { cache: "no-store" });
+    if (platformRes.ok) return true;
+
+    const hasMembership = await hasActiveOrganizationMembership();
+    if (hasMembership) return true;
+
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = "/login";
+        },
+      },
+    });
+    return false;
+  }, [hasActiveOrganizationMembership]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const session = await authClient.getSession();
       if (cancelled || !session?.data?.user) return;
-      router.replace(getDefaultRouteForRole(session.data.user.role));
+
+      const allowed = await enforceOrganizationLinkOrSignOut();
+      if (!allowed || cancelled) {
+        toast.error("This account is not linked to an active organization. Contact your organization admin.");
+        return;
+      }
+
+      await initializeActiveOrganization();
+      const nextRoute = await resolvePostLoginRoute(session.data.user.role);
+      router.replace(nextRoute);
       router.refresh();
     })();
     return () => {
       cancelled = true;
     };
-  }, [router, getDefaultRouteForRole]);
+  }, [router, enforceOrganizationLinkOrSignOut, resolvePostLoginRoute]);
 
   async function resolveRoleWithRetry() {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -88,8 +154,16 @@ export default function LoginPage() {
 
     toast.success("Signed in successfully!");
 
+    const allowed = await enforceOrganizationLinkOrSignOut();
+    if (!allowed) {
+      toast.error("This account is not linked to an active organization. Contact your organization admin.");
+      return;
+    }
+
+    await initializeActiveOrganization();
     const role = await resolveRoleWithRetry();
-    router.push(getDefaultRouteForRole(role));
+    const nextRoute = await resolvePostLoginRoute(role);
+    router.push(nextRoute);
     router.refresh();
   };
 
@@ -163,9 +237,9 @@ export default function LoginPage() {
               Sign In
             </Button>
             <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
+              Need tenant onboarding or staff access?{" "}
               <Link href="/register" className="font-medium text-primary hover:underline">
-                Register
+                Request Access
               </Link>
             </p>
           </CardFooter>

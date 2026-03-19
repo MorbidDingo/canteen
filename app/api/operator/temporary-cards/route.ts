@@ -1,17 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { child, temporaryRfidAccess } from "@/lib/db/schema";
-import { getSession } from "@/lib/auth-server";
+import { child, temporaryRfidAccess, user } from "@/lib/db/schema";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { sendMessage } from "@/lib/messaging-service";
 
 const MIN_STUDENT_HOURS = 1;
 const MAX_STUDENT_HOURS = 48;
 
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "OPERATOR") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Temporary card controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const now = new Date();
   const rows = await db
@@ -30,6 +48,7 @@ export async function GET() {
     })
     .from(temporaryRfidAccess)
     .innerJoin(child, eq(child.id, temporaryRfidAccess.childId))
+    .where(eq(temporaryRfidAccess.organizationId, organizationId))
     .orderBy(temporaryRfidAccess.createdAt);
 
   return NextResponse.json({
@@ -41,10 +60,27 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "OPERATOR") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Temporary card controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const body = await request.json();
   const {
@@ -81,7 +117,7 @@ export async function POST(request: NextRequest) {
   const [targetChild] = await db
     .select({ id: child.id, permanentRfidCardId: child.rfidCardId })
     .from(child)
-    .where(eq(child.id, childId))
+    .where(and(eq(child.id, childId), eq(child.organizationId, organizationId)))
     .limit(1);
 
   if (!targetChild) {
@@ -110,6 +146,7 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(temporaryRfidAccess.temporaryRfidCardId, trimmedTempCard),
+        eq(temporaryRfidAccess.organizationId, organizationId),
         isNull(temporaryRfidAccess.revokedAt),
         gt(temporaryRfidAccess.validUntil, now),
       ),
@@ -126,6 +163,7 @@ export async function POST(request: NextRequest) {
     .where(
       and(
         eq(temporaryRfidAccess.childId, childId),
+        eq(temporaryRfidAccess.organizationId, organizationId),
         eq(temporaryRfidAccess.accessType, "STUDENT_TEMP"),
         isNull(temporaryRfidAccess.revokedAt),
         gt(temporaryRfidAccess.validUntil, now),
@@ -141,13 +179,14 @@ export async function POST(request: NextRequest) {
   const [created] = await db
     .insert(temporaryRfidAccess)
     .values({
+      organizationId,
       childId,
       temporaryRfidCardId: trimmedTempCard,
       accessType,
       validFrom: now,
       validUntil,
       notes: notes?.trim() || null,
-      createdByOperatorId: session.user.id,
+      createdByOperatorId: access.actorUserId,
     })
     .returning({
       id: temporaryRfidAccess.id,
@@ -158,14 +197,59 @@ export async function POST(request: NextRequest) {
       validUntil: temporaryRfidAccess.validUntil,
     });
 
+  // ─── Send SMS/WhatsApp Notification ────────────────────
+  try {
+    const childData = await db.select({ parentId: child.parentId, name: child.name }).from(child).where(eq(child.id, childId)).limit(1);
+    if (childData.length > 0) {
+      const parentData = await db.select({ phone: user.phone }).from(user).where(eq(user.id, childData[0].parentId)).limit(1);
+      if (parentData.length > 0 && parentData[0].phone) {
+        const durationText = durationHours === 1 ? "1 hour" : `${durationHours} hours`;
+        sendMessage({
+          parentId: childData[0].parentId,
+          childId,
+          phoneNumber: parentData[0].phone,
+          notificationType: "TEMPORARY_CARD_ISSUED",
+          title: "Temporary Card Issued",
+          message: `Temporary card ${trimmedTempCard} has been issued to ${childData[0].name}. Valid for ${durationText}.`,
+          metadata: {
+            childName: childData[0].name,
+            cardId: trimmedTempCard,
+            duration: durationText,
+          },
+        }).catch((error) => {
+          console.error("[Messaging] Failed to send temporary card notification:", error);
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[Messaging] Error sending temporary card notification:", error);
+  }
+
   return NextResponse.json({ card: created });
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "OPERATOR") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "OPERATOR"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Temporary card controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
+  }
+
+  const organizationId = access.activeOrganizationId!;
 
   const cardId = request.nextUrl.searchParams.get("id")?.trim();
   if (!cardId) {
@@ -176,7 +260,13 @@ export async function DELETE(request: NextRequest) {
   const [updated] = await db
     .update(temporaryRfidAccess)
     .set({ revokedAt: now })
-    .where(and(eq(temporaryRfidAccess.id, cardId), isNull(temporaryRfidAccess.revokedAt)))
+    .where(
+      and(
+        eq(temporaryRfidAccess.id, cardId),
+        eq(temporaryRfidAccess.organizationId, organizationId),
+        isNull(temporaryRfidAccess.revokedAt),
+      ),
+    )
     .returning({ id: temporaryRfidAccess.id });
 
   if (!updated) {

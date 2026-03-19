@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { menuItem, discount } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { sanitizeImageUrl } from "@/lib/image-url";
 
 function applyDiscount(price: number, type: string, value: number): number {
@@ -9,12 +9,21 @@ function applyDiscount(price: number, type: string, value: number): number {
   return Math.max(0, Math.round((price - value) * 100) / 100);
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const organizationId =
+      request.headers.get("x-organization-id")?.trim() ||
+      request.headers.get("x-org-id")?.trim() ||
+      request.cookies.get("activeOrganizationId")?.value?.trim();
+
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization context is required" }, { status: 400 });
+    }
+
     const items = await db
       .select()
       .from(menuItem)
-      .where(eq(menuItem.available, true));
+      .where(and(eq(menuItem.available, true), eq(menuItem.organizationId, organizationId)));
 
     // Fetch active discounts
     const activeDiscounts = await db

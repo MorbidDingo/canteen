@@ -1,36 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { librarySetting } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { and, eq } from "drizzle-orm";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 
 // GET — return all settings (merged with defaults)
 export async function GET() {
-  const session = await getSession();
-  if (!session?.user || (session.user.role !== "MANAGEMENT" && session.user.role !== "LIB_OPERATOR")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
+    const rows = await db
+      .select()
+      .from(librarySetting)
+      .where(eq(librarySetting.organizationId, access.activeOrganizationId!));
+
+    const settings: Record<string, string> = { ...LIBRARY_SETTINGS_DEFAULTS };
+    for (const row of rows) {
+      settings[row.key] = row.value;
+    }
+
+    return NextResponse.json({ settings });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    console.error("Get library settings error:", error);
+    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }
-
-  const rows = await db.select().from(librarySetting);
-
-  const settings: Record<string, string> = { ...LIBRARY_SETTINGS_DEFAULTS };
-  for (const row of rows) {
-    settings[row.key] = row.value;
-  }
-
-  return NextResponse.json({ settings });
 }
 
 // PUT — save all settings atomically
 export async function PUT(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || (session.user.role !== "MANAGEMENT" && session.user.role !== "LIB_OPERATOR")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const body = await request.json();
     const { settings } = body as { settings: Record<string, string> };
 
@@ -55,35 +66,39 @@ export async function PUT(request: NextRequest) {
         const [existing] = await tx
           .select({ id: librarySetting.id })
           .from(librarySetting)
-          .where(eq(librarySetting.key, key))
+          .where(and(eq(librarySetting.key, key), eq(librarySetting.organizationId, access.activeOrganizationId!)))
           .limit(1);
 
         if (existing) {
           await tx
             .update(librarySetting)
-            .set({ value, updatedAt: now, updatedBy: session.user.id })
-            .where(eq(librarySetting.key, key));
+            .set({ value, updatedAt: now, updatedBy: access.actorUserId })
+            .where(and(eq(librarySetting.key, key), eq(librarySetting.organizationId, access.activeOrganizationId!)));
         } else {
           await tx.insert(librarySetting).values({
+            organizationId: access.activeOrganizationId!,
             key,
             value,
             updatedAt: now,
-            updatedBy: session.user.id,
+            updatedBy: access.actorUserId,
           });
         }
       }
     });
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.LIBRARY_SETTINGS_UPDATED,
-      details: { changes },
+      details: { organizationId: access.activeOrganizationId, changes },
       request,
     });
 
     // Return updated settings
-    const rows = await db.select().from(librarySetting);
+    const rows = await db
+      .select()
+      .from(librarySetting)
+      .where(eq(librarySetting.organizationId, access.activeOrganizationId!));
     const merged: Record<string, string> = { ...LIBRARY_SETTINGS_DEFAULTS };
     for (const row of rows) {
       merged[row.key] = row.value;
@@ -91,6 +106,9 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ settings: merged });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update settings error:", error);
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }

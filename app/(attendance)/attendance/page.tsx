@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ type LiveTapRecord = {
   name: string;
   grNumber: string | null;
   direction: "ENTRY" | "EXIT";
+  gateId?: string | null;
   tappedAt: string;
   image: string | null;
   presenceStatus: "INSIDE" | "OUTSIDE";
@@ -86,6 +88,14 @@ type BulkSummary = {
   errors: number;
 };
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 const defaultStats: SummaryStats = {
   totalStudents: 0,
   insideCount: 0,
@@ -131,6 +141,8 @@ function formatDateTime(value: string) {
 
 export default function AttendancePage() {
   const [recent, setRecent] = useState<LiveTapRecord[]>([]);
+  const [availableGates, setAvailableGates] = useState<string[]>([]);
+  const [selectedGate, setSelectedGate] = useState<string>("ALL");
   const [activeTab, setActiveTab] = useState("live");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SummaryStats>(defaultStats);
@@ -150,6 +162,7 @@ export default function AttendancePage() {
   const [bulkLogs, setBulkLogs] = useState<
     { row: number; status: "created" | "skipped" | "error"; message: string; processed: number; total: number }[]
   >([]);
+  const [assignedGateDevices, setAssignedGateDevices] = useState<OrgContextDevice[]>([]);
 
   const stageOrder = [
     { key: "upload", label: "Upload" },
@@ -177,6 +190,7 @@ export default function AttendancePage() {
       if (!res.ok) throw new Error("Failed to fetch recent taps");
       const data = await res.json();
       setRecent(data.records || []);
+      setAvailableGates(data.gates || []);
     } catch {
       toast.error("Failed to load live attendance feed");
     } finally {
@@ -225,6 +239,22 @@ export default function AttendancePage() {
   };
 
   useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "GATE" && d.status === "ACTIVE",
+        );
+        setAssignedGateDevices(devices);
+      } catch {
+        // non-blocking
+      }
+    };
+
+    void fetchOrgContext();
+
     fetchRecent();
     fetchReports("");
 
@@ -270,10 +300,15 @@ export default function AttendancePage() {
   }, [reportQuery]);
 
   const sortedRecent = useMemo(() => {
-    return [...recent].sort(
+    const gateFiltered =
+      selectedGate === "ALL"
+        ? recent
+        : recent.filter((record) => (record.gateId?.trim() || "UNASSIGNED_GATE") === selectedGate);
+
+    return [...gateFiltered].sort(
       (a, b) => new Date(b.tappedAt).getTime() - new Date(a.tappedAt).getTime(),
     );
-  }, [recent]);
+  }, [recent, selectedGate]);
 
   const filteredReportStudents = useMemo(() => {
     switch (reportView) {
@@ -576,6 +611,26 @@ export default function AttendancePage() {
         </div>
       </div>
 
+      {assignedGateDevices.length > 0 ? (
+        <Card className="border-orange-200/70">
+          <CardHeader>
+            <CardTitle className="text-orange-950">Open Assigned Gate Terminals</CardTitle>
+            <CardDescription>Select a gate here, then run normal terminal flow.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {assignedGateDevices.map((device) => (
+                <Link key={device.id} href={`/gate?deviceCode=${encodeURIComponent(device.deviceCode)}`}>
+                  <Button type="button" variant="outline" className="border-orange-200 text-orange-900 hover:bg-orange-100">
+                    {device.deviceName} ({device.deviceCode})
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid h-auto w-full grid-cols-3 bg-orange-100/70 p-1">
           <TabsTrigger value="live" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">Live</TabsTrigger>
@@ -590,6 +645,34 @@ export default function AttendancePage() {
               <CardDescription>No full-student list is loaded here.</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedGate("ALL")}
+                  className={`rounded-md border px-3 py-1 text-xs font-medium ${
+                    selectedGate === "ALL"
+                      ? "border-orange-600 bg-orange-600 text-white"
+                      : "border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+                  }`}
+                >
+                  All Gates
+                </button>
+                {availableGates.map((gate) => (
+                  <button
+                    key={gate}
+                    type="button"
+                    onClick={() => setSelectedGate(gate)}
+                    className={`rounded-md border px-3 py-1 text-xs font-medium ${
+                      selectedGate === gate
+                        ? "border-orange-600 bg-orange-600 text-white"
+                        : "border-orange-200 bg-white text-orange-900 hover:bg-orange-100"
+                    }`}
+                  >
+                    {gate === "UNASSIGNED_GATE" ? "Unassigned" : gate}
+                  </button>
+                ))}
+              </div>
+
               {loading ? (
                 <div className="text-sm text-muted-foreground">Loading live records...</div>
               ) : sortedRecent.length === 0 ? (
@@ -614,6 +697,9 @@ export default function AttendancePage() {
                         </div>
                         <Badge variant="outline" className="border-orange-200 text-orange-800">
                           {record.direction}
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {record.gateId?.trim() || "UNASSIGNED_GATE"}
                         </Badge>
                         <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-orange-200 bg-orange-50 px-2 py-1 text-xs font-medium text-orange-800 hover:bg-orange-100">
                           <Camera className="mr-1 h-3.5 w-3.5" />

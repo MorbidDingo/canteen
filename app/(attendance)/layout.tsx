@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, getSession, requireAccess } from "@/lib/auth-server";
 import { headers } from "next/headers";
 import { ClipboardList, LogOut } from "lucide-react";
 import { auth } from "@/lib/auth";
@@ -9,14 +9,26 @@ export default async function AttendanceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-
-  if (!session?.user) {
-    redirect("/login");
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["ATTENDANCE"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError && error.code === "UNAUTHENTICATED") {
+      redirect("/login");
+    }
+    redirect("/");
   }
 
-  if (session.user.role !== "ATTENDANCE") {
-    redirect("/");
+  if (access.deviceLoginProfile) {
+    redirect(access.deviceLoginProfile.terminalPath);
+  }
+
+  const session = await getSession();
+  if (!session?.user) {
+    redirect("/login");
   }
 
   async function handleSignOut() {

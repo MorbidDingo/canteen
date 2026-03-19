@@ -3,12 +3,13 @@ import {
   order,
   orderItem,
   menuItem,
+  organizationDevice,
   parentControl,
   child,
   user,
   discount,
 } from "@/lib/db/schema";
-import { gte, eq, and, sql, isNotNull } from "drizzle-orm";
+import { gte, eq, and, sql, isNotNull, or } from "drizzle-orm";
 import type { ConfidenceLevel, MenuCategory } from "@/lib/constants";
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -36,7 +37,7 @@ export interface ItemDailyRow {
   cancelledQty: number;
 }
 
-export async function getItemDailyBreakdown(days: number): Promise<ItemDailyRow[]> {
+export async function getItemDailyBreakdown(days: number, organizationId: string): Promise<ItemDailyRow[]> {
   const startDate = daysAgo(days);
 
   const rows = await db
@@ -52,7 +53,7 @@ export async function getItemDailyBreakdown(days: number): Promise<ItemDailyRow[
     .from(orderItem)
     .innerJoin(order, eq(orderItem.orderId, order.id))
     .innerJoin(menuItem, eq(orderItem.menuItemId, menuItem.id))
-    .where(gte(order.createdAt, startDate));
+    .where(and(gte(order.createdAt, startDate), eq(menuItem.organizationId, organizationId)));
 
   const map = new Map<string, ItemDailyRow>();
 
@@ -98,12 +99,12 @@ export interface StockRecommendation {
   last7: number[];
 }
 
-export async function getStockRecommendations(): Promise<StockRecommendation[]> {
+export async function getStockRecommendations(organizationId: string): Promise<StockRecommendation[]> {
   // Only for tracked-stock items
   const trackedItems = await db
     .select()
     .from(menuItem)
-    .where(isNotNull(menuItem.availableUnits));
+    .where(and(eq(menuItem.organizationId, organizationId), isNotNull(menuItem.availableUnits)));
 
   if (trackedItems.length === 0) return [];
 
@@ -119,7 +120,8 @@ export async function getStockRecommendations(): Promise<StockRecommendation[]> 
     })
     .from(orderItem)
     .innerJoin(order, eq(orderItem.orderId, order.id))
-    .where(gte(order.createdAt, startDate));
+    .innerJoin(menuItem, eq(orderItem.menuItemId, menuItem.id))
+    .where(and(gte(order.createdAt, startDate), eq(menuItem.organizationId, organizationId)));
 
   // Build per-item daily aggregates
   const itemDailyMap = new Map<
@@ -222,10 +224,13 @@ export interface DiscountSuggestion {
   };
 }
 
-export async function getDiscountSuggestions(): Promise<DiscountSuggestion[]> {
+export async function getDiscountSuggestions(organizationId: string): Promise<DiscountSuggestion[]> {
   const startDate = daysAgo(14);
 
-  const allItems = await db.select().from(menuItem);
+  const allItems = await db
+    .select()
+    .from(menuItem)
+    .where(eq(menuItem.organizationId, organizationId));
 
   const orderData = await db
     .select({
@@ -237,7 +242,8 @@ export async function getDiscountSuggestions(): Promise<DiscountSuggestion[]> {
     })
     .from(orderItem)
     .innerJoin(order, eq(orderItem.orderId, order.id))
-    .where(gte(order.createdAt, startDate));
+    .innerJoin(menuItem, eq(orderItem.menuItemId, menuItem.id))
+    .where(and(gte(order.createdAt, startDate), eq(menuItem.organizationId, organizationId)));
 
   // Aggregate per item
   const agg = new Map<
@@ -263,7 +269,8 @@ export async function getDiscountSuggestions(): Promise<DiscountSuggestion[]> {
   const existingDiscounts = await db
     .select({ menuItemId: discount.menuItemId })
     .from(discount)
-    .where(eq(discount.active, true));
+    .innerJoin(menuItem, eq(discount.menuItemId, menuItem.id))
+    .where(and(eq(menuItem.organizationId, organizationId), eq(discount.active, true)));
   const discountedIds = new Set(existingDiscounts.map((d) => d.menuItemId));
 
   const totalItemsSold = Array.from(agg.values()).reduce((s, a) => s + a.sold, 0);
@@ -375,14 +382,17 @@ export interface CategoryBlockStat {
   percentage: number;
 }
 
-export async function getCategoryBlockStats(): Promise<CategoryBlockStat[]> {
+export async function getCategoryBlockStats(organizationId: string): Promise<CategoryBlockStat[]> {
   const controls = await db
     .select({ blockedCategories: parentControl.blockedCategories })
-    .from(parentControl);
+    .from(parentControl)
+    .innerJoin(child, eq(parentControl.childId, child.id))
+    .where(eq(child.organizationId, organizationId));
 
   const totalParentsResult = await db
     .select({ count: sql<number>`count(distinct ${child.parentId})` })
-    .from(child);
+    .from(child)
+    .where(eq(child.organizationId, organizationId));
   const totalParents = Number(totalParentsResult[0]?.count ?? 0);
 
   const counts: Record<string, number> = {
@@ -425,7 +435,7 @@ export interface CategoryRevenue {
   quantity: number;
 }
 
-export async function getRevenueByCategory(days: number): Promise<CategoryRevenue[]> {
+export async function getRevenueByCategory(days: number, organizationId: string): Promise<CategoryRevenue[]> {
   const startDate = daysAgo(days);
 
   const rows = await db
@@ -441,6 +451,7 @@ export async function getRevenueByCategory(days: number): Promise<CategoryRevenu
     .where(
       and(
         gte(order.createdAt, startDate),
+        eq(menuItem.organizationId, organizationId),
         sql`${order.status} != 'CANCELLED'`
       )
     );
@@ -470,7 +481,8 @@ export interface PaymentBreakdown {
 }
 
 export async function getPaymentMethodBreakdown(
-  days: number
+  days: number,
+  organizationId: string,
 ): Promise<PaymentBreakdown[]> {
   const startDate = daysAgo(days);
 
@@ -481,9 +493,12 @@ export async function getPaymentMethodBreakdown(
       status: order.status,
     })
     .from(order)
+    .leftJoin(child, eq(order.childId, child.id))
+    .leftJoin(organizationDevice, eq(order.deviceId, organizationDevice.id))
     .where(
       and(
         gte(order.createdAt, startDate),
+        or(eq(child.organizationId, organizationId), eq(organizationDevice.organizationId, organizationId)),
         sql`${order.status} != 'CANCELLED'`
       )
     );
@@ -513,7 +528,8 @@ export interface PeakHourData {
 }
 
 export async function getPeakHoursAnalysis(
-  days: number
+  days: number,
+  organizationId: string,
 ): Promise<PeakHourData[]> {
   const startDate = daysAgo(days);
 
@@ -524,9 +540,12 @@ export async function getPeakHoursAnalysis(
       status: order.status,
     })
     .from(order)
+    .leftJoin(child, eq(order.childId, child.id))
+    .leftJoin(organizationDevice, eq(order.deviceId, organizationDevice.id))
     .where(
       and(
         gte(order.createdAt, startDate),
+        or(eq(child.organizationId, organizationId), eq(organizationDevice.organizationId, organizationId)),
         sql`${order.status} != 'CANCELLED'`
       )
     );
@@ -555,7 +574,7 @@ export async function getPeakHoursAnalysis(
 
 // ─── Combined analytics endpoint ─────────────────────────
 
-export async function getFullAnalytics(days: number) {
+export async function getFullAnalytics(days: number, organizationId: string) {
   const [
     itemBreakdown,
     recommendations,
@@ -565,13 +584,13 @@ export async function getFullAnalytics(days: number) {
     paymentBreakdown,
     peakHours,
   ] = await Promise.all([
-    getItemDailyBreakdown(days),
-    getStockRecommendations(),
-    getDiscountSuggestions(),
-    getCategoryBlockStats(),
-    getRevenueByCategory(days),
-    getPaymentMethodBreakdown(days),
-    getPeakHoursAnalysis(days),
+    getItemDailyBreakdown(days, organizationId),
+    getStockRecommendations(organizationId),
+    getDiscountSuggestions(organizationId),
+    getCategoryBlockStats(organizationId),
+    getRevenueByCategory(days, organizationId),
+    getPaymentMethodBreakdown(days, organizationId),
+    getPeakHoursAnalysis(days, organizationId),
   ]);
 
   return {

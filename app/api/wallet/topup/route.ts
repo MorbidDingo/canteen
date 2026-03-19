@@ -1,24 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, wallet, walletTransaction } from "@/lib/db/schema";
+import { child, wallet } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
-import { getRazorpay } from "@/lib/razorpay";
+import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
+import { getRazorpayForOrganization, getRazorpayPublicKeyForOrganization } from "@/lib/razorpay";
 
 // POST /api/wallet/topup — create a Razorpay order for wallet top-up
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let access;
+    try {
+      access = await requireLinkedAccount();
+    } catch (error) {
+      if (error instanceof AccessDeniedError) {
+        return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+      }
+      throw error;
     }
+
+    const session = access.session;
 
     const body = await request.json();
     const { childId, amount } = body;
 
     if (!childId || typeof amount !== "number" || amount < 10 || amount > 5000) {
       return NextResponse.json(
-        { error: "Invalid amount. Must be between ₹10 and ₹5,000" },
+        { error: "Invalid amount. Must be between 10 and 5000 credits" },
         { status: 400 }
       );
     }
@@ -46,7 +53,8 @@ export async function POST(request: NextRequest) {
     }
 
     const amountInPaise = Math.round(amount * 100);
-    const razorpay = getRazorpay();
+    const organizationId = children[0].organizationId ?? access.activeOrganizationId;
+    const razorpay = await getRazorpayForOrganization(organizationId);
     const razorpayOrder = await razorpay.orders.create({
       amount: amountInPaise,
       currency: "INR",
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
       razorpayOrderId: razorpayOrder.id,
       amount: amountInPaise,
       currency: "INR",
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+      keyId: await getRazorpayPublicKeyForOrganization(organizationId),
       walletId: wallets[0].id,
     });
   } catch (error) {

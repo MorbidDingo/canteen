@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import nodemailer from "nodemailer";
 import { runParallelForEach } from "@/lib/bulk-upload-engine";
 
@@ -8,9 +8,24 @@ const DEFAULT_SMTP_CONCURRENCY = 6;
 
 // POST — send login credentials to parents
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session?.user || session.user.role !== "MANAGEMENT") {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (access.deviceLoginProfile) {
+    return NextResponse.json(
+      { error: "Credential dispatch controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+      { status: 403 },
+    );
   }
 
   const transporter =

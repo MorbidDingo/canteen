@@ -2,21 +2,33 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
 import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { isMissingRelationError } from "@/lib/db-errors";
 
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session?.user || !["MANAGEMENT", "ATTENDANCE"].includes(session.user.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ATTENDANCE"],
+    });
+
+    if (access.deviceLoginProfile) {
+      return NextResponse.json(
+        { error: "Attendance controls are not available on terminal device accounts", code: "TERMINAL_LOCKED" },
+        { status: 403 },
+      );
     }
 
-    const totalStudentsRows = await db.select({ id: child.id }).from(child);
+    const organizationId = access.activeOrganizationId!;
+
+    const totalStudentsRows = await db
+      .select({ id: child.id })
+      .from(child)
+      .where(eq(child.organizationId, organizationId));
     const insideRows = await db
       .select({ id: child.id })
       .from(child)
-      .where(eq(child.presenceStatus, "INSIDE"));
+      .where(and(eq(child.organizationId, organizationId), eq(child.presenceStatus, "INSIDE")));
 
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     let logsLast24h: Array<{ id: string; isValid: boolean }> = [];
@@ -24,7 +36,8 @@ export async function GET() {
       logsLast24h = await db
         .select({ id: gateLog.id, isValid: gateLog.isValid })
         .from(gateLog)
-        .where(gte(gateLog.tappedAt, last24h));
+        .innerJoin(child, eq(gateLog.childId, child.id))
+        .where(and(gte(gateLog.tappedAt, last24h), eq(child.organizationId, organizationId)));
     } catch (err) {
       if (!isMissingRelationError(err, "gate_log")) {
         throw err;
@@ -37,6 +50,7 @@ export async function GET() {
       .from(child)
       .where(
         and(
+          eq(child.organizationId, organizationId),
           eq(child.presenceStatus, "INSIDE"),
           isNotNull(child.lastGateTapAt),
           lte(child.lastGateTapAt, overstayThreshold),
@@ -56,6 +70,9 @@ export async function GET() {
       },
     });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Attendance summary error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

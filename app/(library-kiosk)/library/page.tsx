@@ -83,6 +83,14 @@ type ActionResult = {
   details?: Record<string, string>;
 };
 
+type OrgContextDevice = {
+  id: string;
+  deviceType: "GATE" | "KIOSK" | "LIBRARY";
+  deviceName: string;
+  deviceCode: string;
+  status: "ACTIVE" | "DISABLED";
+};
+
 // ─── Library Terminal Page ────────────────────────────────
 
 export default function LibraryTerminalPage() {
@@ -98,6 +106,9 @@ export default function LibraryTerminalPage() {
   const [rfidCardId, setRfidCardId] = useState("");
   const [preIssueBook, setPreIssueBook] = useState<PreIssueBook | null>(null);
   const [issueBlockedUntil, setIssueBlockedUntil] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("Organization");
+  const [deviceLabel, setDeviceLabel] = useState<string>("Library");
+  const [selectedDeviceCode, setSelectedDeviceCode] = useState<string>("");
 
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -189,6 +200,43 @@ export default function LibraryTerminalPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rfidCardId, phase]);
 
+  // ─── Fetch org context on mount ────────────────────────
+
+  useEffect(() => {
+    const fetchOrgContext = async () => {
+      try {
+        const res = await fetch("/api/org/context");
+        if (!res.ok) return;
+        const data = await res.json();
+        setOrgName(data.organization?.name || "Organization");
+        const devices = ((data.devices || []) as OrgContextDevice[]).filter(
+          (d) => d.deviceType === "LIBRARY" && d.status === "ACTIVE",
+        );
+
+        const queryCode = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("deviceCode")?.trim().toUpperCase() ?? null
+          : null;
+        const storedCode = typeof window !== "undefined" ? localStorage.getItem("selectedLibraryDeviceCode") : null;
+        const selected =
+          devices.find((d) => d.deviceCode === queryCode) ||
+          devices.find((d) => d.deviceCode === storedCode) ||
+          devices[0] ||
+          null;
+        if (selected) {
+          setSelectedDeviceCode(selected.deviceCode);
+          setDeviceLabel(selected.deviceName || selected.deviceCode || "Library");
+          if (typeof window !== "undefined") {
+            localStorage.setItem("selectedLibraryDeviceCode", selected.deviceCode);
+          }
+        }
+      } catch {
+        // non-blocking on library terminal
+      }
+    };
+
+    void fetchOrgContext();
+  }, []);
+
   // ─── RFID Tap → Look up student ───────────────────────
 
   const lookupStudent = async (cardId: string) => {
@@ -196,7 +244,7 @@ export default function LibraryTerminalPage() {
       const res = await fetch("/api/library/student", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfidCardId: cardId }),
+        body: JSON.stringify({ rfidCardId: cardId, deviceCode: selectedDeviceCode || undefined }),
       });
       const data = await res.json();
 
@@ -278,7 +326,7 @@ export default function LibraryTerminalPage() {
       const res = await fetch("/api/library/issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfidCardId, scanInput }),
+        body: JSON.stringify({ rfidCardId, scanInput, deviceCode: selectedDeviceCode || undefined }),
       });
       const data = await res.json();
 
@@ -303,7 +351,7 @@ export default function LibraryTerminalPage() {
     } catch {
       const queued = await enqueueOfflineAction({
         type: "LIBRARY_ISSUE",
-        payload: { rfidCardId, scanInput },
+        payload: { rfidCardId, scanInput, deviceCode: selectedDeviceCode || undefined },
       });
 
       setResult({
@@ -355,7 +403,7 @@ export default function LibraryTerminalPage() {
       const issueRes = await fetch("/api/library/issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfidCardId, preIssueAccepted: true }),
+        body: JSON.stringify({ rfidCardId, preIssueAccepted: true, deviceCode: selectedDeviceCode || undefined }),
       });
 
       const issueData = await issueRes.json();
@@ -504,6 +552,7 @@ export default function LibraryTerminalPage() {
         <div className="text-center space-y-4 sm:space-y-6 max-w-md w-full">
           <BookOpen className="h-14 w-14 sm:h-20 sm:w-20 mx-auto text-[#d4891a] animate-pulse" />
           <h1 className="text-2xl sm:text-4xl font-bold text-[#d4891a]">Library Terminal</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">{orgName} • {deviceLabel}</p>
           <p className="text-base sm:text-xl text-muted-foreground">
             Tap your RFID card to get started
           </p>

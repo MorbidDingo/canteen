@@ -2,16 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { book, bookCopy, bookIssuance } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { getSession } from "@/lib/auth-server";
+import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // Helper to recalculate cached book copy counts
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function recalcCopyCounts(tx: any, bookId: string) {
+async function recalcCopyCounts(tx: any, bookId: string, organizationId: string) {
   const allCopies = await tx
     .select({ status: bookCopy.status })
     .from(bookCopy)
-    .where(eq(bookCopy.bookId, bookId));
+    .where(and(eq(bookCopy.bookId, bookId), eq(bookCopy.organizationId, organizationId)));
 
   const total = allCopies.filter((c: { status: string }) => c.status !== "RETIRED").length;
   const available = allCopies.filter((c: { status: string }) => c.status === "AVAILABLE").length;
@@ -19,7 +19,7 @@ async function recalcCopyCounts(tx: any, bookId: string) {
   await tx
     .update(book)
     .set({ totalCopies: total, availableCopies: available, updatedAt: new Date() })
-    .where(eq(book.id, bookId));
+    .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)));
 }
 
 // PATCH — update copy details (condition, location, status)
@@ -27,12 +27,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; copyId: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const { id, copyId } = await params;
     const body = await request.json();
     const { condition, location, status } = body;
@@ -40,7 +40,7 @@ export async function PATCH(
     const [existing] = await db
       .select()
       .from(bookCopy)
-      .where(and(eq(bookCopy.id, copyId), eq(bookCopy.bookId, id)))
+      .where(and(eq(bookCopy.id, copyId), eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!existing) {
@@ -83,24 +83,25 @@ export async function PATCH(
       await tx
         .update(bookCopy)
         .set(updates)
-        .where(eq(bookCopy.id, copyId));
+        .where(and(eq(bookCopy.id, copyId), eq(bookCopy.organizationId, access.activeOrganizationId!)));
 
       if (status !== undefined) {
-        await recalcCopyCounts(tx, id);
+        await recalcCopyCounts(tx, id, access.activeOrganizationId!);
       }
     });
 
     const [updated] = await db
       .select()
       .from(bookCopy)
-      .where(eq(bookCopy.id, copyId))
+      .where(and(eq(bookCopy.id, copyId), eq(bookCopy.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_UPDATED,
       details: {
+        organizationId: access.activeOrganizationId,
         bookId: id,
         copyId,
         accessionNumber: existing.accessionNumber,
@@ -111,6 +112,9 @@ export async function PATCH(
 
     return NextResponse.json({ copy: updated });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Update copy error:", error);
     return NextResponse.json({ error: "Failed to update copy" }, { status: 500 });
   }
@@ -121,18 +125,18 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; copyId: string }> },
 ) {
-  const session = await getSession();
-  if (!session?.user || !["MANAGEMENT", "LIB_OPERATOR"].includes(session.user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   try {
+    const access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+    });
+
     const { id, copyId } = await params;
 
     const [existing] = await db
       .select()
       .from(bookCopy)
-      .where(and(eq(bookCopy.id, copyId), eq(bookCopy.bookId, id)))
+      .where(and(eq(bookCopy.id, copyId), eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)))
       .limit(1);
 
     if (!existing) {
@@ -162,16 +166,17 @@ export async function DELETE(
       await tx
         .update(bookCopy)
         .set({ status: "RETIRED", updatedAt: new Date() })
-        .where(eq(bookCopy.id, copyId));
+        .where(and(eq(bookCopy.id, copyId), eq(bookCopy.organizationId, access.activeOrganizationId!)));
 
-      await recalcCopyCounts(tx, id);
+      await recalcCopyCounts(tx, id, access.activeOrganizationId!);
     });
 
     await logAudit({
-      userId: session.user.id,
-      userRole: session.user.role,
+      userId: access.actorUserId,
+      userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_RETIRED,
       details: {
+        organizationId: access.activeOrganizationId,
         bookId: id,
         copyId,
         accessionNumber: existing.accessionNumber,
@@ -181,6 +186,9 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error("Retire copy error:", error);
     return NextResponse.json({ error: "Failed to retire copy" }, { status: 500 });
   }
