@@ -272,6 +272,13 @@ export function ParentNotificationBell({
   const [filter, setFilter] = useState<BellFilter>("ALL");
   const touchStartYRef = useRef<number | null>(null);
   const [dragOffsetY, setDragOffsetY] = useState(0);
+  const mobileSheetStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (dragOffsetY <= 0) return undefined;
+    return {
+      transform: `translateY(${dragOffsetY}px)`,
+      transition: "none",
+    };
+  }, [dragOffsetY]);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.readAt).length,
@@ -493,10 +500,7 @@ export function ParentNotificationBell({
               "bg-white dark:bg-zinc-950",
               "shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.18)] dark:shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.5)]",
             )}
-            style={{
-              transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined,
-              transition: dragOffsetY > 0 ? "none" : undefined,
-            }}
+            style={mobileSheetStyle}
           >
             {/* Handle */}
             <div

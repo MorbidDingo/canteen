@@ -3,7 +3,7 @@
 import { useCartStore } from "@/lib/store/cart-store";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { emitEvent } from "@/lib/events";
 import { Input } from "@/components/ui/input";
@@ -218,6 +218,10 @@ export default function CartPage() {
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
   const total = getTotal();
+  const childNameById = useMemo(
+    () => new Map(children.map((c) => [c.id, c.name])),
+    [children]
+  );
   const getAssignedQty = (menuItemId: string) =>
     Object.values(itemChildAllocations[menuItemId] || {}).reduce(
       (sum, qty) => sum + qty,
@@ -972,22 +976,20 @@ export default function CartPage() {
                                 Required per child wallet
                               </p>
                               {[...childTotals.entries()].map(([childId, amount]) => {
-                                const childName = children.find((c) => c.id === childId)?.name;
+                                const childName = childNameById.get(childId);
                                 const wallet = wallets.find((w) => w.childId === childId);
+                                const amountClassName =
+                                  familyWalletBalance >= amount
+                                    ? "text-emerald-600"
+                                    : "text-destructive";
                                 return (
                                   <div
                                     key={childId}
                                     className="flex items-center justify-between text-sm"
                                   >
                                     <span>{childName || wallet?.childName || "Child"}</span>
-                                    <span
-                                      className={
-                                        familyWalletBalance >= amount
-                                          ? "text-emerald-600"
-                                          : "text-destructive"
-                                      }
-                                    >
-                                      Need ₹{amount.toFixed(2)} • Family balance ₹{familyWalletBalance.toFixed(2)}
+                                    <span className={amountClassName}>
+                                      Need ₹{amount.toFixed(2)}
                                     </span>
                                   </div>
                                 );
