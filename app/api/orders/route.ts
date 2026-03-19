@@ -140,6 +140,10 @@ export async function POST(request: NextRequest) {
           .where(eq(child.parentId, session.user.id));
         siblingChildIds = siblingChildRows.map((c) => c.id);
 
+        if (siblingChildIds.length === 0) {
+          throw new Error("Wallet not found for this child");
+        }
+
         const wallets = await tx
           .select()
           .from(wallet)

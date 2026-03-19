@@ -237,12 +237,12 @@ export default function ParentLayout({
       </header>
 
       {/* ── Page content ── */}
-      <div className="relative pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <div className="relative pb-[calc(5rem+env(safe-area-inset-bottom))]">
         {children}
         {/* Scroll dim overlay — dims content area near the bottom nav */}
         <div
           className={cn(
-            "pointer-events-none fixed bottom-0 left-0 right-0 h-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 transition-opacity duration-300",
+            "pointer-events-none fixed bottom-0 left-0 right-0 h-[calc(5rem+env(safe-area-inset-bottom))] z-40 transition-opacity duration-300",
             navDimmed ? "opacity-100" : "opacity-0",
           )}
           style={{ background: "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)" }}
@@ -250,7 +250,7 @@ export default function ParentLayout({
       </div>
 
       {/* ── iOS-like floating bottom tab bar ── */}
-      <nav className="fixed bottom-3 left-3 right-3 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
+      <nav className="fixed bottom-2 left-5 right-5 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
           {/* Canteen */}
           <Link

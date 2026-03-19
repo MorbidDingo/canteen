@@ -60,13 +60,15 @@ export default function LoginPage() {
   }
 
   const resolvePostLoginRoute = useCallback(async (role?: string | null) => {
-    try {
-      const platformRes = await fetch("/api/platform/me", { cache: "no-store" });
-      if (platformRes.ok) {
-        return "/platform";
+    if (role === "OWNER") {
+      try {
+        const platformRes = await fetch("/api/platform/me", { cache: "no-store" });
+        if (platformRes.ok) {
+          return "/platform";
+        }
+      } catch {
+        // Ignore and fallback to org/default route
       }
-    } catch {
-      // Ignore and fallback to org/default route
     }
 
     return getDefaultRouteForRole(role);
@@ -83,9 +85,8 @@ export default function LoginPage() {
     }
   }, []);
 
-  const enforceOrganizationLinkOrSignOut = useCallback(async () => {
-    const platformRes = await fetch("/api/platform/me", { cache: "no-store" });
-    if (platformRes.ok) return true;
+  const enforceOrganizationLinkOrSignOut = useCallback(async (role?: string | null) => {
+    if (role === "OWNER") return true;
 
     const hasMembership = await hasActiveOrganizationMembership();
     if (hasMembership) return true;
@@ -106,7 +107,7 @@ export default function LoginPage() {
       const session = await authClient.getSession();
       if (cancelled || !session?.data?.user) return;
 
-      const allowed = await enforceOrganizationLinkOrSignOut();
+      const allowed = await enforceOrganizationLinkOrSignOut(session.data.user.role);
       if (!allowed || cancelled) {
         toast.error("This account is not linked to an active organization. Contact your organization admin.");
         return;
@@ -154,7 +155,7 @@ export default function LoginPage() {
 
     toast.success("Signed in successfully!");
 
-    const allowed = await enforceOrganizationLinkOrSignOut();
+    const allowed = await enforceOrganizationLinkOrSignOut(role);
     if (!allowed) {
       toast.error("This account is not linked to an active organization. Contact your organization admin.");
       return;

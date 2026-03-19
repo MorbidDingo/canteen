@@ -3,7 +3,7 @@
 import { useCartStore } from "@/lib/store/cart-store";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { emitEvent } from "@/lib/events";
 import { Input } from "@/components/ui/input";
@@ -218,6 +218,10 @@ export default function CartPage() {
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
   const total = getTotal();
+  const childNameById = useMemo(
+    () => new Map(children.map((c) => [c.id, c.name])),
+    [children]
+  );
   const getAssignedQty = (menuItemId: string) =>
     Object.values(itemChildAllocations[menuItemId] || {}).reduce(
       (sum, qty) => sum + qty,
@@ -269,16 +273,14 @@ export default function CartPage() {
   };
 
   const childTotals = getChildTotals();
-  const hasMissingWalletForAssignedChild = [...childTotals.keys()].some(
-    (childId) => !wallets.some((w) => w.childId === childId)
+  const familyWalletBalance = wallets[0]?.balance ?? 0;
+  const familyWalletRequired = [...childTotals.values()].reduce(
+    (sum, amount) => sum + amount,
+    0
   );
   const hasEnoughBalance =
-    childTotals.size > 0 &&
-    !hasMissingWalletForAssignedChild &&
-    [...childTotals.entries()].every(([childId, amount]) => {
-      const wallet = wallets.find((w) => w.childId === childId);
-      return !!wallet && wallet.balance >= amount;
-    });
+    familyWalletRequired > 0 &&
+    familyWalletBalance >= familyWalletRequired;
 
   const buildChildOrderGroups = () => {
     const groups = new Map<string, typeof items>();
@@ -974,25 +976,31 @@ export default function CartPage() {
                                 Required per child wallet
                               </p>
                               {[...childTotals.entries()].map(([childId, amount]) => {
+                                const childName = childNameById.get(childId);
                                 const wallet = wallets.find((w) => w.childId === childId);
+                                const amountClassName =
+                                  familyWalletBalance >= amount
+                                    ? "text-emerald-600"
+                                    : "text-destructive";
                                 return (
                                   <div
                                     key={childId}
                                     className="flex items-center justify-between text-sm"
                                   >
-                                    <span>{wallet?.childName || "Child"}</span>
-                                    <span
-                                      className={
-                                        wallet && wallet.balance >= amount
-                                          ? "text-emerald-600"
-                                          : "text-destructive"
-                                      }
-                                    >
-                                      Need ₹{amount.toFixed(2)} • Balance ₹{(wallet?.balance || 0).toFixed(2)}
+                                    <span>{childName || wallet?.childName || "Child"}</span>
+                                    <span className={amountClassName}>
+                                      Need ₹{amount.toFixed(2)}
                                     </span>
                                   </div>
                                 );
                               })}
+                              <Separator />
+                              <div className="flex items-center justify-between text-sm font-semibold">
+                                <span>Total required</span>
+                                <span className={familyWalletBalance >= familyWalletRequired ? "text-emerald-600" : "text-destructive"}>
+                                  ₹{familyWalletRequired.toFixed(2)} / ₹{familyWalletBalance.toFixed(2)}
+                                </span>
+                              </div>
                             </CardContent>
                           </Card>
                         )}
