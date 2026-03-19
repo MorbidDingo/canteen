@@ -155,14 +155,14 @@ export default function LoginPage() {
 
     toast.success("Signed in successfully!");
 
+    await initializeActiveOrganization();
+    const role = await resolveRoleWithRetry();
+
     const allowed = await enforceOrganizationLinkOrSignOut(role);
     if (!allowed) {
       toast.error("This account is not linked to an active organization. Contact your organization admin.");
       return;
     }
-
-    await initializeActiveOrganization();
-    const role = await resolveRoleWithRetry();
     const nextRoute = await resolvePostLoginRoute(role);
     router.push(nextRoute);
     router.refresh();
