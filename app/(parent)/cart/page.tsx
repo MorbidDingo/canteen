@@ -272,13 +272,15 @@ export default function CartPage() {
   const hasMissingWalletForAssignedChild = [...childTotals.keys()].some(
     (childId) => !wallets.some((w) => w.childId === childId)
   );
+  const familyWalletBalance = wallets[0]?.balance ?? 0;
+  const familyWalletRequired = [...childTotals.values()].reduce(
+    (sum, amount) => sum + amount,
+    0
+  );
   const hasEnoughBalance =
-    childTotals.size > 0 &&
+    familyWalletRequired > 0 &&
     !hasMissingWalletForAssignedChild &&
-    [...childTotals.entries()].every(([childId, amount]) => {
-      const wallet = wallets.find((w) => w.childId === childId);
-      return !!wallet && wallet.balance >= amount;
-    });
+    familyWalletBalance >= familyWalletRequired;
 
   const buildChildOrderGroups = () => {
     const groups = new Map<string, typeof items>();
@@ -983,16 +985,23 @@ export default function CartPage() {
                                     <span>{wallet?.childName || "Child"}</span>
                                     <span
                                       className={
-                                        wallet && wallet.balance >= amount
+                                        familyWalletBalance >= amount
                                           ? "text-emerald-600"
                                           : "text-destructive"
                                       }
                                     >
-                                      Need ₹{amount.toFixed(2)} • Balance ₹{(wallet?.balance || 0).toFixed(2)}
+                                      Need ₹{amount.toFixed(2)} • Family balance ₹{familyWalletBalance.toFixed(2)}
                                     </span>
                                   </div>
                                 );
                               })}
+                              <Separator />
+                              <div className="flex items-center justify-between text-sm font-semibold">
+                                <span>Total required</span>
+                                <span className={familyWalletBalance >= familyWalletRequired ? "text-emerald-600" : "text-destructive"}>
+                                  ₹{familyWalletRequired.toFixed(2)} / ₹{familyWalletBalance.toFixed(2)}
+                                </span>
+                              </div>
                             </CardContent>
                           </Card>
                         )}

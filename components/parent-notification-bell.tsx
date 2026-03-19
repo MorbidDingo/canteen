@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, X, CheckCheck, Clock, ExternalLink, Inbox, Share } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -270,6 +270,8 @@ export function ParentNotificationBell({
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [filter, setFilter] = useState<BellFilter>("ALL");
+  const touchStartYRef = useRef<number | null>(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
 
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.readAt).length,
@@ -389,6 +391,32 @@ export function ParentNotificationBell({
     });
   }, []);
 
+  const handleSheetTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    touchStartYRef.current = event.touches[0]?.clientY ?? null;
+  }, []);
+
+  const handleSheetTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartYRef.current == null) return;
+    const currentY = event.touches[0]?.clientY ?? touchStartYRef.current;
+    const delta = currentY - touchStartYRef.current;
+    setDragOffsetY(delta > 0 ? delta : 0);
+  }, []);
+
+  const handleSheetTouchEnd = useCallback(() => {
+    if (dragOffsetY > 120) {
+      setMobileOpen(false);
+    }
+    setDragOffsetY(0);
+    touchStartYRef.current = null;
+  }, [dragOffsetY]);
+
+  useEffect(() => {
+    if (!mobileOpen) {
+      setDragOffsetY(0);
+      touchStartYRef.current = null;
+    }
+  }, [mobileOpen]);
+
   /* Bell trigger */
   const bellTrigger = (
     <span className="relative inline-flex">
@@ -464,17 +492,25 @@ export function ParentNotificationBell({
               "h-[90dvh] flex flex-col overflow-hidden",
               "bg-white dark:bg-zinc-950",
               "shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.18)] dark:shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.5)]",
-              "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom",
-              "data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100",
             )}
+            style={{
+              transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined,
+              transition: dragOffsetY > 0 ? "none" : undefined,
+            }}
           >
             {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1 shrink-0">
+            <div
+              className="flex justify-center pt-3 pb-1 shrink-0 touch-none"
+              onTouchStart={handleSheetTouchStart}
+              onTouchMove={handleSheetTouchMove}
+              onTouchEnd={handleSheetTouchEnd}
+              onTouchCancel={handleSheetTouchEnd}
+            >
               <span className="h-1 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
             </div>
 
             {/* Header */}
-            <DialogHeader className="shrink-0 px-4 pb-3">
+            <DialogHeader className="shrink-0 px-4 pb-3 pt-0">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <DialogTitle className="text-[17px] font-bold text-zinc-900 dark:text-zinc-100">
