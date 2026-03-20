@@ -21,6 +21,15 @@ import {
   LogOut,
   ClipboardList,
 } from "lucide-react";
+import { Shield } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
@@ -49,12 +58,18 @@ export default function ParentLayout({
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [cartBounce, setCartBounce] = useState(false);
   const [navDimmed, setNavDimmed] = useState(false);
+  const [showControlsDialog, setShowControlsDialog] = useState(false);
   const [activeOrganizationName, setActiveOrganizationName] = useState("");
   const prevCartCount = useRef(cartCount);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const parentMode = getParentMode(pathname);
-  const isSettingsPage = ["/settings", "/children", "/wallet", "/controls", "/notifications"].includes(pathname);
+  const isSettingsPage = [
+    "/settings",
+    "/children",
+    "/wallet",
+    "/notifications",
+  ].includes(pathname);
   const isOrdersPage = pathname === "/orders" || pathname === "/pre-orders";
 
   // Animate cart icon when items are added
@@ -97,13 +112,21 @@ export default function ParentLayout({
         if (!membershipsRes.ok || !activeRes.ok || cancelled) return;
 
         const membershipsData = (await membershipsRes.json()) as {
-          memberships?: Array<{ organizationId: string; organizationName: string }>;
+          memberships?: Array<{
+            organizationId: string;
+            organizationName: string;
+          }>;
         };
-        const activeData = (await activeRes.json()) as { activeOrganizationId: string | null };
+        const activeData = (await activeRes.json()) as {
+          activeOrganizationId: string | null;
+        };
 
         const memberships = membershipsData.memberships ?? [];
-        const activeId = activeData.activeOrganizationId ?? memberships[0]?.organizationId;
-        const active = memberships.find((m) => m.organizationId === activeId) ?? memberships[0];
+        const activeId =
+          activeData.activeOrganizationId ?? memberships[0]?.organizationId;
+        const active =
+          memberships.find((m) => m.organizationId === activeId) ??
+          memberships[0];
 
         if (!cancelled) {
           setActiveOrganizationName(active?.organizationName ?? "");
@@ -245,7 +268,10 @@ export default function ParentLayout({
             "pointer-events-none fixed bottom-0 left-0 right-0 h-[calc(5rem+env(safe-area-inset-bottom))] z-40 transition-opacity duration-300",
             navDimmed ? "opacity-100" : "opacity-0",
           )}
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)" }}
+          style={{
+            background:
+              "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)",
+          }}
         />
       </div>
 
@@ -299,6 +325,36 @@ export default function ParentLayout({
             )}
           </Link>
 
+          {/* Controls (Certe+ only) */}
+          {certePlusActive ? (
+            <Link
+              href="/controls"
+              className={cn(
+                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
+                pathname === "/controls"
+                  ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                  : "text-muted-foreground hover:text-foreground/70",
+              )}
+            >
+              <Shield className="h-5 w-5" />
+              <span className="text-[10px] font-medium">Controls</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowControlsDialog(true)}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all text-muted-foreground hover:text-foreground/70",
+                pathname === "/controls"
+                  ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
+                  : "",
+              )}
+            >
+              <Shield className="h-5 w-5" />
+              <span className="text-[10px] font-medium">Controls</span>
+            </button>
+          )}
+
           {/* Settings */}
           <Link
             href="/settings"
@@ -316,6 +372,23 @@ export default function ParentLayout({
         {/* Safe area spacer for notched phones */}
         <div className="h-[env(safe-area-inset-bottom)]" />
       </nav>
+      {/* Certe+ required dialog for Controls */}
+      <Dialog open={showControlsDialog} onOpenChange={setShowControlsDialog}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Controls require Certe Plus</DialogTitle>
+            <DialogDescription>
+              Parent controls (spend limits, blocked items) are a Certe Plus
+              feature. Upgrade to Certe Plus from Settings to enable controls.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter showCloseButton>
+            <Link href="/settings">
+              <Button>Upgrade</Button>
+            </Link>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
