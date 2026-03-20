@@ -5,9 +5,22 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, ChevronRight, Shield, Users, Wallet, Sparkles, CheckCircle, Loader2 } from "lucide-react";
+import {
+  Bell,
+  ChevronRight,
+  Shield,
+  Users,
+  Wallet,
+  Sparkles,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
-import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS, CERTE_PLUS } from "@/lib/constants";
+import {
+  CERTE_PLUS_PLAN_LIST,
+  CERTE_PLUS_PLANS,
+  CERTE_PLUS,
+} from "@/lib/constants";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { useSession } from "@/lib/auth-client";
 
@@ -53,12 +66,6 @@ const settingItems = [
     label: "Wallet",
     description: "Top up and view transactions",
     icon: Wallet,
-  },
-  {
-    href: "/controls",
-    label: "Controls",
-    description: "Set limits and blocked categories",
-    icon: Shield,
   },
   {
     href: "/notifications",
@@ -122,7 +129,9 @@ export default function SettingsPage() {
     }) =>
       new Promise<RazorpayResponse>((resolve, reject) => {
         if (!window.Razorpay) {
-          reject(new Error("Payment SDK not loaded. Please refresh and try again."));
+          reject(
+            new Error("Payment SDK not loaded. Please refresh and try again."),
+          );
           return;
         }
 
@@ -227,11 +236,20 @@ export default function SettingsPage() {
     }
   };
 
-  const currentPlanInfo = CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ?? CERTE_PLUS_PLANS.MONTHLY;
-  const penaltyUsedByChild = certePlus?.subscription?.libraryPenaltiesUsedByChild ?? {};
-  const totalPenaltyUsed = Object.values(penaltyUsedByChild).reduce((sum, value) => sum + value, 0);
+  const currentPlanInfo =
+    CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ??
+    CERTE_PLUS_PLANS.MONTHLY;
+  const penaltyUsedByChild =
+    certePlus?.subscription?.libraryPenaltiesUsedByChild ?? {};
+  const totalPenaltyUsed = Object.values(penaltyUsedByChild).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
   const totalPenaltyAllowance = CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE;
-  const totalPenaltyLeft = Math.max(0, totalPenaltyAllowance - totalPenaltyUsed);
+  const totalPenaltyLeft = Math.max(
+    0,
+    totalPenaltyAllowance - totalPenaltyUsed,
+  );
   const certePlusResolved = certePlus !== null;
   const visibleSettingItems = isGeneralAccount
     ? settingItems.filter((item) => item.href === "/notifications")
@@ -251,7 +269,9 @@ export default function SettingsPage() {
               </div>
               <div>
                 <h3 className="font-bold text-sm">Certe+</h3>
-                <p className="text-[11px] text-muted-foreground">Premium subscription</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Premium subscription
+                </p>
               </div>
             </div>
             {certePlusResolved ? (
@@ -260,12 +280,18 @@ export default function SettingsPage() {
                   <CheckCircle className="mr-1 h-3 w-3" /> Active
                 </Badge>
               ) : (
-                <Badge variant="outline" className="border-amber-300 text-amber-700">
+                <Badge
+                  variant="outline"
+                  className="border-amber-300 text-amber-700"
+                >
                   From 79 credits/week
                 </Badge>
               )
             ) : (
-              <Badge variant="outline" className="border-slate-300 text-slate-600">
+              <Badge
+                variant="outline"
+                className="border-slate-300 text-slate-600"
+              >
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 Checking
               </Badge>
@@ -281,39 +307,80 @@ export default function SettingsPage() {
             <div className="space-y-2">
               {!isGeneralAccount && children.length > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  Family plan active for {children.length} child{children.length === 1 ? "" : "ren"}. Benefits are shared across all children.
+                  Family plan active for {children.length} child
+                  {children.length === 1 ? "" : "ren"}. Benefits are shared
+                  across all children.
                 </p>
               )}
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Expires</p>
-                  <p className="text-xs font-semibold">{new Date(certePlus.subscription.endDate).toLocaleDateString()}</p>
+                  <p className="text-xs font-semibold">
+                    {new Date(
+                      certePlus.subscription.endDate,
+                    ).toLocaleDateString()}
+                  </p>
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Overdraft</p>
-                  <p className="text-xs font-semibold">{(CERTE_PLUS.WALLET_OVERDRAFT_LIMIT - certePlus.subscription.walletOverdraftUsed).toFixed(0)} cr left</p>
+                  <p className="text-xs font-semibold">
+                    {(
+                      CERTE_PLUS.WALLET_OVERDRAFT_LIMIT -
+                      certePlus.subscription.walletOverdraftUsed
+                    ).toFixed(0)}{" "}
+                    cr left
+                  </p>
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Late returns</p>
-                  <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
+                  <p className="text-xs font-semibold">
+                    {totalPenaltyLeft} left
+                  </p>
                 </div>
               </div>
               <ul className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-amber-200/40">
-                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return penalties</li>
-                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Pre-ordering meals (wallet only, min 1 week)</li>
-                {!isGeneralAccount && <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} · 1 credit = ₹1</li>}
-                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Controls on library and canteen</li>
-                <li className="flex items-center gap-1 text-muted-foreground/50"><span>⏳</span> Access to Healthy Food (coming soon)</li>
+                <li className="flex items-center gap-1">
+                  <span className="text-emerald-600">✓</span>{" "}
+                  {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return
+                  penalties
+                </li>
+                <li className="flex items-center gap-1">
+                  <span className="text-emerald-600">✓</span> Pre-ordering meals
+                  (wallet only, min 1 week)
+                </li>
+                {!isGeneralAccount && (
+                  <li className="flex items-center gap-1">
+                    <span className="text-emerald-600">✓</span> Overdraft up to
+                    ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} · 1 credit = ₹1
+                  </li>
+                )}
+                <li className="flex items-center gap-1">
+                  <span className="text-emerald-600">✓</span> Controls on
+                  library and canteen
+                </li>
+                <li className="flex items-center gap-1 text-muted-foreground/50">
+                  <span>⏳</span> Access to Healthy Food (coming soon)
+                </li>
               </ul>
             </div>
           ) : (
             <div className="space-y-3">
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li>✓ {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return penalties</li>
+                <li>
+                  ✓ {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return
+                  penalties
+                </li>
                 <li>✓ Pre-ordering meals (wallet payment, min 1 week)</li>
-                {!isGeneralAccount && <li>✓ Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} if balance is low at kiosk</li>}
+                {!isGeneralAccount && (
+                  <li>
+                    ✓ Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} if
+                    balance is low at kiosk
+                  </li>
+                )}
                 <li>✓ Controls on library and canteen</li>
-                <li className="text-muted-foreground/60">⏳ Access to Healthy Food (coming soon)</li>
+                <li className="text-muted-foreground/60">
+                  ⏳ Access to Healthy Food (coming soon)
+                </li>
               </ul>
 
               {/* Plan Selection */}
@@ -330,8 +397,12 @@ export default function SettingsPage() {
                     }`}
                   >
                     <p className="text-xs font-semibold">{plan.label}</p>
-                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{plan.price} credits</p>
-                    <p className="text-[10px] text-muted-foreground">{plan.duration}</p>
+                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                      {plan.price} credits
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {plan.duration}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -343,19 +414,23 @@ export default function SettingsPage() {
                 disabled={subscribing}
               >
                 {subscribing ? (
-                  <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Subscribing...</>
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />{" "}
+                    Subscribing...
+                  </>
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5 mr-1" />
-                    {isGeneralAccount ? "Subscribe Online" : "Subscribe"} - {currentPlanInfo.price} credits / {currentPlanInfo.label}
+                    {isGeneralAccount ? "Subscribe Online" : "Subscribe"} -{" "}
+                    {currentPlanInfo.price} credits / {currentPlanInfo.label}
                   </>
                 )}
               </Button>
               <p className="text-[10px] text-center text-muted-foreground">
                 {isGeneralAccount
                   ? "Payment will be collected using Razorpay."
-                  : "Payment will be deducted from your family wallet balance."}
-                {" "}<span className="font-medium">1 credit = ₹1</span>
+                  : "Payment will be deducted from your family wallet balance."}{" "}
+                <span className="font-medium">1 credit = ₹1</span>
               </p>
             </div>
           )}
@@ -364,22 +439,26 @@ export default function SettingsPage() {
 
       <CardContent className="p-0">
         <div className="flex flex-col flex-1 justify-around">
-          {visibleSettingItems.map(({ href, label, description, icon: Icon }) => (
-            <Link
-              key={href}
-              href={href}
-              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
-                <Icon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium leading-none">{label}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </Link>
-          ))}
+          {visibleSettingItems.map(
+            ({ href, label, description, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium leading-none">{label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {description}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Link>
+            ),
+          )}
         </div>
       </CardContent>
     </div>
