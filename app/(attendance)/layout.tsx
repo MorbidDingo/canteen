@@ -22,7 +22,10 @@ export default async function AttendanceLayout({
     redirect("/");
   }
 
-  if (access.deviceLoginProfile) {
+  // Only redirect to device terminal when the user is a dedicated device login account
+  // (i.e. their role is DEVICE). Human operators / attendance officers who happen to
+  // be assigned as device managers should not be auto-redirected away from this page.
+  if (access.deviceLoginProfile && access.membershipRole === "DEVICE") {
     redirect(access.deviceLoginProfile.terminalPath);
   }
 

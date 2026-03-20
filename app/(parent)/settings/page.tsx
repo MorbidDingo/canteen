@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Bell, ChevronRight, Shield, Users, Wallet, Sparkles, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS } from "@/lib/constants";
+import { CERTE_PLUS_PLAN_LIST, CERTE_PLUS_PLANS, CERTE_PLUS } from "@/lib/constants";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { useSession } from "@/lib/auth-client";
 
@@ -230,7 +230,7 @@ export default function SettingsPage() {
   const currentPlanInfo = CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ?? CERTE_PLUS_PLANS.MONTHLY;
   const penaltyUsedByChild = certePlus?.subscription?.libraryPenaltiesUsedByChild ?? {};
   const totalPenaltyUsed = Object.values(penaltyUsedByChild).reduce((sum, value) => sum + value, 0);
-  const totalPenaltyAllowance = children.length > 0 ? children.length * 5 : 5;
+  const totalPenaltyAllowance = CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE;
   const totalPenaltyLeft = Math.max(0, totalPenaltyAllowance - totalPenaltyUsed);
   const certePlusResolved = certePlus !== null;
   const visibleSettingItems = isGeneralAccount
@@ -291,20 +291,29 @@ export default function SettingsPage() {
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Overdraft</p>
-                  <p className="text-xs font-semibold">{(200 - certePlus.subscription.walletOverdraftUsed).toFixed(0)} credits left</p>
+                  <p className="text-xs font-semibold">{(CERTE_PLUS.WALLET_OVERDRAFT_LIMIT - certePlus.subscription.walletOverdraftUsed).toFixed(0)} cr left</p>
                 </div>
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
-                  <p className="text-xs text-muted-foreground">Penalty waivers</p>
+                  <p className="text-xs text-muted-foreground">Late returns</p>
                   <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
                 </div>
               </div>
+              <ul className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-amber-200/40">
+                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return penalties</li>
+                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Pre-ordering meals (wallet only, min 1 week)</li>
+                {!isGeneralAccount && <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} · 1 credit = ₹1</li>}
+                <li className="flex items-center gap-1"><span className="text-emerald-600">✓</span> Controls on library and canteen</li>
+                <li className="flex items-center gap-1 text-muted-foreground/50"><span>⏳</span> Access to Healthy Food (coming soon)</li>
+              </ul>
             </div>
           ) : (
             <div className="space-y-3">
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li>Use food subscriptions (pre-order daily meals)</li>
-                {!isGeneralAccount && <li>200-credit wallet overdraft if balance is low at kiosk</li>}
-                <li>5 free library late-return penalties per child per active plan</li>
+                <li>✓ {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return penalties</li>
+                <li>✓ Pre-ordering meals (wallet payment, min 1 week)</li>
+                {!isGeneralAccount && <li>✓ Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} if balance is low at kiosk</li>}
+                <li>✓ Controls on library and canteen</li>
+                <li className="text-muted-foreground/60">⏳ Access to Healthy Food (coming soon)</li>
               </ul>
 
               {/* Plan Selection */}
@@ -346,6 +355,7 @@ export default function SettingsPage() {
                 {isGeneralAccount
                   ? "Payment will be collected using Razorpay."
                   : "Payment will be deducted from your family wallet balance."}
+                {" "}<span className="font-medium">1 credit = ₹1</span>
               </p>
             </div>
           )}

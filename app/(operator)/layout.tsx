@@ -19,9 +19,9 @@ export default async function OperatorLayout({
     redirect("/");
   }
 
-  if (access.deviceLoginProfile) {
+  // Only redirect to device terminal for dedicated device-login accounts (DEVICE role).
+  // Human operators assigned to devices should not be auto-redirected.
+  if (access.deviceLoginProfile && access.membershipRole === "DEVICE") {
     redirect(access.deviceLoginProfile.terminalPath);
   }
-
-  return <>{children}</>;
 }

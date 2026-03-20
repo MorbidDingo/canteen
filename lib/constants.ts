@@ -351,8 +351,10 @@ export type CertePlusPlan = keyof typeof CERTE_PLUS_PLANS;
 
 export const CERTE_PLUS = {
   MONTHLY_PRICE: 129, // default plan price (monthly)
-  WALLET_OVERDRAFT_LIMIT: 200,
-  LIBRARY_PENALTY_ALLOWANCE: 5,
+  WALLET_OVERDRAFT_LIMIT: 299,
+  LIBRARY_PENALTY_ALLOWANCE: 10,
+  PRE_ORDER_MIN_SCHOOL_DAYS: 5, // minimum 1 week (5 school days)
+  PRE_ORDER_PLATFORM_FEE_PERCENT: 2, // 2% platform fee on pre-order payments
 } as const;
 
 // ─── Organization Owner Subscription Plans ──────────────
