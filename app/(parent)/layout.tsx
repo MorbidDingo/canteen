@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +70,10 @@ export default function ParentLayout({
     "/wallet",
     "/notifications",
   ].includes(pathname);
+  const isControlsPage = pathname === "/controls";
+
   const isOrdersPage = pathname === "/orders" || pathname === "/pre-orders";
+  const router = useRouter();
 
   // Animate cart icon when items are added
   useEffect(() => {
@@ -283,7 +286,10 @@ export default function ParentLayout({
             href="/menu"
             className={cn(
               "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              parentMode === "canteen" && !isSettingsPage && !isOrdersPage
+              parentMode === "canteen" &&
+                !isSettingsPage &&
+                !isOrdersPage &&
+                !isControlsPage
                 ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
                 : "text-muted-foreground hover:text-foreground/70",
             )}
@@ -374,7 +380,7 @@ export default function ParentLayout({
       </nav>
       {/* Certe+ required dialog for Controls */}
       <Dialog open={showControlsDialog} onOpenChange={setShowControlsDialog}>
-        <DialogContent className="max-w-sm rounded-2xl">
+        <DialogContent className="max-w-sm sm:max-w-md w-full sm:mx-auto rounded-t-2xl sm:rounded-2xl p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Controls require Certe Plus</DialogTitle>
             <DialogDescription>
@@ -383,9 +389,14 @@ export default function ParentLayout({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter showCloseButton>
-            <Link href="/settings">
-              <Button>Upgrade</Button>
-            </Link>
+            <Button
+              onClick={() => {
+                setShowControlsDialog(false);
+                void router.push("/settings");
+              }}
+            >
+              Upgrade
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
