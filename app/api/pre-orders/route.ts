@@ -521,7 +521,6 @@ export async function POST(request: Request) {
     const totalPaymentAmount = Math.round(grandTotalDailyBase * periodSchoolDays * platformFeeMultiplier * 100) / 100;
 
     // ── Find the family wallet (shared across all children of this parent) ──
-    const allChildIds = Array.from(allocationsByChild.keys());
     const siblingChildRows = await db
       .select({ id: child.id })
       .from(child)
@@ -615,9 +614,6 @@ export async function POST(request: Request) {
 
       return createdPairs;
     });
-
-    // Suppress unused variable warning
-    void allChildIds;
 
     broadcast("orders-updated");
 

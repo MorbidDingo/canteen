@@ -24,4 +24,6 @@ export default async function OperatorLayout({
   if (access.deviceLoginProfile && access.membershipRole === "DEVICE") {
     redirect(access.deviceLoginProfile.terminalPath);
   }
+
+  return <>{children}</>;
 }

@@ -386,6 +386,46 @@ export default function PreOrdersPage() {
     return Math.round(dailyTotalBase * periodSchoolDays * (1 + CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100) * 100) / 100;
   }, [dailyTotalBase, periodSchoolDays]);
 
+  const submitPreOrder = useCallback(async () => {
+    setCreating(true);
+    try {
+      const res = await fetch("/api/pre-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          periodSchoolDays,
+          allocations: allocations.map((a) => ({
+            childId: a.childId,
+            menuItemId: a.menuItemId,
+            quantity: a.quantity,
+            breakName: a.breakName,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create pre-order");
+        setPaymentConfirmed(false);
+        setPaymentSlideX(0);
+        setPaymentOpen(false);
+        return;
+      }
+      toast.success(`Pre-order created! ₹${(data.totalPaymentAmount as number).toFixed(2)} deducted from wallet.`);
+      setAllocations([]);
+      setPaymentOpen(false);
+      setPaymentConfirmed(false);
+      setPaymentSlideX(0);
+      setWalletBalance((prev) => prev !== null ? prev - (data.totalPaymentAmount as number) : null);
+      await fetchAll();
+    } catch {
+      toast.error("Failed to create pre-order");
+      setPaymentConfirmed(false);
+      setPaymentSlideX(0);
+    } finally {
+      setCreating(false);
+    }
+  }, [allocations, fetchAll, periodSchoolDays]);
+
   // Slider handlers
   const handleSliderStart = useCallback((clientX: number) => {
     if (paymentConfirmed || creating) return;
@@ -434,47 +474,7 @@ export default function PreOrdersPage() {
     document.addEventListener("touchend", touchEndHandler);
 
     onMove(clientX);
-  }, [paymentConfirmed, creating]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const submitPreOrder = useCallback(async () => {
-    setCreating(true);
-    try {
-      const res = await fetch("/api/pre-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          periodSchoolDays,
-          allocations: allocations.map((a) => ({
-            childId: a.childId,
-            menuItemId: a.menuItemId,
-            quantity: a.quantity,
-            breakName: a.breakName,
-          })),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || "Failed to create pre-order");
-        setPaymentConfirmed(false);
-        setPaymentSlideX(0);
-        setPaymentOpen(false);
-        return;
-      }
-      toast.success(`Pre-order created! ₹${(data.totalPaymentAmount as number).toFixed(2)} deducted from wallet.`);
-      setAllocations([]);
-      setPaymentOpen(false);
-      setPaymentConfirmed(false);
-      setPaymentSlideX(0);
-      setWalletBalance((prev) => prev !== null ? prev - (data.totalPaymentAmount as number) : null);
-      await fetchAll();
-    } catch {
-      toast.error("Failed to create pre-order");
-      setPaymentConfirmed(false);
-      setPaymentSlideX(0);
-    } finally {
-      setCreating(false);
-    }
-  }, [allocations, fetchAll, periodSchoolDays]);
+  }, [paymentConfirmed, creating, submitPreOrder]);
 
   const openPaymentDialog = () => {
     if (allocations.length === 0) return toast.error("Add at least one allocation");
