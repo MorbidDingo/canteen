@@ -20,7 +20,9 @@ export default async function LibOperatorLayout({
     redirect("/");
   }
 
-  if (access.deviceLoginProfile) {
+  // Only redirect to device terminal for dedicated device-login accounts (DEVICE role).
+  // Library operators who are also assigned to devices should not be auto-redirected.
+  if (access.deviceLoginProfile && access.membershipRole === "DEVICE") {
     redirect(access.deviceLoginProfile.terminalPath);
   }
 

@@ -9,12 +9,14 @@ import {
   discount,
   appSetting,
   certeSubscription,
+  wallet,
+  walletTransaction,
 } from "@/lib/db/schema";
-import { eq, desc, and, gte, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
-import { APP_SETTINGS_DEFAULTS, MAX_ACTIVE_PREORDERS_PER_CHILD } from "@/lib/constants";
+import { APP_SETTINGS_DEFAULTS, CERTE_PLUS, MAX_ACTIVE_PREORDERS_PER_CHILD } from "@/lib/constants";
 import { breakNames, parseBreakSlots } from "@/lib/break-slots";
 
 type AllocationInput = {
@@ -241,7 +243,10 @@ export async function POST(request: Request) {
 
     const settings = await getAppSettings();
     const MIN_PREORDER_VALUE = Number(settings.subscription_min_order_value) || 60;
-    const MIN_SUBSCRIPTION_DAYS = Number(settings.subscription_min_days) || 3;
+    const MIN_SUBSCRIPTION_DAYS = Math.max(
+      Number(settings.subscription_min_days) || 3,
+      CERTE_PLUS.PRE_ORDER_MIN_SCHOOL_DAYS,
+    );
     const MAX_SUBSCRIPTION_DAYS = Number(settings.subscription_max_days) || 180;
     const breakSlots = parseBreakSlots(settings.subscription_breaks_json);
     const allowedBreaks = breakNames(breakSlots);
@@ -507,7 +512,79 @@ export async function POST(request: Request) {
 
     const subscriptionUntil = addSchoolDays(effectiveStartDate, periodSchoolDays - 1);
 
+    // ── Compute total payment amount (daily cost × school days × platform fee) ──
+    let grandTotalDailyBase = 0;
+    for (const prepared of preparedByChild.values()) {
+      grandTotalDailyBase += prepared.total;
+    }
+    const platformFeeMultiplier = 1 + CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100;
+    const totalPaymentAmount = Math.round(grandTotalDailyBase * periodSchoolDays * platformFeeMultiplier * 100) / 100;
+
+    // ── Find the family wallet (shared across all children of this parent) ──
+    const siblingChildRows = await db
+      .select({ id: child.id })
+      .from(child)
+      .where(eq(child.parentId, session.user.id));
+    const siblingChildIds = siblingChildRows.map((c) => c.id);
+
+    const wallets = await db
+      .select()
+      .from(wallet)
+      .where(inArray(wallet.childId, siblingChildIds))
+      .orderBy(asc(wallet.createdAt))
+      .limit(1);
+
+    if (wallets.length === 0) {
+      return NextResponse.json(
+        { error: "No wallet found. Please ensure a child is linked to your account." },
+        { status: 400 },
+      );
+    }
+
+    const familyWallet = wallets[0];
+
+    if (familyWallet.balance < totalPaymentAmount) {
+      return NextResponse.json(
+        {
+          error: `Insufficient wallet balance. Required: ₹${totalPaymentAmount.toFixed(2)} (${periodSchoolDays} school days + 2% platform fee). Available: ₹${familyWallet.balance.toFixed(2)}. Please top up your wallet.`,
+          required: totalPaymentAmount,
+          available: familyWallet.balance,
+        },
+        { status: 402 },
+      );
+    }
+
+    // ── Atomically deduct wallet and create pre-orders ──
     const createdByChild = await db.transaction(async (tx) => {
+      // Re-fetch wallet inside transaction to prevent race conditions
+      const [latestWallet] = await tx
+        .select()
+        .from(wallet)
+        .where(inArray(wallet.childId, siblingChildIds))
+        .orderBy(asc(wallet.createdAt))
+        .limit(1);
+
+      if (!latestWallet || latestWallet.balance < totalPaymentAmount) {
+        throw new Error(
+          `Insufficient wallet balance. Required: ₹${totalPaymentAmount.toFixed(2)}, Available: ₹${(latestWallet?.balance ?? 0).toFixed(2)}`,
+        );
+      }
+
+      const newBalance = latestWallet.balance - totalPaymentAmount;
+
+      await tx
+        .update(wallet)
+        .set({ balance: newBalance, updatedAt: new Date() })
+        .where(inArray(wallet.childId, siblingChildIds));
+
+      await tx.insert(walletTransaction).values({
+        walletId: latestWallet.id,
+        type: "DEBIT",
+        amount: totalPaymentAmount,
+        balanceAfter: newBalance,
+        description: `Pre-order subscription (${periodSchoolDays} school days, incl. 2% platform fee)`,
+      });
+
       const createdPairs: Array<{ childId: string; preOrderId: string }> = [];
 
       for (const [childId, prepared] of preparedByChild.entries()) {
@@ -563,6 +640,8 @@ export async function POST(request: Request) {
       ids: createdByChild.map((row) => row.preOrderId),
       scheduledDate: effectiveStartDate,
       subscriptionUntil,
+      totalPaymentAmount,
+      periodSchoolDays,
     });
   } catch (error) {
     console.error("Create pre-order error:", error);

@@ -571,7 +571,7 @@ export default function WalletPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <WalletIcon className="h-6 w-6 text-primary" /> Wallet
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage wallet credits and add credits online</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage wallet credits and add credits online · <span className="font-medium text-amber-700">1 credit = ₹1</span></p>
       </div>
 
       {/* ── Card section ──────────────────────────────────────────────────── */}
@@ -768,7 +768,7 @@ export default function WalletPage() {
                 }
               </Button>
             </div>
-            <p className="text-xs text-orange-700/70">Min 10 credits · Max 5,000 credits</p>
+            <p className="text-xs text-orange-700/70">Min 10 credits · Max 5,000 credits · 1 credit = ₹1</p>
           </div>
         )}
       </div>

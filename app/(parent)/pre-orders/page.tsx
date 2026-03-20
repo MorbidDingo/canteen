@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -37,8 +37,12 @@ import {
   CalendarClock,
   PencilLine,
   Search,
+  ChevronRight,
+  Wallet,
+  ShieldCheck,
 } from "lucide-react";
 import {
+  CERTE_PLUS,
   MENU_CATEGORY_LABELS,
   PRE_ORDER_STATUS_LABELS,
   MAX_ACTIVE_PREORDERS_PER_CHILD,
@@ -154,6 +158,7 @@ export default function PreOrdersPage() {
   const [controls, setControls] = useState<ChildControl[]>([]);
   const [menuItems, setMenuItems] = useState<MenuOption[]>([]);
   const [preOrders, setPreOrders] = useState<PreOrderWithItems[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const [search, setSearch] = useState("");
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
@@ -170,32 +175,47 @@ export default function PreOrdersPage() {
   const [assignBreak, setAssignBreak] = useState(DEFAULT_BREAKS[0]);
   const [allocations, setAllocations] = useState<DraftAllocation[]>([]);
 
+  // Payment confirmation dialog state
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentSlideX, setPaymentSlideX] = useState(0);
+  const [paymentSliding, setPaymentSliding] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const sliderTrackRef = useRef<HTMLDivElement>(null);
+  const sliderThumbRef = useRef<HTMLDivElement>(null);
+
   const [editOpen, setEditOpen] = useState(false);
   const [editingPreOrder, setEditingPreOrder] = useState<PreOrderWithItems | null>(null);
   const [editRows, setEditRows] = useState<EditRow[]>([]);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [preOrdersRes, childrenRes, menuRes, controlsRes, settingsRes] = await Promise.all([
+      const [preOrdersRes, childrenRes, menuRes, controlsRes, settingsRes, walletRes] = await Promise.all([
         fetch("/api/pre-orders"),
         fetch("/api/children"),
         fetch("/api/menu"),
         fetch("/api/controls"),
         fetch("/api/menu/subscription-settings"),
+        fetch("/api/wallet"),
       ]);
 
-      if (!preOrdersRes.ok || !childrenRes.ok || !menuRes.ok || !controlsRes.ok || !settingsRes.ok) {
+      if (!preOrdersRes.ok || !childrenRes.ok || !controlsRes.ok) {
         throw new Error("load failed");
       }
 
       const preOrdersData = (await preOrdersRes.json()) as PreOrderWithItems[];
       const childrenData = (await childrenRes.json()) as ChildOption[];
-      const menuRaw = await menuRes.json();
+      const menuRaw = menuRes.ok ? await menuRes.json() : { items: [] };
       const menuData = ((menuRaw.items || menuRaw) as MenuOption[]).filter(
         (m) => m.available && m.subscribable !== false,
       );
       const controlsData = (await controlsRes.json()) as ChildControl[];
-      const settingsData = await settingsRes.json();
+      const settingsData = settingsRes.ok ? await settingsRes.json() : {};
+
+      if (walletRes.ok) {
+        const walletData = await walletRes.json();
+        const wList = Array.isArray(walletData) ? walletData : [];
+        setWalletBalance(wList.length > 0 ? (wList[0].balance as number) : 0);
+      }
 
       const breakSlots = Array.isArray(settingsData.subscription_break_slots)
         ? parseBreakSlots(JSON.stringify(settingsData.subscription_break_slots))
@@ -208,7 +228,7 @@ export default function PreOrdersPage() {
       setControls(controlsData);
       setSettings({
         minOrderValue: Number(settingsData.subscription_min_order_value) || DEFAULT_MIN_ORDER,
-        minDays: Number(settingsData.subscription_min_days) || DEFAULT_MIN_DAYS,
+        minDays: Math.max(Number(settingsData.subscription_min_days) || DEFAULT_MIN_DAYS, CERTE_PLUS.PRE_ORDER_MIN_SCHOOL_DAYS),
         maxDays: Number(settingsData.subscription_max_days) || DEFAULT_MAX_DAYS,
         breaks,
         breakSlots,
@@ -352,20 +372,21 @@ export default function PreOrdersPage() {
     );
   };
 
-  const createPreOrders = async () => {
-    if (allocations.length === 0) return toast.error("Add at least one allocation");
-    if (!subscriptionEndIso) return toast.error("Subscription end date missing. Please refresh.");
-    if (periodSchoolDays <= 0) {
-      return toast.error("Your Certe+ subscription has no school days left for pre-orders.");
+  // Calculate estimated payment amount for the pre-order
+  const dailyTotalBase = useMemo(() => {
+    let sum = 0;
+    for (const [, s] of summaryByChild.entries()) {
+      sum += s.total;
     }
-    if (periodSchoolDays < settings.minDays) {
-      return toast.error(
-        `At least ${settings.minDays} school days are required. Remaining from your subscription: ${periodSchoolDays}.`,
-      );
-    }
-    if (hasBelowMin) return toast.error(`Each child must meet min Rs${settings.minOrderValue}`);
-    if (hasBlocks) return toast.error("Some allocations are blocked by controls");
+    return sum;
+  }, [summaryByChild]);
 
+  const estimatedTotal = useMemo(() => {
+    if (periodSchoolDays <= 0) return 0;
+    return Math.round(dailyTotalBase * periodSchoolDays * (1 + CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+  }, [dailyTotalBase, periodSchoolDays]);
+
+  const submitPreOrder = useCallback(async () => {
     setCreating(true);
     try {
       const res = await fetch("/api/pre-orders", {
@@ -382,16 +403,102 @@ export default function PreOrdersPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) return toast.error(data.error || "Failed to create pre-order");
-      toast.success("Subscription pre-order created");
+      if (!res.ok) {
+        toast.error(data.error || "Failed to create pre-order");
+        setPaymentConfirmed(false);
+        setPaymentSlideX(0);
+        setPaymentOpen(false);
+        return;
+      }
+      toast.success(`Pre-order created! ₹${(data.totalPaymentAmount as number).toFixed(2)} deducted from wallet.`);
       setAllocations([]);
+      setPaymentOpen(false);
+      setPaymentConfirmed(false);
+      setPaymentSlideX(0);
+      setWalletBalance((prev) => prev !== null ? prev - (data.totalPaymentAmount as number) : null);
       await fetchAll();
     } catch {
       toast.error("Failed to create pre-order");
+      setPaymentConfirmed(false);
+      setPaymentSlideX(0);
     } finally {
       setCreating(false);
     }
+  }, [allocations, fetchAll, periodSchoolDays]);
+
+  // Slider handlers
+  const handleSliderStart = useCallback((clientX: number) => {
+    if (paymentConfirmed || creating) return;
+    setPaymentSliding(true);
+    const track = sliderTrackRef.current;
+    const thumb = sliderThumbRef.current;
+    if (!track || !thumb) return;
+    const trackRect = track.getBoundingClientRect();
+    const maxX = trackRect.width - thumb.offsetWidth - 8;
+
+    const onMove = (moveX: number) => {
+      const x = Math.min(Math.max(0, moveX - trackRect.left - thumb.offsetWidth / 2), maxX);
+      setPaymentSlideX(x);
+      if (x >= maxX * 0.88) {
+        setPaymentConfirmed(true);
+        setPaymentSliding(false);
+        document.removeEventListener("mousemove", mouseMoveHandler);
+        document.removeEventListener("mouseup", mouseUpHandler);
+        document.removeEventListener("touchmove", touchMoveHandler);
+        document.removeEventListener("touchend", touchEndHandler);
+        void submitPreOrder();
+      }
+    };
+
+    const mouseMoveHandler = (e: MouseEvent) => onMove(e.clientX);
+    const mouseUpHandler = () => {
+      setPaymentSliding(false);
+      setPaymentSlideX(0);
+      document.removeEventListener("mousemove", mouseMoveHandler);
+      document.removeEventListener("mouseup", mouseUpHandler);
+    };
+    const touchMoveHandler = (e: TouchEvent) => {
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    };
+    const touchEndHandler = () => {
+      setPaymentSliding(false);
+      setPaymentSlideX(0);
+      document.removeEventListener("touchmove", touchMoveHandler);
+      document.removeEventListener("touchend", touchEndHandler);
+    };
+
+    document.addEventListener("mousemove", mouseMoveHandler);
+    document.addEventListener("mouseup", mouseUpHandler);
+    document.addEventListener("touchmove", touchMoveHandler, { passive: false });
+    document.addEventListener("touchend", touchEndHandler);
+
+    onMove(clientX);
+  }, [paymentConfirmed, creating, submitPreOrder]);
+
+  const openPaymentDialog = () => {
+    if (allocations.length === 0) return toast.error("Add at least one allocation");
+    if (!subscriptionEndIso) return toast.error("Subscription end date missing. Please refresh.");
+    if (periodSchoolDays <= 0) {
+      return toast.error("Your Certe+ subscription has no school days left for pre-orders.");
+    }
+    if (periodSchoolDays < settings.minDays) {
+      return toast.error(
+        `At least ${settings.minDays} school days are required. Remaining from your subscription: ${periodSchoolDays}.`,
+      );
+    }
+    if (hasBelowMin) return toast.error(`Each child must meet min ₹${settings.minOrderValue}`);
+    if (hasBlocks) return toast.error("Some allocations are blocked by controls");
+    if (walletBalance !== null && walletBalance < estimatedTotal) {
+      return toast.error(`Insufficient wallet balance. Required: ₹${estimatedTotal.toFixed(2)}, Available: ₹${walletBalance.toFixed(2)}. Please top up.`);
+    }
+    setPaymentConfirmed(false);
+    setPaymentSlideX(0);
+    setPaymentOpen(true);
   };
+
+  // Keep old createPreOrders as alias for the dialog opener
+  const createPreOrders = openPaymentDialog;
 
   const openEdit = (po: PreOrderWithItems) => {
     const fallbackBreak = settings.breaks[0] ?? DEFAULT_BREAKS[0];
@@ -617,19 +724,35 @@ export default function PreOrdersPage() {
             })}
           </div>
 
-          <div className="rounded-md border p-3 text-sm">
-            <p className="text-muted-foreground">Min value per child: Rs{settings.minOrderValue}</p>
+          <div className="rounded-md border p-3 text-sm space-y-1">
+            <p className="text-muted-foreground">Min value per child: ₹{settings.minOrderValue}</p>
+            <p className="text-muted-foreground">
+              Minimum period: {settings.minDays} school days (1 week)
+            </p>
             <p className="text-muted-foreground">
               Available from subscription: {periodSchoolDays} school days
               {subscriptionEndIso ? ` (until ${subscriptionEndIso})` : ""}
             </p>
             {Array.from(summaryByChild.entries()).map(([childId, s]) => (
               <p key={childId}>
-                {childById.get(childId)}: Rs{Math.round(s.total)}
+                {childById.get(childId)}: ₹{Math.round(s.total)}/day
                 {s.belowMin ? " (below min)" : ""}
                 {s.hasBlocks ? " (blocked by controls)" : ""}
               </p>
             ))}
+            {allocations.length > 0 && periodSchoolDays >= settings.minDays && (
+              <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs space-y-0.5">
+                <p className="font-medium text-amber-800">Estimated Payment (Wallet)</p>
+                <p className="text-amber-700">Daily total: ₹{dailyTotalBase.toFixed(2)} × {periodSchoolDays} days = ₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</p>
+                <p className="text-amber-700">Platform fee (2%): +₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</p>
+                <p className="font-semibold text-amber-900">Total: ₹{estimatedTotal.toFixed(2)}</p>
+                {walletBalance !== null && (
+                  <p className={walletBalance < estimatedTotal ? "text-red-600 font-medium" : "text-emerald-700"}>
+                    Wallet balance: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— Insufficient, please top up" : "✓"}
+                  </p>
+                )}
+              </div>
+            )}
             <p className="text-muted-foreground">
               Maximum active pre-orders: {MAX_ACTIVE_PREORDERS_PER_CHILD} per child.
             </p>
@@ -638,8 +761,8 @@ export default function PreOrdersPage() {
                 Remaining subscription school days ({periodSchoolDays}) are below minimum required ({settings.minDays}).
               </p>
             ) : null}
-            <p className="mt-1 text-xs text-muted-foreground">
-              Existing subscriptions stay active if minimum changes; break-only edits remain allowed even when below new minimum.
+            <p className="text-xs text-muted-foreground">
+              Payment is wallet-only. 1 credit = ₹1. No online payment allowed for pre-orders.
             </p>
           </div>
 
@@ -651,12 +774,13 @@ export default function PreOrdersPage() {
               hasBelowMin ||
               hasBlocks ||
               periodSchoolDays < settings.minDays ||
-              periodSchoolDays <= 0
+              periodSchoolDays <= 0 ||
+              (walletBalance !== null && walletBalance < estimatedTotal)
             }
             onClick={createPreOrders}
           >
             {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Create Pre-Order
+            {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pre-Order"}
           </Button>
         </CardContent>
       </Card>
@@ -670,12 +794,13 @@ export default function PreOrdersPage() {
             hasBelowMin ||
             hasBlocks ||
             periodSchoolDays < settings.minDays ||
-            periodSchoolDays <= 0
+            periodSchoolDays <= 0 ||
+            (walletBalance !== null && walletBalance < estimatedTotal)
           }
           onClick={createPreOrders}
         >
           {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Create Pre-Order
+          {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pre-Order"}
         </Button>
       </div>
 
@@ -794,6 +919,167 @@ export default function PreOrdersPage() {
               Save Changes
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Payment Confirmation Dialog ─────────────────────────────────── */}
+      <Dialog open={paymentOpen} onOpenChange={(open) => {
+        if (!creating) {
+          setPaymentOpen(open);
+          if (!open) { setPaymentSlideX(0); setPaymentConfirmed(false); }
+        }
+      }}>
+        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
+          {/* Header — gradient */}
+          <div className="bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] px-6 pt-6 pb-5 text-white">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+                <Wallet className="h-5 w-5 text-amber-300" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold leading-tight">Confirm Pre-Order Payment</h2>
+                <p className="text-xs text-white/60 mt-0.5">Wallet deduction only · No online payment</p>
+              </div>
+            </div>
+
+            {/* Amount display */}
+            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">Daily meals ({children.length > 0 ? `${children.length} child${children.length > 1 ? "ren" : ""}` : ""})</span>
+                <span className="text-white">₹{dailyTotalBase.toFixed(2)}/day</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">Duration</span>
+                <span className="text-white">{periodSchoolDays} school days</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">Subtotal</span>
+                <span className="text-white">₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-white/70">Platform fee (2%)</span>
+                <span className="text-amber-300">+₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</span>
+              </div>
+              <div className="border-t border-white/10 pt-1.5 flex justify-between">
+                <span className="font-semibold text-white">Total</span>
+                <span className="text-lg font-bold text-amber-300">₹{estimatedTotal.toFixed(2)}</span>
+              </div>
+              {walletBalance !== null && (
+                <div className="flex justify-between text-xs mt-0.5">
+                  <span className="text-white/50">Wallet balance after</span>
+                  <span className={walletBalance - estimatedTotal >= 0 ? "text-emerald-400" : "text-red-400"}>
+                    ₹{(walletBalance - estimatedTotal).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Period info */}
+            <div className="mt-3 flex gap-2 text-xs text-white/60">
+              <span>{startDate}</span>
+              <span>→</span>
+              <span>{endDate}</span>
+              <span className="ml-auto flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                Priority queue
+              </span>
+            </div>
+          </div>
+
+          {/* Slider section */}
+          <div className="bg-[#0d1117] px-6 py-5">
+            <p className="text-xs text-center text-white/40 mb-4">
+              {paymentConfirmed ? "Payment confirmed!" : "Slide to confirm payment"}
+            </p>
+
+            <div
+              ref={sliderTrackRef}
+              className="relative h-14 rounded-full overflow-hidden select-none"
+              style={{
+                background: paymentConfirmed
+                  ? "linear-gradient(90deg, #065f46 0%, #047857 100%)"
+                  : "linear-gradient(90deg, rgba(212,137,26,0.15) 0%, rgba(232,162,48,0.08) 100%)",
+                border: paymentConfirmed ? "1px solid #10b981" : "1px solid rgba(212,137,26,0.3)",
+                transition: "background 0.4s, border-color 0.4s",
+              }}
+            >
+              {/* Track fill */}
+              {!paymentConfirmed && (
+                <div
+                  className="absolute left-0 top-0 bottom-0 rounded-full pointer-events-none"
+                  style={{
+                    width: `${paymentSlideX + 56}px`,
+                    background: "linear-gradient(90deg, rgba(212,137,26,0.3) 0%, rgba(232,162,48,0.1) 100%)",
+                    transition: paymentSliding ? "none" : "width 0.3s ease",
+                  }}
+                />
+              )}
+
+              {/* Confirmed text */}
+              {paymentConfirmed && (
+                <div className="absolute inset-0 flex items-center justify-center gap-2">
+                  {creating ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-emerald-300" />
+                  ) : (
+                    <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                  )}
+                  <span className="text-sm font-semibold text-emerald-300">
+                    {creating ? "Processing…" : "Confirmed!"}
+                  </span>
+                </div>
+              )}
+
+              {/* Slide hint text */}
+              {!paymentConfirmed && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-sm text-white/30 tracking-wide ml-14">
+                    Slide to pay ₹{estimatedTotal.toFixed(2)} →
+                  </span>
+                </div>
+              )}
+
+              {/* Thumb */}
+              {!paymentConfirmed && (
+                <div
+                  ref={sliderThumbRef}
+                  onMouseDown={(e) => { e.preventDefault(); handleSliderStart(e.clientX); }}
+                  onTouchStart={(e) => { e.preventDefault(); handleSliderStart(e.touches[0].clientX); }}
+                  className="absolute top-1 bottom-1 left-1 w-12 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing z-10 touch-none"
+                  style={{
+                    transform: `translateX(${paymentSlideX}px)`,
+                    background: "linear-gradient(135deg, #d4891a 0%, #e8a230 50%, #b87314 100%)",
+                    boxShadow: "0 2px 12px rgba(212,137,26,0.6)",
+                    transition: paymentSliding ? "none" : "transform 0.3s ease",
+                  }}
+                  role="slider"
+                  aria-label="Slide to confirm payment"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={paymentSlideX}
+                >
+                  <ChevronRight className="h-5 w-5 text-white" />
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-center text-white/30 mt-3">
+              This will deduct ₹{estimatedTotal.toFixed(2)} from your family wallet. 1 credit = ₹1.
+            </p>
+          </div>
+
+          {/* Cancel button */}
+          {!paymentConfirmed && (
+            <div className="bg-[#0d1117] px-6 pb-5 -mt-1">
+              <Button
+                variant="ghost"
+                className="w-full text-white/40 hover:text-white/70 hover:bg-white/5"
+                onClick={() => { setPaymentOpen(false); setPaymentSlideX(0); }}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
