@@ -209,7 +209,7 @@ export default function ParentLayout({
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur-xl">
         <div className="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 md:h-16 md:max-w-4xl md:px-6 lg:max-w-6xl">
           <Link href="/" className="flex items-center gap-1">
             <CerteLogo size={24} />
