@@ -69,7 +69,7 @@ export default function MenuPage() {
         </p>
       </div>
 
-      <div className="md:hidden mb-4 rounded-lg border p-1 inline-flex gap-1">
+      <div className="mb-4 inline-flex w-fit gap-1 rounded-lg border p-1">
         <Link href="/menu">
           <Button type="button" variant="secondary" size="sm">
             Menu

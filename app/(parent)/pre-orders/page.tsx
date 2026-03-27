@@ -28,6 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BottomSheet } from "@/components/ui/motion";
 import { Separator } from "@/components/ui/separator";
 import {
   Loader2,
@@ -581,36 +582,33 @@ export default function PreOrdersPage() {
 
   return (
     <div className="container mx-auto max-w-5xl space-y-5 px-4 py-6 pb-28">
-      <Card className="overflow-hidden border-0 bg-gradient-to-br from-[#f58220] via-[#e27417] to-[#c45f0d] text-white">
-        <CardContent className="py-5">
-          <p className="text-xs uppercase tracking-wider text-white/70">Certe+ Subscription</p>
-          <h2 className="text-xl font-bold mt-1">Create Pre-Orders</h2>
-          <p className="text-sm text-white/80 mt-1">
-            Meal schedule is auto-derived from your active Certe+ plan.
-          </p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="text-[11px] text-white/70">Plan</p>
-              <p className="text-sm font-semibold">{subscriptionPlan || "ACTIVE"}</p>
-            </div>
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="text-[11px] text-white/70">School Days</p>
-              <p className="text-sm font-semibold">{periodSchoolDays}</p>
-            </div>
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="text-[11px] text-white/70">Start</p>
-              <p className="text-sm font-semibold">{startDate}</p>
-            </div>
-            <div className="rounded-xl bg-white/10 p-2.5">
-              <p className="text-[11px] text-white/70">End</p>
-              <p className="text-sm font-semibold">{endDate}</p>
-            </div>
+      {/* ── Premium Hero ──────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 p-5 text-white dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:border dark:border-white/5">
+        <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+        <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold">Certe+ Subscription</p>
+        <h2 className="text-lg font-bold mt-1.5 tracking-tight">Pre-Orders</h2>
+        <p className="text-xs text-white/50 mt-1 leading-relaxed">
+          Meal schedule derived from your active plan.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Plan</p>
+            <p className="text-sm font-semibold mt-0.5">{subscriptionPlan || "ACTIVE"}</p>
           </div>
-          <p className="mt-3 text-xs text-white/70">
-            School days are not manually editable here.
-          </p>
-        </CardContent>
-      </Card>
+          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">School Days</p>
+            <p className="text-sm font-semibold mt-0.5">{periodSchoolDays}</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Start</p>
+            <p className="text-sm font-semibold mt-0.5">{startDate}</p>
+          </div>
+          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">End</p>
+            <p className="text-sm font-semibold mt-0.5">{endDate}</p>
+          </div>
+        </div>
+      </div>
 
       <Card className="rounded-2xl">
         <CardHeader>
@@ -670,7 +668,7 @@ export default function PreOrdersPage() {
                 <div>
                   <p className="text-sm font-medium">{item.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {MENU_CATEGORY_LABELS[item.category]} - Rs{item.discountedPrice ?? item.price}
+                    {MENU_CATEGORY_LABELS[item.category]} · ₹{item.discountedPrice ?? item.price}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => addItem(item.id)}>
@@ -744,8 +742,8 @@ export default function PreOrdersPage() {
               <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs space-y-0.5">
                 <p className="font-medium text-amber-800">Estimated Payment (Wallet)</p>
                 <p className="text-amber-700">Daily total: ₹{dailyTotalBase.toFixed(2)} × {periodSchoolDays} days = ₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</p>
-                <p className="text-amber-700">Platform fee (2%): +₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</p>
-                <p className="font-semibold text-amber-900">Total: ₹{estimatedTotal.toFixed(2)}</p>
+                <p className="text-muted-foreground">Platform fee (2%): +₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</p>
+                <p className="font-semibold text-foreground">Total: ₹{estimatedTotal.toFixed(2)}</p>
                 {walletBalance !== null && (
                   <p className={walletBalance < estimatedTotal ? "text-red-600 font-medium" : "text-emerald-700"}>
                     Wallet balance: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— Insufficient, please top up" : "✓"}
@@ -762,7 +760,7 @@ export default function PreOrdersPage() {
               </p>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              Payment is wallet-only. 1 credit = ₹1. No online payment allowed for pre-orders.
+              Payment is wallet-only. No online payment allowed for pre-orders.
             </p>
           </div>
 
@@ -785,24 +783,7 @@ export default function PreOrdersPage() {
         </CardContent>
       </Card>
 
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-20 border-t bg-background/95 backdrop-blur p-3">
-        <Button
-          className="w-full h-11"
-          disabled={
-            creating ||
-            allocations.length === 0 ||
-            hasBelowMin ||
-            hasBlocks ||
-            periodSchoolDays < settings.minDays ||
-            periodSchoolDays <= 0 ||
-            (walletBalance !== null && walletBalance < estimatedTotal)
-          }
-          onClick={createPreOrders}
-        >
-          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pre-Order"}
-        </Button>
-      </div>
+
 
       {preOrders.length === 0 ? (
         <Card>
@@ -848,18 +829,18 @@ export default function PreOrdersPage() {
         </div>
       )}
 
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Edit Pre-Order</DialogTitle>
-            <DialogDescription>You can edit food and break only.</DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[50vh] space-y-2 overflow-auto pr-1">
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[75]}>
+        <div className="space-y-4 pb-4">
+          <div>
+            <h2 className="text-base font-bold">Edit Pre-Order</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">You can edit food and break only.</p>
+          </div>
+          <div className="max-h-[40vh] space-y-2 overflow-auto pr-1">
             {editRows.map((row) => (
-              <div key={row.id} className="rounded-md border p-2">
+              <div key={row.id} className="rounded-xl border p-3 space-y-2">
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {menuItems.map((item) => (
                         <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -867,14 +848,14 @@ export default function PreOrdersPage() {
                     </SelectContent>
                   </Select>
                   <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {Array.from(new Set([...settings.breaks, ...editRows.map((x) => x.breakName)])).map((breakName) => (
                         <SelectItem key={breakName} value={breakName}>{breakLabelByName.get(breakName) ?? breakName}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center justify-between rounded-md border px-2">
+                  <div className="flex items-center justify-between rounded-xl border px-3">
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
@@ -884,7 +865,7 @@ export default function PreOrdersPage() {
                     </Button>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="mt-1 text-red-600" onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}>
+                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}>
                   <Trash2 className="mr-1 h-3.5 w-3.5" />
                   Remove
                 </Button>
@@ -894,6 +875,7 @@ export default function PreOrdersPage() {
           <Button
             type="button"
             variant="outline"
+            className="w-full"
             onClick={() =>
               setEditRows((prev) => [
                 ...prev,
@@ -910,85 +892,89 @@ export default function PreOrdersPage() {
             <Plus className="mr-1 h-3.5 w-3.5" />
             Add Item
           </Button>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={savingEdit}>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setEditOpen(false)} disabled={savingEdit}>
               Cancel
             </Button>
-            <Button onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
+            <Button className="flex-1" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
               {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save Changes
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </BottomSheet>
 
-      {/* ── Payment Confirmation Dialog ─────────────────────────────────── */}
-      <Dialog open={paymentOpen} onOpenChange={(open) => {
-        if (!creating) {
-          setPaymentOpen(open);
-          if (!open) { setPaymentSlideX(0); setPaymentConfirmed(false); }
-        }
-      }}>
-        <DialogContent className="sm:max-w-md p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
-          {/* Header — gradient */}
-          <div className="bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] px-6 pt-6 pb-5 text-white">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-                <Wallet className="h-5 w-5 text-amber-300" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold leading-tight">Confirm Pre-Order Payment</h2>
-                <p className="text-xs text-white/60 mt-0.5">Wallet deduction only · No online payment</p>
-              </div>
+      {/* ── Payment Confirmation BottomSheet ─────────────────────────── */}
+      <BottomSheet
+        open={paymentOpen}
+        onClose={() => {
+          if (!creating) {
+            setPaymentOpen(false);
+            setPaymentSlideX(0);
+            setPaymentConfirmed(false);
+          }
+        }}
+        snapPoints={[85]}
+        className="bg-[#0d1117]"
+      >
+        <div className="space-y-5 pb-4">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+              <Wallet className="h-5 w-5 text-primary" />
             </div>
-
-            {/* Amount display */}
-            <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Daily meals ({children.length > 0 ? `${children.length} child${children.length > 1 ? "ren" : ""}` : ""})</span>
-                <span className="text-white">₹{dailyTotalBase.toFixed(2)}/day</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Duration</span>
-                <span className="text-white">{periodSchoolDays} school days</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Subtotal</span>
-                <span className="text-white">₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-white/70">Platform fee (2%)</span>
-                <span className="text-amber-300">+₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</span>
-              </div>
-              <div className="border-t border-white/10 pt-1.5 flex justify-between">
-                <span className="font-semibold text-white">Total</span>
-                <span className="text-lg font-bold text-amber-300">₹{estimatedTotal.toFixed(2)}</span>
-              </div>
-              {walletBalance !== null && (
-                <div className="flex justify-between text-xs mt-0.5">
-                  <span className="text-white/50">Wallet balance after</span>
-                  <span className={walletBalance - estimatedTotal >= 0 ? "text-emerald-400" : "text-red-400"}>
-                    ₹{(walletBalance - estimatedTotal).toFixed(2)}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Period info */}
-            <div className="mt-3 flex gap-2 text-xs text-white/60">
-              <span>{startDate}</span>
-              <span>→</span>
-              <span>{endDate}</span>
-              <span className="ml-auto flex items-center gap-1">
-                <ShieldCheck className="h-3 w-3 text-emerald-400" />
-                Priority queue
-              </span>
+            <div>
+              <h2 className="text-base font-bold text-white leading-tight">Confirm Pre-Order</h2>
+              <p className="text-xs text-white/50 mt-0.5">Wallet deduction only</p>
             </div>
           </div>
 
-          {/* Slider section */}
-          <div className="bg-[#0d1117] px-6 py-5">
-            <p className="text-xs text-center text-white/40 mb-4">
+          {/* Amount breakdown */}
+          <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 space-y-1.5">
+            <div className="flex justify-between text-sm">
+              <span className="text-white/60">Daily meals ({children.length > 0 ? `${children.length} child${children.length > 1 ? "ren" : ""}` : ""})</span>
+              <span className="text-white">₹{dailyTotalBase.toFixed(2)}/day</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/60">Duration</span>
+              <span className="text-white">{periodSchoolDays} school days</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/60">Subtotal</span>
+              <span className="text-white">₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-white/60">Platform fee (2%)</span>
+              <span className="text-primary">+₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</span>
+            </div>
+            <div className="border-t border-white/10 pt-1.5 flex justify-between">
+              <span className="font-semibold text-white">Total</span>
+              <span className="text-lg font-bold text-primary">₹{estimatedTotal.toFixed(2)}</span>
+            </div>
+            {walletBalance !== null && (
+              <div className="flex justify-between text-xs mt-0.5">
+                <span className="text-white/40">Balance after</span>
+                <span className={walletBalance - estimatedTotal >= 0 ? "text-emerald-400" : "text-red-400"}>
+                  ₹{(walletBalance - estimatedTotal).toFixed(2)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Period */}
+          <div className="flex gap-2 text-xs text-white/50">
+            <span>{startDate}</span>
+            <span>→</span>
+            <span>{endDate}</span>
+            <span className="ml-auto flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3 text-emerald-400" />
+              Priority queue
+            </span>
+          </div>
+
+          {/* Slider */}
+          <div>
+            <p className="text-xs text-center text-white/35 mb-3">
               {paymentConfirmed ? "Payment confirmed!" : "Slide to confirm payment"}
             </p>
 
@@ -998,24 +984,22 @@ export default function PreOrdersPage() {
               style={{
                 background: paymentConfirmed
                   ? "linear-gradient(90deg, #065f46 0%, #047857 100%)"
-                  : "linear-gradient(90deg, rgba(212,137,26,0.15) 0%, rgba(232,162,48,0.08) 100%)",
-                border: paymentConfirmed ? "1px solid #10b981" : "1px solid rgba(212,137,26,0.3)",
+                  : "linear-gradient(90deg, rgba(212,137,26,0.12) 0%, rgba(232,162,48,0.06) 100%)",
+                border: paymentConfirmed ? "1px solid #10b981" : "1px solid rgba(255,255,255,0.10)",
                 transition: "background 0.4s, border-color 0.4s",
               }}
             >
-              {/* Track fill */}
               {!paymentConfirmed && (
                 <div
                   className="absolute left-0 top-0 bottom-0 rounded-full pointer-events-none"
                   style={{
                     width: `${paymentSlideX + 56}px`,
-                    background: "linear-gradient(90deg, rgba(212,137,26,0.3) 0%, rgba(232,162,48,0.1) 100%)",
+                    background: "linear-gradient(90deg, rgba(212,137,26,0.25) 0%, rgba(232,162,48,0.08) 100%)",
                     transition: paymentSliding ? "none" : "width 0.3s ease",
                   }}
                 />
               )}
 
-              {/* Confirmed text */}
               {paymentConfirmed && (
                 <div className="absolute inset-0 flex items-center justify-center gap-2">
                   {creating ? (
@@ -1029,16 +1013,14 @@ export default function PreOrdersPage() {
                 </div>
               )}
 
-              {/* Slide hint text */}
               {!paymentConfirmed && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-sm text-white/30 tracking-wide ml-14">
+                  <span className="text-sm text-white/25 tracking-wide ml-14">
                     Slide to pay ₹{estimatedTotal.toFixed(2)} →
                   </span>
                 </div>
               )}
 
-              {/* Thumb */}
               {!paymentConfirmed && (
                 <div
                   ref={sliderThumbRef}
@@ -1047,8 +1029,8 @@ export default function PreOrdersPage() {
                   className="absolute top-1 bottom-1 left-1 w-12 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing z-10 touch-none"
                   style={{
                     transform: `translateX(${paymentSlideX}px)`,
-                    background: "linear-gradient(135deg, #d4891a 0%, #e8a230 50%, #b87314 100%)",
-                    boxShadow: "0 2px 12px rgba(212,137,26,0.6)",
+                    background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.8) 100%)",
+                    boxShadow: "0 2px 12px hsl(var(--primary)/0.5)",
                     transition: paymentSliding ? "none" : "transform 0.3s ease",
                   }}
                   role="slider"
@@ -1062,26 +1044,23 @@ export default function PreOrdersPage() {
               )}
             </div>
 
-            <p className="text-[10px] text-center text-white/30 mt-3">
-              This will deduct ₹{estimatedTotal.toFixed(2)} from your family wallet. 1 credit = ₹1.
+            <p className="text-[10px] text-center text-white/25 mt-3">
+              This will deduct ₹{estimatedTotal.toFixed(2)} from your family wallet.
             </p>
           </div>
 
-          {/* Cancel button */}
           {!paymentConfirmed && (
-            <div className="bg-[#0d1117] px-6 pb-5 -mt-1">
-              <Button
-                variant="ghost"
-                className="w-full text-white/40 hover:text-white/70 hover:bg-white/5"
-                onClick={() => { setPaymentOpen(false); setPaymentSlideX(0); }}
-                disabled={creating}
-              >
-                Cancel
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              className="w-full text-white/35 hover:text-white/60 hover:bg-white/5"
+              onClick={() => { setPaymentOpen(false); setPaymentSlideX(0); }}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

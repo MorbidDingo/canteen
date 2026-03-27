@@ -20,27 +20,55 @@ import {
   Wallet,
   LogOut,
   ClipboardList,
+  Shield,
+  IndianRupee,
+  Sparkles,
 } from "lucide-react";
-import { Shield } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CerteLogo } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { motion, BottomSheet } from "@/components/ui/motion";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 type ParentMode = "canteen" | "library";
+type WalletSnapshot = {
+  childId: string;
+  childName: string;
+  parentName?: string | null;
+  balance: number;
+};
 
 function getParentMode(pathname: string): ParentMode {
   if (pathname.startsWith("/library")) return "library";
+  return "canteen";
+}
+
+const TABS = [
+  { key: "canteen", href: "/menu", icon: UtensilsCrossed, label: "Menu" },
+  { key: "orders", href: "/orders", icon: ClipboardList, label: "Orders" },
+  { key: "library", href: "/library-history", icon: BookOpen, label: "Library" },
+  { key: "controls", href: "/controls", icon: Shield, label: "Controls" },
+  { key: "settings", href: "/settings", icon: Settings, label: "Settings" },
+] as const;
+
+function getActiveTab(pathname: string, parentMode: ParentMode): string {
+  if (["/settings", "/children", "/wallet", "/notifications", "/messaging-settings"].includes(pathname)) {
+    return "settings";
+  }
+  if (pathname === "/controls") return "controls";
+  if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
+  if (parentMode === "library") return "library";
   return "canteen";
 }
 
@@ -52,41 +80,76 @@ export default function ParentLayout({
   const { data: session } = useSession();
   const isGeneralAccount = session?.user?.role === "GENERAL";
   const pathname = usePathname();
+  const router = useRouter();
+
+  const cartItems = useCartStore((s) => s.items);
   const cartCount = useCartStore((s) => s.getItemCount());
+  const clearCart = useCartStore((s) => s.clearCart);
+
   const [overdueCount, setOverdueCount] = useState(0);
   const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
+
   const [cartBounce, setCartBounce] = useState(false);
-  const [navDimmed, setNavDimmed] = useState(false);
-  const [showControlsDialog, setShowControlsDialog] = useState(false);
-  const [activeOrganizationName, setActiveOrganizationName] = useState("");
+  const [showControlsSheet, setShowControlsSheet] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
+  const [walletsLoading, setWalletsLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const prevCartCount = useRef(cartCount);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const parentMode = getParentMode(pathname);
-  const isSettingsPage = [
-    "/settings",
-    "/children",
-    "/wallet",
-    "/notifications",
-  ].includes(pathname);
-  const isControlsPage = pathname === "/controls";
+  const activeTab = getActiveTab(pathname, parentMode);
 
-  const isOrdersPage = pathname === "/orders" || pathname === "/pre-orders";
-  const router = useRouter();
+  const cartTotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (total, item) => total + (item.discountedPrice ?? item.price) * item.quantity,
+        0,
+      ),
+    [cartItems],
+  );
 
-  // Animate cart icon when items are added
+  const totalWalletBalance = useMemo(
+    () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
+    [wallets],
+  );
+  const walletOwnerName = useMemo(
+    () => wallets[0]?.parentName?.trim() || session?.user?.name || "Parent",
+    [session?.user?.name, wallets],
+  );
+
+  const fetchWallets = useCallback(async () => {
+    setWalletsLoading(true);
+    setWalletError(null);
+    try {
+      const res = await fetch("/api/wallet", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error("Failed to load wallet balances");
+      }
+      const data = (await res.json()) as WalletSnapshot[];
+      setWallets(data ?? []);
+    } catch (error) {
+      setWalletError(
+        error instanceof Error ? error.message : "Failed to load wallet balances",
+      );
+    } finally {
+      setWalletsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (cartCount > prevCartCount.current) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCartBounce(true);
-      const t = setTimeout(() => setCartBounce(false), 400);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => setCartBounce(false), 360);
+      prevCartCount.current = cartCount;
+      return () => clearTimeout(timer);
     }
     prevCartCount.current = cartCount;
   }, [cartCount]);
 
-  // Fetch overdue count
   useEffect(() => {
     fetch("/api/library/history")
       .then((res) => (res.ok ? res.json() : null))
@@ -96,67 +159,34 @@ export default function ParentLayout({
       .catch(() => {});
   }, []);
 
-  // Keep Certe+ status warm for all parent screens.
   useEffect(() => {
     void ensureCertePlusFresh(45_000);
   }, [ensureCertePlusFresh]);
 
-  // Resolve active organization name for visibility in the parent UI.
   useEffect(() => {
-    let cancelled = false;
+    if (!walletDrawerOpen || isGeneralAccount) return;
+    void fetchWallets();
+  }, [fetchWallets, isGeneralAccount, walletDrawerOpen]);
 
-    (async () => {
-      try {
-        const [membershipsRes, activeRes] = await Promise.all([
-          fetch("/api/org/memberships", { cache: "no-store" }),
-          fetch("/api/org/active", { cache: "no-store" }),
-        ]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mediaQuery.matches);
+    sync();
 
-        if (!membershipsRes.ok || !activeRes.ok || cancelled) return;
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", sync);
+      return () => mediaQuery.removeEventListener("change", sync);
+    }
 
-        const membershipsData = (await membershipsRes.json()) as {
-          memberships?: Array<{
-            organizationId: string;
-            organizationName: string;
-          }>;
-        };
-        const activeData = (await activeRes.json()) as {
-          activeOrganizationId: string | null;
-        };
-
-        const memberships = membershipsData.memberships ?? [];
-        const activeId =
-          activeData.activeOrganizationId ?? memberships[0]?.organizationId;
-        const active =
-          memberships.find((m) => m.organizationId === activeId) ??
-          memberships[0];
-
-        if (!cancelled) {
-          setActiveOrganizationName(active?.organizationName ?? "");
-        }
-      } catch {
-        // Keep UI functional even if org lookup fails.
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    mediaQuery.addListener(sync);
+    return () => mediaQuery.removeListener(sync);
   }, []);
 
-  // Dim content area below bottom nav while scrolling
   useEffect(() => {
-    const handleScroll = () => {
-      setNavDimmed(true);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      scrollTimeoutRef.current = setTimeout(() => setNavDimmed(false), 800);
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    };
-  }, []);
+    setCartDrawerOpen(false);
+    setWalletDrawerOpen(false);
+  }, [pathname]);
 
   const getInitials = (name?: string | null) => {
     if (!name) return "?";
@@ -168,55 +198,71 @@ export default function ParentLayout({
       .slice(0, 2);
   };
 
+  const tabs = useMemo(
+    () =>
+      TABS.map((tab) => ({
+        ...tab,
+        locked: tab.key === "controls" && !certePlusActive,
+      })),
+    [certePlusActive],
+  );
+
   return (
     <>
-      {/* ── Minimal top header ── */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
-        <div className="container mx-auto flex h-14 items-center justify-between px-4">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-            <CerteLogo size={36} />
-            <div className="flex flex-col leading-tight">
-              <CerteWordmark className="text-lg" showPlus={certePlusActive} />
-              {activeOrganizationName && (
-                <span className="text-[10px] font-medium text-muted-foreground truncate max-w-[200px]">
-                  {activeOrganizationName}
-                </span>
-              )}
-            </div>
+      <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/90 backdrop-blur-xl">
+        <div className="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 md:h-16 md:max-w-4xl md:px-6 lg:max-w-6xl">
+          <Link href="/" className="flex items-center gap-1">
+            <CerteLogo size={24} />
+            <span className="text-sm font-extrabold tracking-tight text-foreground">
+              certe
+            </span>
+            {certePlusActive && (
+              <span className="text-lg font-bold tracking-wide text-primary">+</span>
+            )}
           </Link>
 
-          {/* Right: cart + wallet + avatar */}
-          <div className="flex items-center gap-2">
-            <ParentNotificationBell parentId={session?.user?.id} />
+          <div className="flex items-center gap-1 rounded-2xl border border-border/50 bg-muted/60 px-1.5 py-1 shadow-sm backdrop-blur-sm">
+            <ThemeToggle />
+
+            <ParentNotificationBell
+              parentId={session?.user?.id}
+              className="h-9 w-9 rounded-xl"
+            />
 
             {parentMode === "canteen" && (
               <>
-                <Link
-                  href="/cart"
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-full"
+                <button
+                  type="button"
+                  aria-label="Open cart drawer"
+                  onClick={() => setCartDrawerOpen(true)}
+                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
                 >
                   <ShoppingCart
-                    className={cn("h-5 w-5", cartBounce && "animate-bounce")}
+                    className={cn(
+                      "h-[17px] w-[17px] text-foreground/80",
+                      cartBounce && "animate-bounce",
+                    )}
                   />
                   {cartCount > 0 && (
-                    <span
-                      className={cn(
-                        "absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] font-bold bg-foreground text-background rounded-full flex items-center justify-center transition-transform",
-                        cartBounce && "scale-125",
-                      )}
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
                     >
                       {cartCount}
-                    </span>
+                    </motion.span>
                   )}
-                </Link>
+                </button>
+
                 {!isGeneralAccount && (
-                  <Link
-                    href="/wallet"
-                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-full"
+                  <button
+                    type="button"
+                    aria-label="Open wallet drawer"
+                    onClick={() => setWalletDrawerOpen(true)}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
                   >
-                    <Wallet className="h-5 w-5" />
-                  </Link>
+                    <Wallet className="h-[17px] w-[17px] text-foreground/80" />
+                  </button>
                 )}
               </>
             )}
@@ -224,20 +270,18 @@ export default function ParentLayout({
             {session && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs font-semibold">
+                  <button className="inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent">
+                    <Avatar className="h-7 w-7 ring-1 ring-primary/20">
+                      <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
                         {getInitials(session.user?.name)}
                       </AvatarFallback>
                     </Avatar>
-                  </Button>
+                  </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 py-1.5">
-                    <p className="text-sm font-medium">{session.user?.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {session.user?.email}
-                    </p>
+                <DropdownMenuContent align="end" className="w-56 rounded-2xl">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-semibold">{session.user?.name}</p>
+                    <p className="text-xs text-muted-foreground">{session.user?.email}</p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -250,7 +294,7 @@ export default function ParentLayout({
                         },
                       })
                     }
-                    className="gap-2 text-destructive focus:text-destructive"
+                    className="mx-1 gap-2 rounded-xl text-destructive focus:text-destructive"
                   >
                     <LogOut className="h-4 w-4" />
                     Sign out
@@ -262,144 +306,432 @@ export default function ParentLayout({
         </div>
       </header>
 
-      {/* ── Page content ── */}
-      <div className="relative pb-[calc(5rem+env(safe-area-inset-bottom))]">
+      <div className="pb-[calc(5rem+env(safe-area-inset-bottom))]">
         {children}
-        {/* Scroll dim overlay — dims content area near the bottom nav */}
-        <div
-          className={cn(
-            "pointer-events-none fixed bottom-0 left-0 right-0 h-[calc(5rem+env(safe-area-inset-bottom))] z-40 transition-opacity duration-300",
-            navDimmed ? "opacity-100" : "opacity-0",
-          )}
-          style={{
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.10) 0%, transparent 100%)",
-          }}
-        />
       </div>
 
-      {/* ── iOS-like floating bottom tab bar ── */}
-      <nav className="fixed bottom-2 left-5 right-5 z-50 rounded-2xl border border-white/20 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.12)] supports-backdrop-filter:bg-white/50 dark:supports-backdrop-filter:bg-gray-900/50 ios-bottom-nav">
-        <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-2">
-          {/* Canteen */}
-          <Link
-            href="/menu"
-            className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              parentMode === "canteen" &&
-                !isSettingsPage &&
-                !isOrdersPage &&
-                !isControlsPage
-                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                : "text-muted-foreground hover:text-foreground/70",
-            )}
-          >
-            <UtensilsCrossed className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Canteen</span>
-          </Link>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)]">
+        <div className="mx-auto max-w-lg px-4 pb-2 md:max-w-4xl lg:max-w-6xl">
+          <div className="relative flex items-center justify-around gap-1 rounded-[26px] border border-border/50 bg-background/95 px-2 py-2 shadow-lg backdrop-blur-xl">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              const Icon = tab.icon;
 
-          {/* Orders */}
-          <Link
-            href="/orders"
-            className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              pathname === "/orders" || pathname === "/pre-orders"
-                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                : "text-muted-foreground hover:text-foreground/70",
-            )}
-          >
-            <ClipboardList className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Orders</span>
-          </Link>
+              const handleClick = (e: React.MouseEvent) => {
+                if (tab.locked) {
+                  e.preventDefault();
+                  setShowControlsSheet(true);
+                }
+              };
 
-          {/* Library */}
-          <Link
-            href="/library-history"
-            className={cn(
-              "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              parentMode === "library"
-                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                : "text-muted-foreground hover:text-foreground/70",
-            )}
-          >
-            <BookOpen className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Library</span>
-            {overdueCount > 0 && (
-              <span className="absolute top-0 right-1/4 h-4 min-w-4 px-1 text-[9px] font-bold bg-destructive text-white rounded-full flex items-center justify-center">
-                {overdueCount}
-              </span>
-            )}
-          </Link>
+              return (
+                <Link
+                  key={tab.key}
+                  href={tab.href}
+                  onClick={handleClick}
+                  className="relative flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2"
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="tab-pill"
+                      className="absolute inset-x-1 inset-y-0.5 rounded-2xl bg-primary/10 dark:bg-primary/15"
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <motion.div
+                    whileTap={{ scale: 0.85 }}
+                    className="relative z-10 flex flex-col items-center gap-0.5"
+                  >
+                    <Icon
+                      className={cn(
+                        "h-[20px] w-[20px] transition-colors duration-200",
+                        isActive ? "text-primary" : "text-muted-foreground",
+                      )}
+                      strokeWidth={isActive ? 2.5 : 1.8}
+                    />
+                    <span
+                      className={cn(
+                        "text-[11px] leading-tight transition-colors duration-200",
+                        isActive
+                          ? "font-semibold text-primary"
+                          : "font-medium text-muted-foreground",
+                      )}
+                    >
+                      {tab.label}
+                    </span>
+                  </motion.div>
 
-          {/* Controls (Certe+ only) */}
-          {certePlusActive ? (
-            <Link
-              href="/controls"
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-                pathname === "/controls"
-                  ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                  : "text-muted-foreground hover:text-foreground/70",
-              )}
-            >
-              <Shield className="h-5 w-5" />
-              <span className="text-[10px] font-medium">Controls</span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowControlsDialog(true)}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all text-muted-foreground hover:text-foreground/70",
-                pathname === "/controls"
-                  ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                  : "",
-              )}
-            >
-              <Shield className="h-5 w-5" />
-              <span className="text-[10px] font-medium">Controls</span>
-            </button>
-          )}
-
-          {/* Settings */}
-          <Link
-            href="/settings"
-            className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-2 transition-all",
-              isSettingsPage
-                ? "text-foreground bg-white/50 dark:bg-white/10 shadow-sm"
-                : "text-muted-foreground hover:text-foreground/70",
-            )}
-          >
-            <Settings className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Settings</span>
-          </Link>
+                  {tab.key === "library" && overdueCount > 0 && (
+                    <span className="absolute right-[18%] top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                      {overdueCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </div>
-        {/* Safe area spacer for notched phones */}
-        <div className="h-[env(safe-area-inset-bottom)]" />
       </nav>
-      {/* Certe+ required dialog for Controls */}
-      <Dialog open={showControlsDialog} onOpenChange={setShowControlsDialog}>
-        <DialogContent className="max-w-sm sm:max-w-md w-full sm:mx-auto rounded-t-2xl sm:rounded-2xl p-4 sm:p-6">
-          <DialogHeader>
-            <DialogTitle>Controls require Certe Plus</DialogTitle>
-            <DialogDescription>
-              Parent controls (spend limits, blocked items) are a Certe Plus
-              feature. Upgrade to Certe Plus from Settings to enable controls.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter showCloseButton>
-            <Button
-              onClick={() => {
-                setShowControlsDialog(false);
-                void router.push("/settings");
-              }}
+
+      {isMobile ? (
+        <>
+          <BottomSheet
+            open={cartDrawerOpen}
+            onClose={() => setCartDrawerOpen(false)}
+            snapPoints={[88]}
+            bare
+          >
+            <div className="flex h-full flex-col">
+              <div className="space-y-1 border-b border-border/60 px-5 py-3">
+                <h3 className="flex items-center gap-2 text-base font-semibold">
+                  <ShoppingCart className="h-4 w-4 text-primary" />
+                  Cart
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {cartCount > 0
+                    ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
+                    : "Your cart is empty. Add something from the menu."}
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {cartItems.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    No items yet. Tap Menu to start an order.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {cartItems.map((item) => {
+                      const lineTotal =
+                        (item.discountedPrice ?? item.price) * item.quantity;
+                      return (
+                        <div
+                          key={item.menuItemId}
+                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
+                            </div>
+                            <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
+                  <span className="text-sm text-muted-foreground">Subtotal</span>
+                  <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
+                </div>
+                <Button
+                  variant="premium"
+                  className="w-full"
+                  disabled={cartCount === 0}
+                  onClick={() => {
+                    setCartDrawerOpen(false);
+                    void router.push("/cart");
+                  }}
+                >
+                  Open Full Cart
+                </Button>
+                {cartCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-destructive hover:text-destructive"
+                    onClick={clearCart}
+                  >
+                    Clear Cart
+                  </Button>
+                )}
+              </div>
+            </div>
+          </BottomSheet>
+
+          <BottomSheet
+            open={walletDrawerOpen}
+            onClose={() => setWalletDrawerOpen(false)}
+            snapPoints={[84]}
+            bare
+          >
+            <div className="flex h-full flex-col">
+              <div className="space-y-1 border-b border-border/60 px-5 py-3">
+                <h3 className="flex items-center gap-2 text-base font-semibold">
+                  <Wallet className="h-4 w-4 text-primary" />
+                  Family Wallet
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Quick balance snapshot across all child wallets.
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {walletsLoading ? (
+                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                    Loading wallet balances...
+                  </div>
+                ) : walletError ? (
+                  <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                    <p className="text-sm text-destructive">{walletError}</p>
+                    <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
+                      Retry
+                    </Button>
+                  </div>
+                ) : wallets.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    No wallet found yet. Add a child to activate family wallet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {walletOwnerName}&apos;s Family Balance
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
+                        <IndianRupee className="h-5 w-5 text-primary" />
+                        {totalWalletBalance.toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      {wallets.map((wallet) => (
+                        <div
+                          key={wallet.childId}
+                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold">{wallet.childName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {walletOwnerName}&apos;s available balance
+                              </p>
+                            </div>
+                            <p className="text-sm font-semibold text-primary">
+                              {`INR ${wallet.balance.toFixed(2)}`}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <Button
+                  className="w-full gap-2"
+                  variant="premium"
+                  onClick={() => {
+                    setWalletDrawerOpen(false);
+                    void router.push("/wallet");
+                  }}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Open Wallet
+                </Button>
+              </div>
+            </div>
+          </BottomSheet>
+        </>
+      ) : (
+        <>
+          <Sheet open={cartDrawerOpen} onOpenChange={setCartDrawerOpen}>
+            <SheetContent
+              side="right"
+              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
             >
-              Upgrade
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <div className="flex h-full flex-col">
+                <SheetHeader className="space-y-1 border-b border-border/60">
+                  <SheetTitle className="flex items-center gap-2 text-base">
+                    <ShoppingCart className="h-4 w-4 text-primary" />
+                    Cart
+                  </SheetTitle>
+                  <SheetDescription>
+                    {cartCount > 0
+                      ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
+                      : "Your cart is empty. Add something from the menu."}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {cartItems.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                      No items yet. Tap Menu to start an order.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {cartItems.map((item) => {
+                        const lineTotal =
+                          (item.discountedPrice ?? item.price) * item.quantity;
+                        return (
+                          <div
+                            key={item.menuItemId}
+                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
+                              </div>
+                              <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
+                      <span className="text-sm text-muted-foreground">Subtotal</span>
+                      <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
+                    </div>
+                    <Button
+                      variant="premium"
+                      className="w-full"
+                      disabled={cartCount === 0}
+                      onClick={() => {
+                        setCartDrawerOpen(false);
+                        void router.push("/cart");
+                      }}
+                    >
+                      Open Full Cart
+                    </Button>
+                    {cartCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        className="w-full text-destructive hover:text-destructive"
+                        onClick={clearCart}
+                      >
+                        Clear Cart
+                      </Button>
+                    )}
+                  </div>
+                </SheetFooter>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <Sheet open={walletDrawerOpen} onOpenChange={setWalletDrawerOpen}>
+            <SheetContent
+              side="right"
+              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+            >
+              <div className="flex h-full flex-col">
+                <SheetHeader className="space-y-1 border-b border-border/60">
+                  <SheetTitle className="flex items-center gap-2 text-base">
+                    <Wallet className="h-4 w-4 text-primary" />
+                    Family Wallet
+                  </SheetTitle>
+                  <SheetDescription>
+                    Quick balance snapshot across all child wallets.
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {walletsLoading ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                      Loading wallet balances...
+                    </div>
+                  ) : walletError ? (
+                    <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                      <p className="text-sm text-destructive">{walletError}</p>
+                      <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
+                        Retry
+                      </Button>
+                    </div>
+                  ) : wallets.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                      No wallet found yet. Add a child to activate family wallet.
+                    </div>
+                  ) : (
+                    <>
+                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {walletOwnerName}&apos;s Family Balance
+                        </p>
+                        <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
+                          <IndianRupee className="h-5 w-5 text-primary" />
+                          {totalWalletBalance.toFixed(2)}
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        {wallets.map((wallet) => (
+                          <div
+                            key={wallet.childId}
+                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold">{wallet.childName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {walletOwnerName}&apos;s available balance
+                                </p>
+                              </div>
+                              <p className="text-sm font-semibold text-primary">
+                                {`INR ${wallet.balance.toFixed(2)}`}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                  <Button
+                    className="w-full gap-2"
+                    variant="premium"
+                    onClick={() => {
+                      setWalletDrawerOpen(false);
+                      void router.push("/wallet");
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Open Wallet
+                  </Button>
+                </SheetFooter>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      )}
+
+      <BottomSheet
+        open={showControlsSheet}
+        onClose={() => setShowControlsSheet(false)}
+      >
+        <div className="flex flex-col items-center gap-4 py-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+            <Shield className="h-7 w-7 text-primary" />
+          </div>
+          <div className="text-center">
+            <h3 className="text-lg font-bold">Unlock Controls</h3>
+            <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
+              Set spend limits and block items with Certe Plus.
+            </p>
+          </div>
+          <Button
+            variant="premium"
+            size="lg"
+            className="w-full max-w-[280px]"
+            onClick={() => {
+              setShowControlsSheet(false);
+              void router.push("/settings");
+            }}
+          >
+            Upgrade to Certe+
+          </Button>
+        </div>
+      </BottomSheet>
     </>
   );
 }

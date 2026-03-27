@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Bell,
   ChevronRight,
-  Shield,
   Users,
   Wallet,
+  MessageSquare,
   Sparkles,
   CheckCircle,
   Loader2,
@@ -73,12 +73,13 @@ const settingItems = [
     description: "Search and review activity alerts",
     icon: Bell,
   },
+  {
+    href: "/messaging-settings",
+    label: "Messaging",
+    description: "WhatsApp and SMS notification preferences",
+    icon: MessageSquare,
+  },
 ];
-
-type ChildInfo = {
-  id: string;
-  name: string;
-};
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -86,27 +87,12 @@ export default function SettingsPage() {
   const refreshCertePlusStatus = useCertePlusStore((s) => s.refresh);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [subscribing, setSubscribing] = useState(false);
-  const [children, setChildren] = useState<ChildInfo[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
   const isGeneralAccount = session?.user?.role === "GENERAL";
 
-  const fetchChildren = useCallback(async () => {
-    try {
-      const res = await fetch("/api/children");
-      if (res.ok) {
-        const data = await res.json();
-        const kids = data.children || data;
-        setChildren(kids);
-      }
-    } catch {
-      // silently fail
-    }
-  }, []);
-
   useEffect(() => {
     void ensureCertePlusFresh(45_000);
-    void fetchChildren();
-  }, [ensureCertePlusFresh, fetchChildren]);
+  }, [ensureCertePlusFresh]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && !window.Razorpay) {
@@ -252,12 +238,19 @@ export default function SettingsPage() {
   );
   const certePlusResolved = certePlus !== null;
   const visibleSettingItems = isGeneralAccount
-    ? settingItems.filter((item) => item.href === "/notifications")
+    ? settingItems.filter((item) =>
+        ["/notifications", "/messaging-settings"].includes(item.href),
+      )
     : settingItems;
 
   return (
-    <div className="container mx-auto max-w-xl px-4 py-6 space-y-4">
-      <h1 className="text-2xl font-bold mb-4">Settings</h1>
+    <div className="container mx-auto max-w-xl space-y-4 px-4 py-6">
+      <div className="rounded-2xl border border-white/20 bg-[linear-gradient(120deg,rgba(251,146,60,0.14),rgba(251,191,36,0.06)_45%,transparent_100%)] p-4 shadow-[0_10px_30px_rgba(18,18,30,0.08)]">
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage family controls, communication preferences, and premium features.
+        </p>
+      </div>
 
       {/* Certe+ Subscription Card */}
       <Card className="overflow-hidden rounded-2xl border-2 border-amber-200/50">
@@ -305,13 +298,6 @@ export default function SettingsPage() {
             </div>
           ) : certePlus?.active && certePlus.subscription ? (
             <div className="space-y-2">
-              {!isGeneralAccount && children.length > 0 && (
-                <p className="text-[11px] text-muted-foreground">
-                  Family plan active for {children.length} child
-                  {children.length === 1 ? "" : "ren"}. Benefits are shared
-                  across all children.
-                </p>
-              )}
               <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
                   <p className="text-xs text-muted-foreground">Expires</p>
@@ -437,16 +423,16 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <CardContent className="p-0">
-        <div className="flex flex-col flex-1 justify-around">
+      <CardContent className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-0">
+        <div className="flex flex-1 flex-col justify-around">
           {visibleSettingItems.map(
             ({ href, label, description, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+                className="flex items-center gap-3 border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/50 last:border-b-0"
               >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/80">
                   <Icon className="h-4 w-4" />
                 </div>
                 <div className="min-w-0 flex-1">

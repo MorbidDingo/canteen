@@ -40,6 +40,8 @@ import {
 import { toast } from "sonner";
 import { PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
 import Link from "next/link";
+import { BottomSheet } from "@/components/ui/motion";
+import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@/lib/constants";
 
 // Extend Window for Razorpay checkout
@@ -116,6 +118,7 @@ export default function CartPage() {
   const slideTrackRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
   const startX = useRef(0);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -787,8 +790,8 @@ export default function CartPage() {
           ))}
         </div>
 
-        {/* Order Summary */}
-        <div className="lg:col-span-1">
+        {/* Order Summary — Desktop only */}
+        <div className="hidden lg:block lg:col-span-1">
           <Card className="sticky top-20 animate-scale-in glass-card">
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
@@ -1125,6 +1128,232 @@ export default function CartPage() {
           </Card>
         </div>
       </div>
+
+      {/* ── Mobile: Fixed checkout bar + BottomSheet ── */}
+      {items.length > 0 && (
+        <>
+          <div className="fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 px-4 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setCheckoutOpen(true)}
+              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 py-3.5 text-primary-foreground shadow-[0_8px_30px_rgba(0,0,0,0.2)] active:scale-[0.98] transition-transform"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4.5 w-4.5" />
+                <span className="text-sm font-semibold">
+                  {items.reduce((s, i) => s + i.quantity, 0)} item{items.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <span className="text-base font-bold">
+                Checkout · ₹{total.toFixed(0)}
+              </span>
+            </button>
+          </div>
+
+          <BottomSheet
+            open={checkoutOpen}
+            onClose={() => setCheckoutOpen(false)}
+            snapPoints={[85]}
+          >
+            <div className="space-y-4 pb-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold">Order Summary</h2>
+                <span className="text-sm text-muted-foreground">{items.reduce((s, i) => s + i.quantity, 0)} items</span>
+              </div>
+
+              {/* Line items */}
+              <div className="space-y-2">
+                {items.map((item) => (
+                  <div key={item.menuItemId} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {item.name} × {item.quantity}
+                      {getAllocationSummary(item.menuItemId)}
+                    </span>
+                    <span className="font-medium">₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-between font-bold text-lg">
+                <span>Total</span>
+                <span>₹{total.toFixed(2)}</span>
+              </div>
+
+              {/* Payment method */}
+              <div className="space-y-3 pt-2">
+                <Label className="text-sm text-muted-foreground">Payment Method</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("ONLINE")}
+                    className={cn(
+                      "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
+                      paymentMethod === "ONLINE"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border hover:border-primary/30",
+                    )}
+                  >
+                    <div className={cn(
+                      "rounded-full p-2.5 transition-colors",
+                      paymentMethod === "ONLINE"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                    )}>
+                      <CreditCard className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold">Razorpay</p>
+                    <p className="text-[11px] text-muted-foreground">UPI · Cards · Wallets</p>
+                    {paymentMethod === "ONLINE" && (
+                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-0.5">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                  </button>
+
+                  {!isGeneralAccount && (
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("WALLET")}
+                      className={cn(
+                        "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
+                        paymentMethod === "WALLET"
+                          ? "border-emerald-500 bg-emerald-500/5 shadow-sm"
+                          : "border-border hover:border-emerald-500/30",
+                      )}
+                    >
+                      <div className={cn(
+                        "rounded-full p-2.5 transition-colors",
+                        paymentMethod === "WALLET"
+                          ? "bg-emerald-500 text-white"
+                          : "bg-muted text-muted-foreground",
+                      )}>
+                        <Wallet className="h-5 w-5" />
+                      </div>
+                      <p className="text-sm font-semibold">Wallet</p>
+                      <p className="text-[11px] text-muted-foreground">Instant pay</p>
+                      {paymentMethod === "WALLET" && (
+                        <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5">
+                          <Check className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Wallet balance (when wallet selected) */}
+              {paymentMethod === "WALLET" && selectedWallet && (
+                <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden">
+                  <CardContent className="py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-orange-200/70">{selectedWallet.childName}&apos;s Balance</p>
+                      <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
+                        <IndianRupee className="h-4 w-4 text-orange-400" />
+                        {selectedWallet.balance.toFixed(2)}
+                      </p>
+                    </div>
+                    {!hasEnoughBalance && (
+                      <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px]">
+                        Insufficient
+                      </Badge>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Action button */}
+              {paymentMethod === "ONLINE" ? (
+                <Button
+                  className="w-full gap-2 text-base h-13 rounded-2xl"
+                  size="lg"
+                  onClick={() => {
+                    setCheckoutOpen(false);
+                    handlePlaceOrder();
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-4 w-4" />
+                  )}
+                  Pay ₹{total.toFixed(0)} with Razorpay
+                </Button>
+              ) : paymentMethod === "WALLET" && selectedWallet ? (
+                <div className="pt-1">
+                  <div
+                    ref={slideTrackRef}
+                    className={cn(
+                      "relative h-14 rounded-full overflow-hidden transition-colors duration-300",
+                      slideState === "paid"
+                        ? "bg-emerald-500"
+                        : slideState === "paying"
+                          ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
+                          : hasEnoughBalance
+                            ? "bg-gradient-to-r from-muted to-muted/80"
+                            : "bg-muted/50 opacity-50",
+                    )}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      {slideState === "idle" && (
+                        <span className={cn("text-sm font-medium transition-opacity duration-200", slideX > 20 ? "opacity-0" : "opacity-60")}>
+                          {hasEnoughBalance ? "Slide to pay" : "Insufficient balance"}
+                        </span>
+                      )}
+                      {slideState === "paying" && (
+                        <div className="flex items-center gap-2 text-emerald-600">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span className="text-sm font-medium">Processing...</span>
+                        </div>
+                      )}
+                      {slideState === "paid" && (
+                        <div className="flex items-center gap-2 text-white">
+                          <Check className="h-5 w-5" />
+                          <span className="text-sm font-bold">Paid ₹{total.toFixed(0)}!</span>
+                        </div>
+                      )}
+                    </div>
+                    {slideState === "idle" && (
+                      <div
+                        className={cn(
+                          "absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none",
+                          hasEnoughBalance
+                            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing"
+                            : "bg-muted text-muted-foreground cursor-not-allowed",
+                        )}
+                        style={{
+                          transform: `translateX(${slideX}px)`,
+                          transition: isDragging.current ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                        }}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerCancel={handlePointerUp}
+                      >
+                        <ArrowRight className="h-5 w-5" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-destructive hover:text-destructive"
+                onClick={() => {
+                  clearCart();
+                  setCheckoutOpen(false);
+                }}
+              >
+                Clear Cart
+              </Button>
+            </div>
+          </BottomSheet>
+        </>
+      )}
     </div>
   );
 }

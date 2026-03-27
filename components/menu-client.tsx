@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Card,
@@ -132,6 +132,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 
 export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
@@ -168,6 +170,32 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
       {} as Record<MenuCategory, number>,
     );
   }, [items]);
+
+  const searchSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const item of items) {
+      const label = item.name.trim();
+      const key = label.toLowerCase();
+      if (!label || seen.has(key)) continue;
+      seen.add(key);
+      names.push(label);
+      if (names.length >= 12) break;
+    }
+
+    return names;
+  }, [items]);
+
+  useEffect(() => {
+    if (searchQuery.trim() || searchFocused || searchSuggestions.length <= 1) return;
+
+    const timer = setInterval(() => {
+      setSuggestionIndex((prev) => (prev + 1) % searchSuggestions.length);
+    }, 2200);
+
+    return () => clearInterval(timer);
+  }, [searchFocused, searchQuery, searchSuggestions.length]);
 
   const filteredItems = useMemo(() => {
     let result = [...items];
@@ -229,6 +257,11 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
     setCategoryFilter("ALL");
   };
 
+  const activeSuggestion =
+    searchSuggestions.length > 0
+      ? searchSuggestions[suggestionIndex % searchSuggestions.length]
+      : "menu item";
+
   return (
     <>
       {discountedItems.length > 0 && !discountsOnly && !dismissDiscountBanner && (
@@ -288,15 +321,21 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
         </div>
       )}
 
-      <div className="space-y-3 mb-6 animate-fade-in">
+      <div className="mb-6 space-y-3 rounded-2xl bg-amber-50/35 p-3 animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or description..."
+              placeholder={
+                searchQuery.trim()
+                  ? "Search menu..."
+                  : `Try "${activeSuggestion}"`
+              }
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-9"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              className="border-amber-200/70 bg-background/85 pl-9 pr-9 dark:border-amber-200/20"
             />
             {searchQuery && (
               <button
@@ -311,7 +350,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             variant={showFilters ? "secondary" : "outline"}
             size="icon"
             onClick={() => setShowFilters(!showFilters)}
-            className="shrink-0 relative"
+            className="relative shrink-0 border-amber-200/70 bg-background/85 dark:border-amber-200/20"
           >
             <SlidersHorizontal className="h-4 w-4" />
             {hasActiveFilters && (
@@ -326,7 +365,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             value={categoryFilter}
             onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -341,7 +380,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
         </div>
 
         {showFilters && (
-          <div className="flex flex-col sm:flex-row gap-3 p-3 rounded-lg border bg-muted/30 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex flex-col sm:flex-row gap-3 rounded-xl border border-amber-200/60 bg-amber-50/40 p-3 animate-in fade-in slide-in-from-top-1 duration-200 dark:border-amber-200/20 dark:bg-amber-950/12">
             <div className="flex-1 space-y-1.5">
               <Label className="text-xs text-muted-foreground">Max Price (₹)</Label>
               <Input
@@ -350,7 +389,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(e.target.value)}
                 min={0}
-                className="h-9"
+                className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20"
               />
             </div>
             <div className="flex-1 space-y-1.5">
@@ -359,7 +398,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                 value={sortBy}
                 onValueChange={(v) => setSortBy(v as SortOption)}
               >
-                <SelectTrigger className="h-9">
+                <SelectTrigger className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20">
                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
                   <SelectValue />
                 </SelectTrigger>

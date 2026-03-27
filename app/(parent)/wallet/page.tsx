@@ -30,6 +30,7 @@ import {
   WALLET_TRANSACTION_LABELS,
   type WalletTransactionType,
 } from "@/lib/constants";
+import { BottomSheet } from "@/components/ui/motion";
 
 // ─── Razorpay types ───────────────────────────────────────────────────────────
 declare global {
@@ -75,46 +76,46 @@ const GHOST_STEP = 10;
 
 // ─── Injected CSS ─────────────────────────────────────────────────────────────
 const WALLET_CSS = `
-  /* ── Student name: bright gold engraved ─────────────────── */
+  /* ── Card holder name: platinum metallic ────────────────── */
   .wt-gold {
     background: linear-gradient(105deg,
-      #c49a1a 0%,  #e8c14a 18%, #fde97a 32%,
-      #fff5b0 50%, #fde97a 68%, #e8c14a 82%, #c49a1a 100%);
+      #b8b8b8 0%, #d8d8d8 18%, #f0f0f0 32%,
+      #ffffff 50%, #f0f0f0 68%, #d8d8d8 82%, #b8b8b8 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     filter:
-      drop-shadow(0  1.5px 0 rgba(0,0,0,0.95))
-      drop-shadow(0 -0.8px 0 rgba(255,240,130,0.30));
+      drop-shadow(0 1.5px 0 rgba(0,0,0,0.9))
+      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.15));
   }
 
-  /* ── Parent name: mid gold engraved ─────────────────────── */
+  /* ── Subtitle: muted platinum ───────────────────────────── */
   .wt-gold-sm {
     background: linear-gradient(105deg,
-      #9a7512 0%,  #c49928 18%, #e8c050 32%,
-      #f8dea0 50%, #e8c050 68%, #c49928 82%, #9a7512 100%);
+      #8a8a8a 0%, #a8a8a8 18%, #c8c8c8 32%,
+      #e0e0e0 50%, #c8c8c8 68%, #a8a8a8 82%, #8a8a8a 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     filter:
-      drop-shadow(0  1.5px 0 rgba(0,0,0,0.95))
-      drop-shadow(0 -0.8px 0 rgba(240,195,90,0.22));
+      drop-shadow(0 1.5px 0 rgba(0,0,0,0.9))
+      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.10));
   }
 
-  /* ── Balance: bright silver engraved ────────────────────── */
+  /* ── Balance: bright white metallic ─────────────────────── */
   .wt-silver {
     background: linear-gradient(105deg,
-      #8c8c8c 0%, #c8c8c8 18%, #eaeaea 32%,
-      #ffffff 50%, #eaeaea 68%, #c8c8c8 82%, #8c8c8c 100%);
+      #c0c0c0 0%, #e0e0e0 18%, #f5f5f5 32%,
+      #ffffff 50%, #f5f5f5 68%, #e0e0e0 82%, #c0c0c0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     filter:
-      drop-shadow(0  1.5px 0 rgba(0,0,0,0.95))
-      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.28));
+      drop-shadow(0 1.5px 0 rgba(0,0,0,0.9))
+      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.22));
   }
 
-  /* ── Card number: mid silver engraved ───────────────────── */
+  /* ── Card number: muted silver ──────────────────────────── */
   .wt-silver-sm {
     background: linear-gradient(105deg,
       #707070 0%, #aaaaaa 18%, #d0d0d0 32%,
@@ -123,30 +124,32 @@ const WALLET_CSS = `
     background-clip: text;
     -webkit-text-fill-color: transparent;
     filter:
-      drop-shadow(0  1.5px 0 rgba(0,0,0,0.95))
-      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.18));
+      drop-shadow(0 1.5px 0 rgba(0,0,0,0.9))
+      drop-shadow(0 -0.8px 0 rgba(255,255,255,0.12));
   }
 
-  /* ── Card body ───────────────────────────────────────────── */
+  /* ── Card body — premium black Amex style ───────────────── */
   .w-card-face {
     background:
-      radial-gradient(ellipse at 20% 30%, rgba(80,58,16,0.35) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 75%, rgba(50,38,10,0.28) 0%, transparent 48%),
+      radial-gradient(ellipse at 15% 20%, rgba(60,60,70,0.30) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 80%, rgba(40,40,50,0.25) 0%, transparent 40%),
       linear-gradient(148deg,
-        #1a1a1a 0%,  #222222 28%,
-        #181818 55%, #202020 78%,
-        #191919 100%);
-    border: 1px solid rgba(212,175,55,0.16);
-    /* no outer shadow */
+        #111113 0%, #1a1a1e 20%,
+        #0e0e10 45%, #161618 65%,
+        #111113 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.05);
   }
 
   /* ── Ghost card ─────────────────────────────────────────── */
   .w-card-ghost {
-    background: linear-gradient(148deg, #111111 0%, #181818 50%, #121212 100%);
-    border: 1px solid rgba(212,175,55,0.07);
+    background: linear-gradient(148deg, #0a0a0c 0%, #111113 50%, #0c0c0e 100%);
+    border: 1px solid rgba(255,255,255,0.04);
   }
 
-  /* ── Tilt shimmer overlay ───────────────────────────────── */
+  /* ── Tilt shimmer overlay — cool silver tone ────────────── */
   .w-tilt-shimmer {
     position: absolute;
     inset: 0;
@@ -156,9 +159,9 @@ const WALLET_CSS = `
     transition: opacity 0.6s ease;
     background: radial-gradient(
       ellipse 65% 45% at var(--sx, 50%) var(--sy, 50%),
-      rgba(255,228,96,0.15)  0%,
-      rgba(255,255,220,0.07) 45%,
-      transparent            72%
+      rgba(200,210,230,0.12) 0%,
+      rgba(220,225,240,0.05) 45%,
+      transparent 72%
     );
     mix-blend-mode: screen;
   }
@@ -167,16 +170,16 @@ const WALLET_CSS = `
     transition: opacity 0.12s ease;
   }
 
-  /* ── + button on card ───────────────────────────────────── */
+  /* ── + button on card — platinum accent ─────────────────── */
   .w-plus {
-    background: rgba(212,175,55,0.08);
-    border: 1px solid rgba(212,175,55,0.30);
-    color: #d4af37;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.70);
     transition: background 0.25s, border-color 0.25s;
   }
   .w-plus:hover {
-    background: rgba(212,175,55,0.18);
-    border-color: rgba(212,175,55,0.55);
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.30);
   }
 
   /* ── Top-up panel ───────────────────────────────────────── */
@@ -184,10 +187,20 @@ const WALLET_CSS = `
     background: linear-gradient(160deg, #ffffff 0%, #fff9f3 100%);
     border: 1px solid rgba(251, 146, 60, 0.28);
   }
+  @media (prefers-color-scheme: dark) {
+    .w-topup {
+      background: linear-gradient(160deg, #1a1a1e 0%, #161618 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+  }
+  .dark .w-topup {
+    background: linear-gradient(160deg, #1a1a1e 0%, #161618 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
 
   /* ── Hint / label text ──────────────────────────────────── */
   .w-hint {
-    color: rgba(212,175,55,0.82);
+    color: rgba(255,255,255,0.50);
     font-size: 9.5px;
     letter-spacing: 0.24em;
     text-transform: uppercase;
@@ -196,16 +209,16 @@ const WALLET_CSS = `
 
   /* ── Nav arrow buttons ──────────────────────────────────── */
   .w-nav-btn {
-    border: 1px solid rgba(212,175,55,0.24);
-    color: rgba(212,175,55,0.65);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.50);
     background: transparent;
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
   .w-nav-btn:hover:not(:disabled) {
-    background: rgba(212,175,55,0.10);
-    border-color: rgba(212,175,55,0.48);
-    color: rgba(212,175,55,0.92);
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.24);
+    color: rgba(255,255,255,0.80);
   }
   .w-nav-btn:disabled {
     opacity: 0.25;
@@ -213,7 +226,6 @@ const WALLET_CSS = `
     pointer-events: none;
   }
 `;
-
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function WalletPage() {
   const router = useRouter();
@@ -415,7 +427,7 @@ export default function WalletPage() {
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
     if (isNaN(amount) || amount < 10 || amount > 5000) {
-      toast.error("Enter an amount between 10 and 5,000 credits"); return;
+      toast.error("Enter an amount between ₹10 and ₹5,000"); return;
     }
     if (!selectedChildId) { toast.error("Select a child first"); return; }
     setTopUpLoading(true);
@@ -432,7 +444,7 @@ export default function WalletPage() {
       const { razorpayOrderId, amount: amountPaise, keyId, walletId } = await res.json();
       const childName = wallets.find((w) => w.childId === selectedChildId)?.childName || "";
       const { newBalance } = await handleRazorpayTopUp(razorpayOrderId, amountPaise, keyId, walletId, childName);
-      toast.success(`${amount.toFixed(0)} credits added to wallet!`);
+      toast.success(`₹${amount.toFixed(0)} added to wallet!`);
       setTopUpAmount("");
       setTopUpOpen(false);
       setWallets((prev) => prev.map((w) => w.childId === selectedChildId ? { ...w, balance: newBalance } : w));
@@ -481,9 +493,9 @@ export default function WalletPage() {
 
       {/* Balance */}
       <div>
-        <p className="w-hint mb-1">Available Credits</p>
+        <p className="w-hint mb-1">Available Balance</p>
         <p className="text-[2.05rem] font-bold flex items-center gap-0.5 wt-silver leading-none">
-          CR {w.balance.toFixed(2)}
+          ₹{w.balance.toFixed(2)}
         </p>
       </div>
 
@@ -571,7 +583,7 @@ export default function WalletPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <WalletIcon className="h-6 w-6 text-primary" /> Wallet
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage wallet credits and add credits online · <span className="font-medium text-amber-700">1 credit = ₹1</span></p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your family wallet and add money online</p>
       </div>
 
       {/* ── Card section ──────────────────────────────────────────────────── */}
@@ -671,7 +683,7 @@ export default function WalletPage() {
                   }}
                   role="button"
                   tabIndex={0}
-                  className="w-card-face rounded-2xl overflow-hidden snap-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/40 shrink-0"
+                  className="w-card-face rounded-2xl overflow-hidden snap-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 shrink-0"
                   style={{ width: wallets.length === 1 ? "100%" : "88%" }}
                   aria-label={`${w.childName}'s wallet`}
                 >
@@ -695,8 +707,8 @@ export default function WalletPage() {
                     style={{
                       width:      w.childId === selectedChildId ? "24px" : "8px",
                       background: w.childId === selectedChildId
-                        ? "rgba(212,175,55,0.72)"
-                        : "rgba(255,255,255,0.20)",
+                        ? "rgba(255,255,255,0.60)"
+                        : "rgba(255,255,255,0.15)",
                     }}
                     aria-label={`View ${w.childName}'s card`}
                   />
@@ -706,27 +718,20 @@ export default function WalletPage() {
           </div>
         )}
 
-        {/* ── INLINE TOP-UP PANEL ─────────────────────────── */}
-        {topUpOpen && selectedWallet && (
-          <div className="w-topup rounded-xl p-4 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-orange-800">
-                  Add money · Family Wallet
-                </p>
-                <p className="text-xs mt-0.5 text-orange-700/70">
-                  UPI · Card · Net Banking · Razorpay
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setTopUpOpen(false); setTopUpAmount(""); }}
-                className="flex items-center justify-center w-6 h-6 rounded-full"
-                style={{ color: "rgba(154, 52, 18, 0.65)", border: "1px solid rgba(251, 146, 60, 0.30)", background: "rgba(255, 247, 237, 0.85)" }}
-                aria-label="Close top-up panel"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+        {/* ── TOP-UP BOTTOM SHEET ─────────────────────── */}
+        <BottomSheet
+          open={topUpOpen && !!selectedWallet}
+          onClose={() => { setTopUpOpen(false); setTopUpAmount(""); }}
+          snapPoints={[50]}
+        >
+          <div className="space-y-4 pb-4">
+            <div>
+              <p className="text-base font-semibold">
+                Add money
+              </p>
+              <p className="text-xs mt-0.5 text-muted-foreground">
+                UPI · Card · Net Banking · Razorpay
+              </p>
             </div>
 
             <div className="grid grid-cols-4 gap-2">
@@ -738,20 +743,20 @@ export default function WalletPage() {
                   onClick={() => setTopUpAmount(String(amt))}
                   className={
                     topUpAmount === String(amt)
-                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white border-0"
-                      : "border-orange-200 text-orange-700 bg-white hover:bg-orange-50"
+                      ? "bg-primary text-primary-foreground border-0"
+                      : ""
                   }
                 >
-                  {amt} cr
+                  ₹{amt}
                 </Button>
               ))}
             </div>
 
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">CR</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">₹</span>
                 <Input
-                  type="number" min={10} max={5000} placeholder="Enter credits"
+                  type="number" min={10} max={5000} placeholder="Enter amount"
                   value={topUpAmount}
                   onChange={(e) => setTopUpAmount(e.target.value)}
                   className="pl-7"
@@ -760,7 +765,8 @@ export default function WalletPage() {
               <Button
                 onClick={handleTopUp}
                 disabled={topUpLoading || !topUpAmount}
-                className="min-w-[96px] bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600"
+                className="min-w-[96px]"
+                variant="premium"
               >
                 {topUpLoading
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -768,9 +774,9 @@ export default function WalletPage() {
                 }
               </Button>
             </div>
-            <p className="text-xs text-orange-700/70">Min 10 credits · Max 5,000 credits · 1 credit = ₹1</p>
+            <p className="text-xs text-muted-foreground">Min ₹10 · Max ₹5,000</p>
           </div>
-        )}
+        </BottomSheet>
       </div>
 
       {/* ── Transaction history ────────────────────────────────────────────── */}
@@ -810,9 +816,9 @@ export default function WalletPage() {
                     </div>
                     <div className="text-right">
                       <p className={`font-semibold ${tx.type === "DEBIT" ? "text-destructive" : "text-emerald-500"}`}>
-                        {tx.type === "DEBIT" ? "-" : "+"}{tx.amount.toFixed(2)} cr
+                        {tx.type === "DEBIT" ? "-" : "+"}₹{tx.amount.toFixed(2)}
                       </p>
-                      <p className="text-xs text-muted-foreground">Bal: {tx.balanceAfter.toFixed(2)} cr</p>
+                      <p className="text-xs text-muted-foreground">Bal: ₹{tx.balanceAfter.toFixed(2)}</p>
                     </div>
                   </div>
                   <Separator className="mt-3" />

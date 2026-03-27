@@ -296,11 +296,6 @@ export default function ControlsPage() {
               General and teacher accounts do not support child-specific controls.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button variant="outline" onClick={() => router.push("/settings")}>
-              Back to Settings
-            </Button>
-          </CardContent>
         </Card>
       </div>
     );
@@ -317,17 +312,6 @@ export default function ControlsPage() {
   if (children.length === 0) {
     return (
       <div className="container mx-auto max-w-lg px-4 py-6 space-y-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="-ml-2 w-fit gap-1.5"
-          onClick={() => router.push("/settings")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Settings
-        </Button>
-
         <Card>
           <CardContent className="pt-8 pb-8 text-center">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -342,17 +326,6 @@ export default function ControlsPage() {
 
   return (
     <div className="container mx-auto max-w-lg px-4 py-6 space-y-6">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="-ml-2 w-fit gap-1.5"
-        onClick={() => router.push("/settings")}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Settings
-      </Button>
-
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Shield className="h-6 w-6 text-[#d4891a]" />

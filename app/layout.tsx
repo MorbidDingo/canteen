@@ -1,15 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { SyncManager } from "@/components/sync-manager";
 import { PwaRegister } from "@/components/pwa-register";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -160,20 +156,28 @@ export default function RootLayout({
             }),
           }}
         />
+        <link
+          href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,600,700,800,900&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistMono.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
+        <ThemeProvider>
         <Navbar />
         <main className="min-h-[calc(100vh-3.5rem)]">{children}</main>
         <PwaRegister />
         <SyncManager />
         <Toaster
           richColors
-          position="bottom-center"
-          toastOptions={{ className: "text-sm" }}
+          position="top-center"
+          toastOptions={{
+            className: "text-sm rounded-2xl shadow-lg",
+          }}
         />
+        </ThemeProvider>
       </body>
     </html>
   );
