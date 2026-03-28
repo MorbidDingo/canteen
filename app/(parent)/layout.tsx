@@ -252,15 +252,15 @@ function ParentLayoutContent({
                     type="button"
                     aria-label="Open family wallet"
                     onClick={() => setWalletDrawerOpen(true)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
                   >
-                    <Wallet className="h-4 w-4" />
+                    <Wallet className="h-5 w-5" />
                   </button>
                 )}
                 <ParentNotificationBell
                   parentId={session?.user?.id}
                   href={withParentMode("/notifications")}
-                  className="h-8 w-8 rounded-lg"
+                  className="h-10 w-10 rounded-lg"
                 />
               </div>
 
@@ -276,7 +276,7 @@ function ParentLayoutContent({
                   }
                 }}
                 className={cn(
-                  "inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all",
+                  "inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-all",
                   parentMode === "library"
                     ? libraryChatOpen
                       ? "bg-[#b87314] text-white"
@@ -286,7 +286,7 @@ function ParentLayoutContent({
                     : "bg-[#d4891a] text-white hover:bg-[#b87314]",
                 )}
               >
-                <MessageSquareText className="h-4 w-4" />
+                <MessageSquareText className="h-5 w-5" />
               </button>
             </div>
           </div>

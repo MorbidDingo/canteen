@@ -217,7 +217,7 @@ export function BottomSheet({
               <div className="h-[5px] w-9 rounded-full bg-muted-foreground/25 dark:bg-white/20" />
             </div>
             {bare ? (
-              <div className="flex-1 min-h-0">{children}</div>
+              <div className="flex flex-1 flex-col min-h-0 overflow-hidden">{children}</div>
             ) : (
               <div
                 className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))]"
