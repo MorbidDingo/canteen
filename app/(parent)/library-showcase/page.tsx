@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useSSE } from "@/lib/events";
 import { Input } from "@/components/ui/input";
@@ -259,6 +260,7 @@ function Rail({
 }
 
 export default function LibraryShowcasePage() {
+  const searchParams = useSearchParams();
   const [data, setData] = useState<ShowcaseData | null>(null);
   const [loading, setLoading] = useState(true);
   const [issuingBookId, setIssuingBookId] = useState<string | null>(null);
@@ -318,6 +320,21 @@ export default function LibraryShowcasePage() {
   useEffect(() => {
     void fetchShowcase();
   }, [fetchShowcase]);
+
+  // Auto-open book detail when ?bookId= query param is present
+  useEffect(() => {
+    const bookId = searchParams.get("bookId");
+    if (!bookId || !data) return;
+    const found =
+      data.catalog.find((b) => b.id === bookId) ??
+      data.rails.hotThisWeek.find((b) => b.id === bookId) ??
+      data.rails.newcomers.find((b) => b.id === bookId) ??
+      data.rails.goats.find((b) => b.id === bookId) ??
+      data.rails.mustReads.find((b) => b.id === bookId) ??
+      data.rails.personalized?.find((b) => b.id === bookId);
+    if (found && !activeBook) setActiveBook(found);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, searchParams]);
 
   const requestIssue = useCallback(async (bookId: string) => {
     if (!selectedChildId) {
@@ -592,6 +609,65 @@ export default function LibraryShowcasePage() {
             </div>
           </div>
         </section>
+
+        {/* Suggested for You — personalized recommendation banner */}
+        {!hasActiveFilters && (data.rails.personalized ?? []).length > 0 && (
+          <section className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/6 via-background to-primary/4 shadow-sm">
+            <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-3">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-bold text-foreground">Suggested for You</h2>
+                <p className="text-xs text-muted-foreground">Based on your reading history & preferences</p>
+              </div>
+              <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/8 text-primary text-[10px]">
+                Personalized
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-px divide-y divide-primary/8 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              {(data.rails.personalized ?? []).slice(0, 3).map((book) => (
+                <button
+                  key={`suggested-${book.id}`}
+                  type="button"
+                  onClick={() => setActiveBook(book)}
+                  className="flex items-center gap-3 p-3 text-left transition-colors hover:bg-primary/4 active:bg-primary/8"
+                >
+                  <div className="h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border/50 bg-muted shadow-sm">
+                    {book.coverImageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={book.coverImageUrl}
+                        alt={book.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="line-clamp-2 text-[13px] font-semibold leading-tight text-foreground">
+                      {book.title}
+                    </p>
+                    <p className="truncate text-[11px] text-muted-foreground">{book.author}</p>
+                    {book.mlReasons?.[0] ? (
+                      <p className="mt-1 line-clamp-1 text-[10px] text-primary/80">
+                        {book.mlReasons[0]}
+                      </p>
+                    ) : (
+                      <Badge variant="outline" className="mt-1 border-primary/20 bg-primary/5 px-1.5 py-0 text-[9px] font-medium text-primary">
+                        {getCategoryLabel(book.category)}
+                      </Badge>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Pending requests */}
         {pendingRequests.length > 0 ? (
