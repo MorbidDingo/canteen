@@ -180,6 +180,19 @@ export default function LibOperatorSettingsPage() {
                 />
               </FieldGroup>
               <FieldGroup
+                label="Request Hold Duration"
+                hint="Hours a book is held when requested via app"
+                suffix="hours"
+              >
+                <Input
+                  type="number"
+                  min="1"
+                  max="720"
+                  value={settings.request_hold_hours || "48"}
+                  onChange={(e) => updateSetting("request_hold_hours", e.target.value)}
+                />
+              </FieldGroup>
+              <FieldGroup
                 label="Max Reissues"
                 hint="Renewal limit per book"
               >

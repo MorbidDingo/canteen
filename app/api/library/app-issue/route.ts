@@ -14,6 +14,7 @@ import {
   requireLinkedAccount,
 } from "@/lib/auth-server";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 
 const ACTIVE_ISSUANCE_STATUSES = ["ISSUED", "OVERDUE", "RETURN_PENDING"] as const;
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
           eq(libraryAppIssueRequest.status, "REQUESTED"),
         );
 
-  await db
+  const expiredRows = await db
     .update(libraryAppIssueRequest)
     .set({ status: "EXPIRED", updatedAt: now })
     .where(
@@ -102,7 +103,24 @@ export async function POST(request: NextRequest) {
         pendingScopeCondition,
         sql`${libraryAppIssueRequest.expiresAt} <= ${now}`,
       ),
-    );
+    )
+    .returning({ bookId: libraryAppIssueRequest.bookId });
+
+  if (expiredRows.length > 0) {
+    const bookCounts = new Map<string, number>();
+    for (const row of expiredRows) {
+      bookCounts.set(row.bookId, (bookCounts.get(row.bookId) ?? 0) + 1);
+    }
+    for (const [expiredBookId, count] of bookCounts) {
+      await db
+        .update(book)
+        .set({
+          availableCopies: sql`LEAST(${book.availableCopies} + ${count}, ${book.totalCopies})`,
+          updatedAt: now,
+        })
+        .where(and(eq(book.id, expiredBookId), eq(book.organizationId, organizationId)));
+    }
+  }
 
   const [bookRows, controlRows, settingRows, activeIssueCountRows, overdueRows, activePendingRows, activeSameBookRows] = await Promise.all([
     db
@@ -126,15 +144,14 @@ export async function POST(request: NextRequest) {
       .where(eq(parentControl.childId, childId))
       .limit(1),
     db
-      .select({ value: librarySetting.value })
+      .select({ key: librarySetting.key, value: librarySetting.value })
       .from(librarySetting)
       .where(
         and(
           eq(librarySetting.organizationId, organizationId),
-          eq(librarySetting.key, "max_books_per_student"),
+          inArray(librarySetting.key, ["max_books_per_student", "request_hold_hours"]),
         ),
-      )
-      .limit(1),
+      ),
     db
       .select({ count: sql<number>`count(*)` })
       .from(bookIssuance)
@@ -268,7 +285,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const maxBooksPerStudent = parseInt(settingRows[0]?.value ?? "3", 10) || 3;
+  const settingsMap = new Map(settingRows.map((r) => [r.key, r.value]));
+  const maxBooksPerStudent =
+    parseInt(settingsMap.get("max_books_per_student") ?? LIBRARY_SETTINGS_DEFAULTS.max_books_per_student, 10) ||
+    parseInt(LIBRARY_SETTINGS_DEFAULTS.max_books_per_student, 10);
+  const holdHours =
+    parseInt(settingsMap.get("request_hold_hours") ?? LIBRARY_SETTINGS_DEFAULTS.request_hold_hours, 10) ||
+    parseInt(LIBRARY_SETTINGS_DEFAULTS.request_hold_hours, 10);
   const activeIssueCount = Number(activeIssueCountRows[0]?.count ?? 0);
   if (activeIssueCount >= maxBooksPerStudent) {
     return NextResponse.json(
@@ -279,27 +302,37 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  const expiresAt = new Date(now.getTime() + holdHours * 60 * 60 * 1000);
 
-  const insertedRows = await db
-    .insert(libraryAppIssueRequest)
-    .values({
-      organizationId,
-      parentId: session.user.id,
-      childId,
-      bookId,
-      status: "REQUESTED",
-      expiresAt,
-      notes,
-    })
-    .returning({
-      id: libraryAppIssueRequest.id,
-      status: libraryAppIssueRequest.status,
-      requestedAt: libraryAppIssueRequest.createdAt,
-      expiresAt: libraryAppIssueRequest.expiresAt,
-    });
+  const created = await db.transaction(async (tx) => {
+    const insertedRows = await tx
+      .insert(libraryAppIssueRequest)
+      .values({
+        organizationId,
+        parentId: session.user.id,
+        childId,
+        bookId,
+        status: "REQUESTED",
+        expiresAt,
+        notes,
+      })
+      .returning({
+        id: libraryAppIssueRequest.id,
+        status: libraryAppIssueRequest.status,
+        requestedAt: libraryAppIssueRequest.createdAt,
+        expiresAt: libraryAppIssueRequest.expiresAt,
+      });
 
-  const created = insertedRows[0];
+    await tx
+      .update(book)
+      .set({
+        availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
+        updatedAt: now,
+      })
+      .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)));
+
+    return insertedRows[0];
+  });
 
   return NextResponse.json({
     success: true,
@@ -381,6 +414,14 @@ export async function DELETE(request: NextRequest) {
     .update(libraryAppIssueRequest)
     .set({ status: nextStatus, updatedAt: now })
     .where(eq(libraryAppIssueRequest.id, existing.id));
+
+  await db
+    .update(book)
+    .set({
+      availableCopies: sql`LEAST(${book.availableCopies} + 1, ${book.totalCopies})`,
+      updatedAt: now,
+    })
+    .where(and(eq(book.id, existing.bookId), eq(book.organizationId, organizationId)));
 
   return NextResponse.json({
     success: true,
