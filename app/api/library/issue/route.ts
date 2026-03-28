@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     const studentChild = children[0];
     const now = new Date();
 
-    await db
+    const expiredIssueRows = await db
       .update(libraryAppIssueRequest)
       .set({
         status: "EXPIRED",
@@ -125,7 +125,24 @@ export async function POST(request: NextRequest) {
           eq(libraryAppIssueRequest.status, "REQUESTED"),
           sql`${libraryAppIssueRequest.expiresAt} <= ${now}`
         )
-      );
+      )
+      .returning({ bookId: libraryAppIssueRequest.bookId });
+
+    if (expiredIssueRows.length > 0) {
+      const bookCounts = new Map<string, number>();
+      for (const row of expiredIssueRows) {
+        bookCounts.set(row.bookId, (bookCounts.get(row.bookId) ?? 0) + 1);
+      }
+      for (const [expiredBookId, count] of bookCounts) {
+        await db
+          .update(book)
+          .set({
+            availableCopies: sql`LEAST(${book.availableCopies} + ${count}, ${book.totalCopies})`,
+            updatedAt: now,
+          })
+          .where(and(eq(book.id, expiredBookId), eq(book.organizationId, requestOrgId)));
+      }
+    }
 
     const controlRows = await db
       .select({
@@ -499,6 +516,25 @@ export async function POST(request: NextRequest) {
     // ── 9. Create issuance, update copy & book ────────
     const issuanceId = crypto.randomUUID();
 
+    // Check if there is a pre-existing app request for this child+book so we skip
+    // the availableCopies decrement (it was already decremented when the request was created).
+    const hasPreExistingAppRequest =
+      confirmedAppIssueRequestId !== null ||
+      (await db
+        .select({ id: libraryAppIssueRequest.id })
+        .from(libraryAppIssueRequest)
+        .where(
+          and(
+            eq(libraryAppIssueRequest.organizationId, requestOrgId),
+            eq(libraryAppIssueRequest.childId, studentChild.id),
+            eq(libraryAppIssueRequest.bookId, resolvedBook.id),
+            eq(libraryAppIssueRequest.status, "REQUESTED"),
+            sql`${libraryAppIssueRequest.expiresAt} > ${now}`
+          )
+        )
+        .limit(1)
+        .then((rows) => rows.length > 0));
+
     try {
       await db.transaction(async (tx) => {
         const inTxnActive = await tx
@@ -562,13 +598,15 @@ export async function POST(request: NextRequest) {
           issuedBy: "SELF_SERVICE",
         });
 
-        await tx
-          .update(book)
-          .set({
-            availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
-            updatedAt: now,
-          })
-          .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
+        if (!hasPreExistingAppRequest) {
+          await tx
+            .update(book)
+            .set({
+              availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
+              updatedAt: now,
+            })
+            .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
+        }
       });
     } catch (error) {
       if (error instanceof Error) {

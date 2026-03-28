@@ -6,6 +6,7 @@ import {
   bookCopy,
   bookIssuance,
   librarySetting,
+  libraryAppIssueRequest,
 } from "@/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
@@ -218,6 +219,23 @@ export async function POST(request: NextRequest) {
 
     const issuanceId = crypto.randomUUID();
 
+    // Check for a pending app request for this child+book.
+    // If one exists, availableCopies was already decremented at request time, so skip decrement here.
+    const pendingRequestRows = await db
+      .select({ id: libraryAppIssueRequest.id })
+      .from(libraryAppIssueRequest)
+      .where(
+        and(
+          eq(libraryAppIssueRequest.organizationId, organizationId),
+          eq(libraryAppIssueRequest.childId, studentChild.id),
+          eq(libraryAppIssueRequest.bookId, resolvedBook!.id),
+          eq(libraryAppIssueRequest.status, "REQUESTED"),
+          sql`${libraryAppIssueRequest.expiresAt} > ${now}`
+        )
+      )
+      .limit(1);
+    const pendingAppRequestId = pendingRequestRows[0]?.id ?? null;
+
     try {
       await db.transaction(async (tx) => {
         const inTxnActive = await tx
@@ -280,13 +298,15 @@ export async function POST(request: NextRequest) {
           issuedBy: access.actorUserId,
         });
 
-        await tx
-          .update(book)
-          .set({
-            availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
-            updatedAt: now,
-          })
-          .where(and(eq(book.id, resolvedBook!.id), eq(book.organizationId, organizationId)));
+        if (!pendingAppRequestId) {
+          await tx
+            .update(book)
+            .set({
+              availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
+              updatedAt: now,
+            })
+            .where(and(eq(book.id, resolvedBook!.id), eq(book.organizationId, organizationId)));
+        }
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -315,6 +335,18 @@ export async function POST(request: NextRequest) {
     }
 
     broadcast("library-updated");
+
+    if (pendingAppRequestId) {
+      await db
+        .update(libraryAppIssueRequest)
+        .set({
+          status: "CONFIRMED",
+          confirmedAt: now,
+          issuanceId,
+          updatedAt: now,
+        })
+        .where(eq(libraryAppIssueRequest.id, pendingAppRequestId));
+    }
 
     notifyParentForChild({
       childId: studentChild.id,
