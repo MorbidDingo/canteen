@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, or, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { db } from "@/lib/db";
@@ -62,6 +62,50 @@ const TOOLS: Anthropic.Tool[] = [
           description: "Max records to return (default 10)",
         },
       },
+      required: [],
+    },
+  },
+  {
+    name: "get_popular_books",
+    description:
+      "Get the most borrowed books in the school library over the last 30 days. Use this to recommend trending or popular reads.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        limit: {
+          type: "number",
+          description: "Max results (default 8, max 15)",
+        },
+        category: {
+          type: "string",
+          description: "Optional category filter",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "check_book_availability",
+    description:
+      "Check if a specific book is currently available to borrow (by title or book ID). Returns availability and copy count.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Book title or book ID to check",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_overdue_books",
+    description:
+      "Check which books the selected child currently has overdue or issued. Use this to remind them about returns.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
       required: [],
     },
   },
@@ -164,6 +208,143 @@ async function executeLibraryTool(
     }
   }
 
+  if (toolName === "get_popular_books") {
+    const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 15) : 8;
+    const category = typeof input.category === "string" ? input.category.trim() : "";
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    try {
+      const popular = await db
+        .select({
+          bookId: book.id,
+          title: book.title,
+          author: book.author,
+          category: book.category,
+          coverImageUrl: book.coverImageUrl,
+          availableCopies: book.availableCopies,
+          borrowCount: count(bookIssuance.id),
+        })
+        .from(bookIssuance)
+        .innerJoin(bookCopy, eq(bookCopy.id, bookIssuance.bookCopyId))
+        .innerJoin(book, eq(book.id, bookCopy.bookId))
+        .where(
+          and(
+            eq(book.organizationId, ctx.orgId),
+            gte(bookIssuance.issuedAt, thirtyDaysAgo),
+            category ? eq(book.category, category) : undefined,
+          ),
+        )
+        .groupBy(book.id, book.title, book.author, book.category, book.coverImageUrl, book.availableCopies)
+        .orderBy(desc(count(bookIssuance.id)))
+        .limit(limit);
+
+      return JSON.stringify({
+        results: popular.map((b) => ({
+          bookId: b.bookId,
+          title: b.title,
+          author: b.author,
+          category: b.category,
+          coverImageUrl: b.coverImageUrl,
+          availableCopies: b.availableCopies,
+          borrowCount: b.borrowCount,
+        })),
+        count: popular.length,
+      });
+    } catch (err) {
+      return JSON.stringify({ error: "Failed to fetch popular books", details: String(err) });
+    }
+  }
+
+  if (toolName === "check_book_availability") {
+    const query = typeof input.query === "string" ? input.query.trim() : "";
+    if (!query) return JSON.stringify({ error: "Query is required" });
+
+    try {
+      const results = await db
+        .select({
+          bookId: book.id,
+          title: book.title,
+          author: book.author,
+          totalCopies: book.totalCopies,
+          availableCopies: book.availableCopies,
+          coverImageUrl: book.coverImageUrl,
+        })
+        .from(book)
+        .where(
+          and(
+            eq(book.organizationId, ctx.orgId),
+            or(
+              eq(book.id, query),
+              sql`LOWER(${book.title}) LIKE LOWER(${"%"+ query + "%"})`,
+            ),
+          ),
+        )
+        .limit(5);
+
+      return JSON.stringify({
+        results: results.map((b) => ({
+          bookId: b.bookId,
+          title: b.title,
+          author: b.author,
+          totalCopies: b.totalCopies,
+          availableCopies: b.availableCopies,
+          available: (b.availableCopies ?? 0) > 0,
+          coverImageUrl: b.coverImageUrl,
+        })),
+        count: results.length,
+      });
+    } catch (err) {
+      return JSON.stringify({ error: "Failed to check availability", details: String(err) });
+    }
+  }
+
+  if (toolName === "get_overdue_books") {
+    if (!ctx.childId) {
+      return JSON.stringify({ books: [], count: 0, note: "No child selected" });
+    }
+
+    try {
+      const overdue = await db
+        .select({
+          bookId: book.id,
+          title: book.title,
+          author: book.author,
+          issuedAt: bookIssuance.issuedAt,
+          dueDate: bookIssuance.dueDate,
+          status: bookIssuance.status,
+        })
+        .from(bookIssuance)
+        .innerJoin(bookCopy, eq(bookCopy.id, bookIssuance.bookCopyId))
+        .innerJoin(book, eq(book.id, bookCopy.bookId))
+        .where(
+          and(
+            eq(bookIssuance.childId, ctx.childId),
+            or(
+              eq(bookIssuance.status, "ISSUED"),
+              eq(bookIssuance.status, "OVERDUE"),
+            ),
+          ),
+        )
+        .orderBy(desc(bookIssuance.issuedAt))
+        .limit(20);
+
+      return JSON.stringify({
+        books: overdue.map((b) => ({
+          bookId: b.bookId,
+          title: b.title,
+          author: b.author,
+          issuedAt: b.issuedAt?.toISOString(),
+          dueDate: b.dueDate?.toISOString(),
+          status: b.status,
+          isOverdue: b.dueDate ? new Date(b.dueDate) < new Date() : false,
+        })),
+        count: overdue.length,
+      });
+    } catch (err) {
+      return JSON.stringify({ error: "Failed to fetch overdue books", details: String(err) });
+    }
+  }
+
   return JSON.stringify({ error: `Unknown tool: ${toolName}` });
 }
 
@@ -234,26 +415,28 @@ function chunkText(text: string, avgWords = 20): string[] {
 
 // ─── System Prompt ────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are Certe Library AI — a knowledgeable library assistant for school students and parents.
+const SYSTEM_PROMPT = `You are Certe Library AI — a brief, tool-driven library assistant.
 
-Always use tools before responding. For any book-related request:
-1. Use get_reading_history to check what the child has already read.
-2. Use search_library_catalog to find relevant books — search multiple times with different keywords if needed.
-3. Only then compose your response based on actual tool results.
+CRITICAL RULES:
+1. ALWAYS call tools BEFORE responding. Never answer from memory alone.
+2. Keep every reply to 1-3 short sentences MAX. No paragraphs, no intros, no filler.
+3. Never fabricate book details. Only reference books confirmed by tool results.
 
-When recommending books:
-- Never guess or fabricate book details. Only use books returned by search_library_catalog.
-- Recommend the top 3 most suitable books that the child has NOT already read.
-- After your response text, output the book data in this EXACT format (no extra text or newlines around the JSON):
+Tool-use workflow — follow this for EVERY request:
+- "Recommend / suggest / what should I read" → call get_reading_history + search_library_catalog (or get_popular_books). Exclude already-read books.
+- "What's popular / trending" → call get_popular_books.
+- "Find [book/topic/author]" → call search_library_catalog with relevant query. Try variant keywords if first search returns nothing.
+- "Is [book] available?" → call check_book_availability.
+- "What do I have due / overdue?" → call get_overdue_books.
+- Any other library question → pick the most relevant tool(s) first, then answer from results.
+
+When recommending books, output the top 3 in this EXACT format after your short text reply:
 
 [[BOOK_RECOMMENDATIONS]]
 [{"bookId":"id","title":"Book Title","author":"Author Name","category":"CATEGORY","coverImageUrl":"url_or_null"}]
 [[/BOOK_RECOMMENDATIONS]]
 
-Response style:
-- Be brief and direct. Avoid lengthy introductions or filler sentences.
-- For questions about a specific book or author, use search_library_catalog to look it up first.
-- If the catalog returns no results, say so honestly rather than suggesting books not in the system.`;
+If the catalog has no matching books, say so in one sentence — do not invent alternatives.`;
 
 // ─── POST Handler ─────────────────────────────────────────
 
@@ -322,13 +505,13 @@ export async function POST(request: NextRequest) {
   const anthropic = new Anthropic();
   const allMessages: Anthropic.MessageParam[] = [...messages];
   let finalResponse = "";
-  const MAX_ROUNDS = 6;
+  const MAX_ROUNDS = 8;
 
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: 512,
         system: SYSTEM_PROMPT,
         tools: TOOLS,
         messages: allMessages,

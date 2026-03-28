@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { and, eq } from "drizzle-orm";
+import { and, count, desc, eq, gte, or, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { db } from "@/lib/db";
-import { appSetting } from "@/lib/db/schema";
+import { appSetting, book, bookCopy, bookIssuance, child } from "@/lib/db/schema";
 
 const DAILY_SUMMARY_LIMIT = 5;
 const SUMMARY_KEY_PREFIX = "library_ai_summary_usage";
@@ -20,6 +20,7 @@ type ChatBody = {
   messages?: Anthropic.MessageParam[];
   summaryRequest?: boolean;
   book?: LibraryBookContext;
+  childId?: string;
 };
 
 const LIBRARY_TOOL_DEFINITIONS: Anthropic.Tool[] = [
@@ -33,6 +34,79 @@ const LIBRARY_TOOL_DEFINITIONS: Anthropic.Tool[] = [
         query: {
           type: "string",
           description: "Book search query with title and author",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_library_catalog",
+    description:
+      "Search the school library catalog for books by title, author, category, or keywords. Returns books available in our library.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Search keywords (title, author, topic, or genre)",
+        },
+        category: {
+          type: "string",
+          description:
+            "Optional category filter: FICTION, NON_FICTION, SCIENCE, HISTORY, BIOGRAPHY, ADVENTURE, FANTASY, MYSTERY, POETRY, GENERAL",
+        },
+        limit: {
+          type: "number",
+          description: "Max results to return (default 8, max 15)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_reading_history",
+    description:
+      "Get the recent reading/borrowing history for the selected child. Shows what they have read and their preferences.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        limit: {
+          type: "number",
+          description: "Max records to return (default 10)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_popular_books",
+    description:
+      "Get the most borrowed books in the school library over the last 30 days.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        limit: {
+          type: "number",
+          description: "Max results (default 8, max 15)",
+        },
+        category: {
+          type: "string",
+          description: "Optional category filter",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "check_book_availability",
+    description:
+      "Check if a specific book is currently available to borrow (by title or book ID).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Book title or book ID to check",
         },
       },
       required: ["query"],
@@ -229,36 +303,228 @@ async function runBookWebSearch(query: string) {
 async function executeLibraryTool(
   toolName: string,
   input: Record<string, unknown>,
+  ctx: { orgId: string; childId: string | null },
 ): Promise<string> {
   switch (toolName) {
     case "web_search_books":
       return runBookWebSearch(String(input.query ?? ""));
+
+    case "search_library_catalog": {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      const category = typeof input.category === "string" ? input.category.trim() : "";
+      const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 15) : 8;
+
+      try {
+        const bookRows = await db
+          .select({
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            description: book.description,
+            coverImageUrl: book.coverImageUrl,
+            availableCopies: book.availableCopies,
+          })
+          .from(book)
+          .where(
+            and(
+              eq(book.organizationId, ctx.orgId),
+              query
+                ? or(
+                    sql`LOWER(${book.title}) LIKE LOWER(${"%" + query + "%"})`,
+                    sql`LOWER(${book.author}) LIKE LOWER(${"%" + query + "%"})`,
+                    sql`LOWER(COALESCE(${book.description}, '')) LIKE LOWER(${"%" + query + "%"})`,
+                  )
+                : undefined,
+              category ? eq(book.category, category) : undefined,
+            ),
+          )
+          .limit(limit);
+
+        return JSON.stringify({
+          results: bookRows.map((b) => ({
+            bookId: b.id,
+            title: b.title,
+            author: b.author,
+            category: b.category,
+            description: b.description ? b.description.slice(0, 200) : null,
+            availableCopies: b.availableCopies,
+            coverImageUrl: b.coverImageUrl,
+          })),
+          count: bookRows.length,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to search catalog", details: String(err) });
+      }
+    }
+
+    case "get_reading_history": {
+      if (!ctx.childId) {
+        return JSON.stringify({ history: [], count: 0, note: "No child selected" });
+      }
+      const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 20) : 10;
+
+      try {
+        const history = await db
+          .select({
+            bookId: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            issuedAt: bookIssuance.issuedAt,
+            returnedAt: bookIssuance.returnedAt,
+            status: bookIssuance.status,
+          })
+          .from(bookIssuance)
+          .innerJoin(bookCopy, eq(bookCopy.id, bookIssuance.bookCopyId))
+          .innerJoin(book, eq(book.id, bookCopy.bookId))
+          .where(eq(bookIssuance.childId, ctx.childId))
+          .orderBy(desc(bookIssuance.issuedAt))
+          .limit(limit);
+
+        return JSON.stringify({
+          history: history.map((h) => ({
+            bookId: h.bookId,
+            title: h.title,
+            author: h.author,
+            category: h.category,
+            issuedAt: h.issuedAt?.toISOString(),
+            returnedAt: h.returnedAt?.toISOString(),
+            status: h.status,
+          })),
+          count: history.length,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to fetch reading history", details: String(err) });
+      }
+    }
+
+    case "get_popular_books": {
+      const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 15) : 8;
+      const category = typeof input.category === "string" ? input.category.trim() : "";
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      try {
+        const popular = await db
+          .select({
+            bookId: book.id,
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            coverImageUrl: book.coverImageUrl,
+            availableCopies: book.availableCopies,
+            borrowCount: count(bookIssuance.id),
+          })
+          .from(bookIssuance)
+          .innerJoin(bookCopy, eq(bookCopy.id, bookIssuance.bookCopyId))
+          .innerJoin(book, eq(book.id, bookCopy.bookId))
+          .where(
+            and(
+              eq(book.organizationId, ctx.orgId),
+              gte(bookIssuance.issuedAt, thirtyDaysAgo),
+              category ? eq(book.category, category) : undefined,
+            ),
+          )
+          .groupBy(book.id, book.title, book.author, book.category, book.coverImageUrl, book.availableCopies)
+          .orderBy(desc(count(bookIssuance.id)))
+          .limit(limit);
+
+        return JSON.stringify({
+          results: popular.map((b) => ({
+            bookId: b.bookId,
+            title: b.title,
+            author: b.author,
+            category: b.category,
+            coverImageUrl: b.coverImageUrl,
+            availableCopies: b.availableCopies,
+            borrowCount: b.borrowCount,
+          })),
+          count: popular.length,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to fetch popular books", details: String(err) });
+      }
+    }
+
+    case "check_book_availability": {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      if (!query) return JSON.stringify({ error: "Query is required" });
+
+      try {
+        const results = await db
+          .select({
+            bookId: book.id,
+            title: book.title,
+            author: book.author,
+            totalCopies: book.totalCopies,
+            availableCopies: book.availableCopies,
+            coverImageUrl: book.coverImageUrl,
+          })
+          .from(book)
+          .where(
+            and(
+              eq(book.organizationId, ctx.orgId),
+              or(
+                eq(book.id, query),
+                sql`LOWER(${book.title}) LIKE LOWER(${"%" + query + "%"})`,
+              ),
+            ),
+          )
+          .limit(5);
+
+        return JSON.stringify({
+          results: results.map((b) => ({
+            bookId: b.bookId,
+            title: b.title,
+            author: b.author,
+            totalCopies: b.totalCopies,
+            availableCopies: b.availableCopies,
+            available: (b.availableCopies ?? 0) > 0,
+            coverImageUrl: b.coverImageUrl,
+          })),
+          count: results.length,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to check availability", details: String(err) });
+      }
+    }
+
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
 }
 
-function buildLibrarySystemPrompt(book: LibraryBookContext | undefined) {
+function buildLibrarySystemPrompt(bookCtx: LibraryBookContext | undefined) {
   const contextBits = [
-    book?.title ? `Book title: ${book.title}` : "",
-    book?.author ? `Book author: ${book.author}` : "",
-    book?.isbn ? `ISBN: ${book.isbn}` : "",
-    book?.description ? `Catalog description: ${compactText(book.description, 500)}` : "",
+    bookCtx?.title ? `Book title: ${bookCtx.title}` : "",
+    bookCtx?.author ? `Book author: ${bookCtx.author}` : "",
+    bookCtx?.isbn ? `ISBN: ${bookCtx.isbn}` : "",
+    bookCtx?.description ? `Catalog description: ${compactText(bookCtx.description, 500)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
   return [
-    "You are Certe Library AI Assistant.",
-    "Goal: help users understand books quickly and accurately.",
-    "For book summaries, produce concise sections: Overview, Themes, Reading Level, Why It May Suit This Reader.",
-    "Never fabricate plot points or claims. If uncertain, say what is uncertain.",
-    "When key details are missing, call the web_search_books tool before answering.",
-    "Keep tone practical and student-friendly.",
-    contextBits ? `Known context:\n${contextBits}` : "",
+    "You are Certe Library AI — a brief, tool-driven library assistant.",
+    "",
+    "CRITICAL RULES:",
+    "1. ALWAYS call tools BEFORE responding. Never answer from memory alone.",
+    "2. Keep every reply to 1-3 short sentences MAX. No paragraphs, no intros, no filler.",
+    "3. Never fabricate book details. Only reference books confirmed by tool results.",
+    "",
+    "Tool-use workflow:",
+    "- For book summaries: call web_search_books first, then give a brief Overview, Themes, Reading Level, and Suitability — each in one sentence.",
+    "- For catalog searches: call search_library_catalog with relevant keywords.",
+    "- For reading history: call get_reading_history.",
+    "- For popularity: call get_popular_books.",
+    "- For availability: call check_book_availability.",
+    "- If uncertain about a book, call web_search_books before answering.",
+    "",
+    "Always prefer tool results over guessing. If no data is found, say so in one sentence.",
+    contextBits ? `\nKnown context:\n${contextBits}` : "",
   ]
     .filter(Boolean)
-    .join("\n\n");
+    .join("\n");
 }
 
 export async function POST(request: NextRequest) {
@@ -312,18 +578,31 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Resolve childId
+  let childId: string | null = body.childId ?? null;
+  if (!childId) {
+    const [firstChild] = await db
+      .select({ id: child.id })
+      .from(child)
+      .where(eq(child.parentId, userId))
+      .limit(1);
+    if (firstChild) childId = firstChild.id;
+  }
+
+  const toolCtx = { orgId: organizationId, childId };
+
   try {
     const anthropic = new Anthropic();
     const systemPrompt = buildLibrarySystemPrompt(body.book);
     const conversation: Anthropic.MessageParam[] = [...messages];
 
     let finalText = "";
-    const MAX_ROUNDS = 6;
+    const MAX_ROUNDS = 8;
 
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 900,
+        max_tokens: 512,
         system: systemPrompt,
         tools: LIBRARY_TOOL_DEFINITIONS,
         messages: conversation,
@@ -338,6 +617,7 @@ export async function POST(request: NextRequest) {
           const result = await executeLibraryTool(
             block.name,
             (block.input ?? {}) as Record<string, unknown>,
+            toolCtx,
           );
           toolResults.push({
             type: "tool_result",
