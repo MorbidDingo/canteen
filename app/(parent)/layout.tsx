@@ -17,7 +17,7 @@ import {
   MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { CerteLogo } from "@/components/certe-logo";
@@ -68,7 +68,7 @@ function getActiveTab(pathname: string): string {
   return "home";
 }
 
-export default function ParentLayout({
+function ParentLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -786,6 +786,18 @@ export default function ParentLayout({
 
       <ChatAssistant open={chatOpen} onOpenChange={setChatOpen} />
     </>
+  );
+}
+
+export default function ParentLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense>
+      <ParentLayoutContent>{children}</ParentLayoutContent>
+    </Suspense>
   );
 }
 
