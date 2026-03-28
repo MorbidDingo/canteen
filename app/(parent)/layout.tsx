@@ -23,6 +23,7 @@ import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { CerteLogo } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
 import { ChatAssistant } from "@/components/ai/chat-assistant";
+import { LibraryChatAssistant } from "@/components/ai/library-chat-assistant";
 import { motion, BottomSheet } from "@/components/ui/motion";
 import {
   Sheet,
@@ -65,6 +66,7 @@ function getActiveTab(pathname: string): string {
   if (pathname === "/controls") return "controls";
   if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
   if (pathname === "/cart") return "cart";
+  if (pathname === "/library-history") return "home";
   return "home";
 }
 
@@ -91,6 +93,7 @@ function ParentLayoutContent({
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [libraryChatOpen, setLibraryChatOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
@@ -193,6 +196,7 @@ function ParentLayoutContent({
     setCartDrawerOpen(false);
     setWalletDrawerOpen(false);
     setChatOpen(false);
+    setLibraryChatOpen(false);
   }, [pathname]);
 
   const getInitials = (name?: string | null) => {
@@ -210,6 +214,7 @@ function ParentLayoutContent({
       return [
         { key: "home" as const, href: "/menu", icon: UtensilsCrossed, label: "Menu", locked: false },
         { key: "orders" as const, href: "/orders", icon: ClipboardList, label: "Orders", locked: false },
+        { key: "cart" as const, href: "/cart", icon: ShoppingCart, label: "Cart", locked: false },
         { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
         { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
       ];
@@ -239,62 +244,50 @@ function ParentLayoutContent({
               )}
             </Link>
 
-            <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
-              {parentMode === "canteen" && (
-                <button
-                  type="button"
-                  aria-label="Open AI assistant"
-                  onClick={() => setChatOpen((value) => !value)}
-                  className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent",
-                    chatOpen && "bg-primary/10 text-primary",
-                  )}
-                >
-                  <MessageSquareText className="h-4 w-4" />
-                </button>
-              )}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {/* Wallet + Notification bubble */}
+              <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
+                {parentMode === "canteen" && (
+                  <button
+                    type="button"
+                    aria-label="Open family wallet"
+                    onClick={() => setWalletDrawerOpen(true)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
+                  >
+                    <Wallet className="h-4 w-4" />
+                  </button>
+                )}
+                <ParentNotificationBell
+                  parentId={session?.user?.id}
+                  href={withParentMode("/notifications")}
+                  className="h-8 w-8 rounded-lg"
+                />
+              </div>
 
-              {parentMode === "canteen" && (
-                <button
-                  type="button"
-                  aria-label="Open family wallet"
-                  onClick={() => setWalletDrawerOpen(true)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
-                >
-                  <Wallet className="h-4 w-4" />
-                </button>
-              )}
-
-              <ParentNotificationBell
-                parentId={session?.user?.id}
-                href={withParentMode("/notifications")}
-                className="h-8 w-8 rounded-lg"
-              />
-
-              {parentMode === "canteen" && (
-                <button
-                  type="button"
-                  aria-label="Open cart drawer"
-                  onClick={() => setCartDrawerOpen(true)}
-                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent"
-                >
-                  <ShoppingCart
-                    className={cn(
-                      "h-4 w-4 text-foreground/85",
-                      cartBounce && "animate-bounce",
-                    )}
-                  />
-                  {cartCount > 0 && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground"
-                    >
-                      {cartCount}
-                    </motion.span>
-                  )}
-                </button>
-              )}
+              {/* AI Chat button — orange, always visible, mode-aware */}
+              <button
+                type="button"
+                aria-label={parentMode === "library" ? "Open Library Assistant" : "Open AI assistant"}
+                onClick={() => {
+                  if (parentMode === "library") {
+                    setLibraryChatOpen((v) => !v);
+                  } else {
+                    setChatOpen((v) => !v);
+                  }
+                }}
+                className={cn(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-xl shadow-sm transition-all",
+                  parentMode === "library"
+                    ? libraryChatOpen
+                      ? "bg-[#b87314] text-white"
+                      : "bg-[#d4891a] text-white hover:bg-[#b87314]"
+                    : chatOpen
+                    ? "bg-[#b87314] text-white"
+                    : "bg-[#d4891a] text-white hover:bg-[#b87314]",
+                )}
+              >
+                <MessageSquareText className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
@@ -343,7 +336,7 @@ function ParentLayoutContent({
         <div className="mx-auto max-w-lg px-3 md:max-w-4xl lg:max-w-6xl">
           <div className={cn(
             "relative grid gap-1 rounded-2xl border border-border/55 bg-background/92 p-1.5 shadow-[0_14px_30px_rgba(15,23,42,0.16)] backdrop-blur-2xl",
-            tabs.length === 4 ? "grid-cols-4" : "grid-cols-3",
+            tabs.length === 5 ? "grid-cols-5" : tabs.length === 4 ? "grid-cols-4" : "grid-cols-3",
           )}>
             <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-white/70 dark:bg-white/20" />
             <div className="pointer-events-none absolute -left-4 bottom-1 h-10 w-20 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
@@ -390,6 +383,7 @@ function ParentLayoutContent({
                         className={cn(
                           "h-[17px] w-[17px] transition-colors duration-200",
                           isActive ? "text-primary" : "text-muted-foreground/90",
+                          tab.key === "cart" && cartBounce && "animate-bounce",
                         )}
                         strokeWidth={isActive ? 2.5 : 1.8}
                       />
@@ -409,6 +403,12 @@ function ParentLayoutContent({
                   {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
                     <span className="absolute right-2 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                       {overdueCount}
+                    </span>
+                  )}
+
+                  {tab.key === "cart" && cartCount > 0 && (
+                    <span className="absolute right-1 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                      {cartCount}
                     </span>
                   )}
 
@@ -785,6 +785,7 @@ function ParentLayoutContent({
       </BottomSheet>
 
       <ChatAssistant open={chatOpen} onOpenChange={setChatOpen} />
+      <LibraryChatAssistant open={libraryChatOpen} onOpenChange={setLibraryChatOpen} />
     </>
   );
 }
