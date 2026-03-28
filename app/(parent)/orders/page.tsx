@@ -19,6 +19,7 @@ import {
   XCircle,
   RefreshCw,
   CreditCard,
+  Star,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -30,6 +31,8 @@ import {
 } from "@/lib/constants";
 import Link from "next/link";
 import { emitEvent, useRealtimeData } from "@/lib/events";
+import { OrderFeedbackSheet } from "@/components/order-feedback-sheet";
+import { CancelReasonSheet } from "@/components/cancel-reason-sheet";
 
 // Razorpay types for window
 declare global {
@@ -91,6 +94,9 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [feedbackOrderId, setFeedbackOrderId] = useState<string | null>(null);
+  const [cancelReasonOrderId, setCancelReasonOrderId] = useState<string | null>(null);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -128,11 +134,13 @@ export default function OrdersPage() {
   // Instant refresh via SSE when any order event occurs
   useRealtimeData(fetchOrders, "orders-updated");
 
-  const handleCancel = async (orderId: string) => {
+  const handleCancel = async (orderId: string, reason?: string, otherText?: string) => {
     setCancellingId(orderId);
     try {
       const res = await fetch(`/api/orders/${orderId}/cancel`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, otherText }),
       });
 
       if (!res.ok) {
@@ -147,6 +155,7 @@ export default function OrdersPage() {
       toast.error(
         error instanceof Error ? error.message : "Failed to cancel order",
       );
+      throw error; // Re-throw so CancelReasonSheet knows it failed
     } finally {
       setCancellingId(null);
     }
@@ -254,18 +263,18 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="mb-6 flex items-center justify-between animate-fade-in">
+    <div className="app-shell">
+      <div className="app-header-card mb-5 flex items-center justify-between gap-3 animate-fade-in">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="app-title">
             My Orders
           </h1>
-          <p className="text-muted-foreground">Track and manage your orders</p>
+          <p className="app-subtitle">Track and manage your orders</p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          className="gap-2"
+          className="gap-2 rounded-lg"
           onClick={() => {
             setLoading(true);
             fetchOrders();
@@ -356,6 +365,7 @@ export default function OrdersPage() {
                 </div>
               </CardContent>
               {(order.status === "PLACED" ||
+                order.status === "SERVED" ||
                 (order.paymentStatus === "UNPAID" &&
                   order.status !== "CANCELLED")) && (
                 <CardFooter className="flex flex-wrap gap-2">
@@ -380,7 +390,7 @@ export default function OrdersPage() {
                       variant="destructive"
                       size="sm"
                       className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                      onClick={() => handleCancel(order.id)}
+                      onClick={() => setCancelReasonOrderId(order.id)}
                       disabled={cancellingId === order.id}
                     >
                       {cancellingId === order.id ? (
@@ -391,11 +401,58 @@ export default function OrdersPage() {
                       Cancel Order
                     </Button>
                   )}
+                  {order.status === "SERVED" &&
+                    !feedbackSubmitted.has(order.id) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 sm:w-auto active:scale-95 transition-transform"
+                        onClick={() => setFeedbackOrderId(order.id)}
+                      >
+                        <Star className="h-4 w-4" />
+                        Rate Order
+                      </Button>
+                    )}
+                  {order.status === "SERVED" &&
+                    feedbackSubmitted.has(order.id) && (
+                      <Badge variant="secondary" className="gap-1.5">
+                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                        Reviewed
+                      </Badge>
+                    )}
                 </CardFooter>
               )}
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Feedback BottomSheet */}
+      {feedbackOrderId && (
+        <OrderFeedbackSheet
+          orderId={feedbackOrderId}
+          open={!!feedbackOrderId}
+          onOpenChange={(open) => {
+            if (!open) setFeedbackOrderId(null);
+          }}
+          onSubmitted={() => {
+            setFeedbackSubmitted((prev) => new Set([...prev, feedbackOrderId]));
+          }}
+        />
+      )}
+
+      {/* Cancel Reason BottomSheet */}
+      {cancelReasonOrderId && (
+        <CancelReasonSheet
+          orderId={cancelReasonOrderId}
+          open={!!cancelReasonOrderId}
+          onOpenChange={(open) => {
+            if (!open) setCancelReasonOrderId(null);
+          }}
+          onConfirm={async (reason, otherText) => {
+            await handleCancel(cancelReasonOrderId, reason, otherText);
+          }}
+        />
       )}
     </div>
   );

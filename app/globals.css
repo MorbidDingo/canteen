@@ -128,15 +128,54 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    min-height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "ss01", "ss02", "cv01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(circle at 10% -10%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 42%),
+      radial-gradient(circle at 92% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 34%),
+      linear-gradient(180deg, color-mix(in oklab, var(--background) 94%, var(--foreground) 6%) 0%, var(--background) 50%);
+    background-attachment: fixed;
   }
   h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
     font-weight: 700;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .app-shell-compact {
+    @apply mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .app-header-card {
+    @apply rounded-2xl border border-border/60 bg-card/75 p-4 shadow-sm backdrop-blur-sm sm:p-5;
+  }
+
+  .app-title {
+    @apply text-2xl font-bold tracking-tight sm:text-3xl;
+  }
+
+  .app-subtitle {
+    @apply mt-1 text-sm text-muted-foreground;
+  }
+
+  .app-section-card {
+    @apply rounded-2xl border border-border/60 bg-card/75 shadow-sm;
+  }
+
+  .app-mobile-safe-bottom {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -219,7 +258,6 @@
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
-  padding-bottom: 85px;
 }
 
 /* Better touch targets */

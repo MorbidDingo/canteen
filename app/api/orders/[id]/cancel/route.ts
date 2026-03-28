@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, order, orderItem, wallet, walletTransaction } from "@/lib/db/schema";
+import { child, order, orderItem, wallet, walletTransaction, orderCancellationReason } from "@/lib/db/schema";
 import { eq, inArray, asc } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { incrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 
+const VALID_CANCEL_REASONS = [
+  "ORDERED_BY_MISTAKE",
+  "FOUND_BETTER_OPTION",
+  "CHILD_NOT_IN_SCHOOL",
+  "TAKING_HOMEMADE_FOOD",
+  "TOO_EXPENSIVE",
+  "OTHER",
+] as const;
+
 /**
  * PATCH /api/orders/[id]/cancel
  * Parent cancels their own order (only from PLACED status).
  * If the order was PAID, refund to the child's wallet and restore stock.
+ * Accepts optional { reason, otherText } in body.
  */
 export async function PATCH(
   request: NextRequest,
@@ -21,6 +31,21 @@ export async function PATCH(
     const session = await getSession();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Parse optional cancellation reason from body
+    let reason: (typeof VALID_CANCEL_REASONS)[number] | undefined;
+    let otherText: string | undefined;
+    try {
+      const body = await request.json();
+      if (body.reason && VALID_CANCEL_REASONS.includes(body.reason)) {
+        reason = body.reason;
+      }
+      if (body.otherText && typeof body.otherText === "string") {
+        otherText = body.otherText.slice(0, 500);
+      }
+    } catch {
+      // Body is optional — PATCH without body still works
     }
 
     const [existingOrder] = await db
@@ -103,6 +128,16 @@ export async function PATCH(
         .update(order)
         .set({ status: "CANCELLED", updatedAt: new Date() })
         .where(eq(order.id, id));
+
+      // Store cancellation reason if provided
+      if (reason) {
+        await tx.insert(orderCancellationReason).values({
+          orderId: id,
+          userId: session.user.id,
+          reason,
+          otherText: reason === "OTHER" ? (otherText || null) : null,
+        });
+      }
     });
 
     broadcast("orders-updated");

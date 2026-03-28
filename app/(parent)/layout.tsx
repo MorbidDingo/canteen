@@ -1,28 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useSession, signOut } from "@/lib/auth-client";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   UtensilsCrossed,
   ShoppingCart,
   BookOpen,
-  Settings,
   Wallet,
-  LogOut,
   ClipboardList,
   Shield,
   IndianRupee,
   Sparkles,
+  MessageSquareText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
@@ -30,7 +22,7 @@ import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { CerteLogo } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { ChatAssistant } from "@/components/ai/chat-assistant";
 import { motion, BottomSheet } from "@/components/ui/motion";
 import {
   Sheet,
@@ -49,27 +41,31 @@ type WalletSnapshot = {
   balance: number;
 };
 
-function getParentMode(pathname: string): ParentMode {
+function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
   if (pathname.startsWith("/library")) return "library";
+  if (
+    pathname === "/menu" ||
+    pathname.startsWith("/orders") ||
+    pathname.startsWith("/pre-orders") ||
+    pathname === "/cart"
+  ) {
+    return "canteen";
+  }
+  if (requestedMode === "library" || requestedMode === "canteen") {
+    return requestedMode;
+  }
   return "canteen";
 }
 
-const TABS = [
-  { key: "canteen", href: "/menu", icon: UtensilsCrossed, label: "Menu" },
-  { key: "orders", href: "/orders", icon: ClipboardList, label: "Orders" },
-  { key: "library", href: "/library-history", icon: BookOpen, label: "Library" },
-  { key: "controls", href: "/controls", icon: Shield, label: "Controls" },
-  { key: "settings", href: "/settings", icon: Settings, label: "Settings" },
-] as const;
-
-function getActiveTab(pathname: string, parentMode: ParentMode): string {
+function getActiveTab(pathname: string): string {
+  if (pathname === "/library-showcase") return "showcase";
   if (["/settings", "/children", "/wallet", "/notifications", "/messaging-settings"].includes(pathname)) {
     return "settings";
   }
   if (pathname === "/controls") return "controls";
   if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
-  if (parentMode === "library") return "library";
-  return "canteen";
+  if (pathname === "/cart") return "cart";
+  return "home";
 }
 
 export default function ParentLayout({
@@ -78,9 +74,9 @@ export default function ParentLayout({
   children: React.ReactNode;
 }) {
   const { data: session } = useSession();
-  const isGeneralAccount = session?.user?.role === "GENERAL";
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const cartItems = useCartStore((s) => s.items);
   const cartCount = useCartStore((s) => s.getItemCount());
@@ -94,14 +90,24 @@ export default function ParentLayout({
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const prevCartCount = useRef(cartCount);
 
-  const parentMode = getParentMode(pathname);
-  const activeTab = getActiveTab(pathname, parentMode);
+  const requestedMode = searchParams.get("mode");
+  const parentMode = getParentMode(pathname, requestedMode);
+  const activeTab = getActiveTab(pathname);
+
+  const withParentMode = useCallback(
+    (href: string) => {
+      const separator = href.includes("?") ? "&" : "?";
+      return `${href}${separator}mode=${parentMode}`;
+    },
+    [parentMode],
+  );
 
   const cartTotal = useMemo(
     () =>
@@ -164,9 +170,9 @@ export default function ParentLayout({
   }, [ensureCertePlusFresh]);
 
   useEffect(() => {
-    if (!walletDrawerOpen || isGeneralAccount) return;
+    if (!walletDrawerOpen) return;
     void fetchWallets();
-  }, [fetchWallets, isGeneralAccount, walletDrawerOpen]);
+  }, [fetchWallets, walletDrawerOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -186,6 +192,7 @@ export default function ParentLayout({
   useEffect(() => {
     setCartDrawerOpen(false);
     setWalletDrawerOpen(false);
+    setChatOpen(false);
   }, [pathname]);
 
   const getInitials = (name?: string | null) => {
@@ -198,48 +205,82 @@ export default function ParentLayout({
       .slice(0, 2);
   };
 
-  const tabs = useMemo(
-    () =>
-      TABS.map((tab) => ({
-        ...tab,
-        locked: tab.key === "controls" && !certePlusActive,
-      })),
-    [certePlusActive],
-  );
+  const tabs = useMemo(() => {
+    if (parentMode === "canteen") {
+      return [
+        { key: "home" as const, href: "/menu", icon: UtensilsCrossed, label: "Menu", locked: false },
+        { key: "orders" as const, href: "/orders", icon: ClipboardList, label: "Orders", locked: false },
+        { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
+        { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
+      ];
+    }
+    return [
+      { key: "showcase" as const, href: "/library-showcase", icon: Sparkles, label: "Showcase", locked: false },
+      { key: "home" as const, href: "/library-history", icon: BookOpen, label: "History", locked: false },
+      { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
+      { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
+    ];
+  }, [certePlusActive, parentMode, withParentMode]);
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur-xl">
-        <div className="relative mx-auto flex h-14 max-w-lg items-center justify-between px-4 md:h-16 md:max-w-4xl md:px-6 lg:max-w-6xl">
-          <Link href="/" className="flex items-center gap-1">
-            <CerteLogo size={24} />
-            <span className="text-sm font-extrabold tracking-tight text-foreground">
-              certe
-            </span>
-            {certePlusActive && (
-              <span className="text-lg font-bold tracking-wide text-primary">+</span>
-            )}
-          </Link>
+      <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto w-full max-w-6xl px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6 md:py-2">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/" className="flex min-w-0 items-center gap-1.5">
+              <CerteLogo size={24} />
+              <span className="hidden text-sm font-extrabold tracking-tight text-foreground sm:inline">
+                certe
+              </span>
+              {certePlusActive && (
+                <span className="text-base font-bold tracking-wide text-primary">
+                  +
+                </span>
+              )}
+            </Link>
 
-          <div className="flex items-center gap-1 rounded-2xl border border-border/50 bg-muted/60 px-1.5 py-1 shadow-sm backdrop-blur-sm">
-            <ThemeToggle />
+            <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
+              {parentMode === "canteen" && (
+                <button
+                  type="button"
+                  aria-label="Open AI assistant"
+                  onClick={() => setChatOpen((value) => !value)}
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent",
+                    chatOpen && "bg-primary/10 text-primary",
+                  )}
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                </button>
+              )}
 
-            <ParentNotificationBell
-              parentId={session?.user?.id}
-              className="h-9 w-9 rounded-xl"
-            />
+              {parentMode === "canteen" && (
+                <button
+                  type="button"
+                  aria-label="Open family wallet"
+                  onClick={() => setWalletDrawerOpen(true)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
+                >
+                  <Wallet className="h-4 w-4" />
+                </button>
+              )}
 
-            {parentMode === "canteen" && (
-              <>
+              <ParentNotificationBell
+                parentId={session?.user?.id}
+                href={withParentMode("/notifications")}
+                className="h-8 w-8 rounded-lg"
+              />
+
+              {parentMode === "canteen" && (
                 <button
                   type="button"
                   aria-label="Open cart drawer"
                   onClick={() => setCartDrawerOpen(true)}
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent"
                 >
                   <ShoppingCart
                     className={cn(
-                      "h-[17px] w-[17px] text-foreground/80",
+                      "h-4 w-4 text-foreground/85",
                       cartBounce && "animate-bounce",
                     )}
                   />
@@ -247,72 +288,65 @@ export default function ParentLayout({
                     <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+                      className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground"
                     >
                       {cartCount}
                     </motion.span>
                   )}
                 </button>
+              )}
+            </div>
+          </div>
 
-                {!isGeneralAccount && (
-                  <button
-                    type="button"
-                    aria-label="Open wallet drawer"
-                    onClick={() => setWalletDrawerOpen(true)}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent"
-                  >
-                    <Wallet className="h-[17px] w-[17px] text-foreground/80" />
-                  </button>
+          <div className="mt-2 flex justify-center md:justify-start">
+            <div className="flex w-full max-w-xs items-center rounded-xl border border-border/60 bg-muted/55 p-1 shadow-sm">
+              <Link
+                href="/menu"
+                className={cn(
+                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
+                  parentMode === "canteen"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
-              </>
-            )}
+              >
+                <UtensilsCrossed className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Canteen</span>
+              </Link>
 
-            {session && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent">
-                    <Avatar className="h-7 w-7 ring-1 ring-primary/20">
-                      <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
-                        {getInitials(session.user?.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 rounded-2xl">
-                  <div className="px-3 py-2">
-                    <p className="text-sm font-semibold">{session.user?.name}</p>
-                    <p className="text-xs text-muted-foreground">{session.user?.email}</p>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() =>
-                      signOut({
-                        fetchOptions: {
-                          onSuccess: () => {
-                            window.location.href = "/login";
-                          },
-                        },
-                      })
-                    }
-                    className="mx-1 gap-2 rounded-xl text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+              <Link
+                href="/library-history"
+                className={cn(
+                  "relative inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
+                  parentMode === "library"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Library</span>
+                {overdueCount > 0 && (
+                  <span className="absolute -right-1 -top-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                    {overdueCount}
+                  </span>
+                )}
+              </Link>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="pb-[calc(5rem+env(safe-area-inset-bottom))]">
+      <div className="app-mobile-safe-bottom">
         {children}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)]">
-        <div className="mx-auto max-w-lg px-4 pb-2 md:max-w-4xl lg:max-w-6xl">
-          <div className="relative flex items-center justify-around gap-1 rounded-[26px] border border-border/50 bg-background/95 px-2 py-2 shadow-lg backdrop-blur-xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-lg px-3 md:max-w-4xl lg:max-w-6xl">
+          <div className={cn(
+            "relative grid gap-1 rounded-2xl border border-border/55 bg-background/92 p-1.5 shadow-[0_14px_30px_rgba(15,23,42,0.16)] backdrop-blur-2xl",
+            tabs.length === 4 ? "grid-cols-4" : "grid-cols-3",
+          )}>
+            <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-white/70 dark:bg-white/20" />
+            <div className="pointer-events-none absolute -left-4 bottom-1 h-10 w-20 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
             {tabs.map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
@@ -329,41 +363,58 @@ export default function ParentLayout({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2"
+                  className="relative flex h-11 items-center justify-center rounded-xl px-2"
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute inset-x-1 inset-y-0.5 rounded-2xl bg-primary/10 dark:bg-primary/15"
+                      className="absolute inset-0 rounded-xl bg-primary/12 dark:bg-primary/20"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
                   <motion.div
                     whileTap={{ scale: 0.85 }}
-                    className="relative z-10 flex flex-col items-center gap-0.5"
+                    className="relative z-10 flex items-center gap-1.5"
                   >
-                    <Icon
-                      className={cn(
-                        "h-[20px] w-[20px] transition-colors duration-200",
-                        isActive ? "text-primary" : "text-muted-foreground",
-                      )}
-                      strokeWidth={isActive ? 2.5 : 1.8}
-                    />
+                    {(tab as { isProfile?: boolean }).isProfile ? (
+                      <Avatar className="h-5 w-5 ring-1 ring-primary/20">
+                        <AvatarFallback className={cn(
+                          "text-[8px] font-bold transition-colors duration-200",
+                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                        )}>
+                          {getInitials(session?.user?.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : Icon ? (
+                      <Icon
+                        className={cn(
+                          "h-[17px] w-[17px] transition-colors duration-200",
+                          isActive ? "text-primary" : "text-muted-foreground/90",
+                        )}
+                        strokeWidth={isActive ? 2.5 : 1.8}
+                      />
+                    ) : null}
                     <span
                       className={cn(
                         "text-[11px] leading-tight transition-colors duration-200",
                         isActive
                           ? "font-semibold text-primary"
-                          : "font-medium text-muted-foreground",
+                          : "font-medium text-muted-foreground/90",
                       )}
                     >
                       {tab.label}
                     </span>
                   </motion.div>
 
-                  {tab.key === "library" && overdueCount > 0 && (
-                    <span className="absolute right-[18%] top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                  {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
+                    <span className="absolute right-2 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                       {overdueCount}
+                    </span>
+                  )}
+
+                  {tab.key === "controls" && tab.locked && (
+                    <span className="absolute -top-1 right-2 z-20 rounded-full bg-primary px-1.5 py-0.5 text-[8px] font-bold leading-none text-primary-foreground">
+                      +
                     </span>
                   )}
                 </Link>
@@ -527,7 +578,7 @@ export default function ParentLayout({
                   variant="premium"
                   onClick={() => {
                     setWalletDrawerOpen(false);
-                    void router.push("/wallet");
+                    void router.push(withParentMode("/wallet"));
                   }}
                 >
                   <Sparkles className="h-4 w-4" />
@@ -692,7 +743,7 @@ export default function ParentLayout({
                     variant="premium"
                     onClick={() => {
                       setWalletDrawerOpen(false);
-                      void router.push("/wallet");
+                      void router.push(withParentMode("/wallet"));
                     }}
                   >
                     <Sparkles className="h-4 w-4" />
@@ -725,13 +776,16 @@ export default function ParentLayout({
             className="w-full max-w-[280px]"
             onClick={() => {
               setShowControlsSheet(false);
-              void router.push("/settings");
+              void router.push(withParentMode("/settings"));
             }}
           >
             Upgrade to Certe+
           </Button>
         </div>
       </BottomSheet>
+
+      <ChatAssistant open={chatOpen} onOpenChange={setChatOpen} />
     </>
   );
 }
+

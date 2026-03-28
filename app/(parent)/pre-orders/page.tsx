@@ -581,7 +581,7 @@ export default function PreOrdersPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl space-y-5 px-4 py-6 pb-28">
+    <div className="app-shell space-y-5 pb-28">
       {/* ── Premium Hero ──────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 p-5 text-white dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:border dark:border-white/5">
         <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
@@ -829,24 +829,26 @@ export default function PreOrdersPage() {
         </div>
       )}
 
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[75]}>
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[85]}>
         <div className="space-y-4 pb-4">
           <div>
             <h2 className="text-base font-bold">Edit Pre-Order</h2>
             <p className="text-xs text-muted-foreground mt-0.5">You can edit food and break only.</p>
           </div>
-          <div className="max-h-[40vh] space-y-2 overflow-auto pr-1">
+          <div className="max-h-[50vh] space-y-2 overflow-auto pr-1">
             {editRows.map((row) => (
               <div key={row.id} className="rounded-xl border p-3 space-y-2">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {menuItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Menu item selector — full width */}
+                <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {menuItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Break + Quantity row */}
+                <div className="grid grid-cols-2 gap-2">
                   <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
                     <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -855,7 +857,7 @@ export default function PreOrdersPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center justify-between rounded-xl border px-3">
+                  <div className="flex items-center justify-between rounded-xl border px-3 h-9">
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>
                       <Minus className="h-3.5 w-3.5" />
                     </Button>

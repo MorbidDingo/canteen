@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -24,13 +23,13 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  X,
 } from "lucide-react";
 import {
   WALLET_TRANSACTION_LABELS,
   type WalletTransactionType,
 } from "@/lib/constants";
 import { BottomSheet } from "@/components/ui/motion";
+import { WalletForecastWidget } from "@/components/recommendations/wallet-forecast";
 
 // ─── Razorpay types ───────────────────────────────────────────────────────────
 declare global {
@@ -229,8 +228,9 @@ const WALLET_CSS = `
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function WalletPage() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const isGeneralAccount = session?.user?.role === "GENERAL";
+  const searchParams = useSearchParams();
+  const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
+  const settingsHref = `/settings?mode=${parentMode}`;
   const [wallets, setWallets]                 = useState<ChildWallet[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [transactions, setTransactions]       = useState<Transaction[]>([]);
@@ -517,30 +517,6 @@ export default function WalletPage() {
   );
 
   // ── Loading / empty ───────────────────────────────────────────────────────
-  if (isGeneralAccount) {
-    return (
-      <div className="container mx-auto max-w-lg px-4 py-6 space-y-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="-ml-2 w-fit gap-1.5"
-          onClick={() => router.push("/settings")}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Settings
-        </Button>
-        <Card>
-          <CardContent className="pt-8 pb-8 text-center">
-            <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              Wallet is not available for general and teacher accounts.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -551,9 +527,9 @@ export default function WalletPage() {
 
   if (wallets.length === 0) {
     return (
-      <div className="container mx-auto max-w-lg px-4 py-6 space-y-4">
+      <div className="app-shell-compact space-y-4">
         <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit gap-1.5"
-          onClick={() => router.push("/settings")}>
+          onClick={() => router.push(settingsHref)}>
           <ArrowLeft className="h-4 w-4" /> Back to Settings
         </Button>
         <Card>
@@ -571,19 +547,19 @@ export default function WalletPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="container mx-auto max-w-lg px-4 py-6 space-y-6">
+    <div className="app-shell-compact space-y-6">
       <style dangerouslySetInnerHTML={{ __html: WALLET_CSS }} />
 
       <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit gap-1.5"
-        onClick={() => router.push("/settings")}>
+        onClick={() => router.push(settingsHref)}>
         <ArrowLeft className="h-4 w-4" /> Back to Settings
       </Button>
 
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+      <div className="app-header-card">
+        <h1 className="app-title flex items-center gap-2">
           <WalletIcon className="h-6 w-6 text-primary" /> Wallet
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your family wallet and add money online</p>
+        <p className="app-subtitle">Manage your family wallet and add money online</p>
       </div>
 
       {/* ── Card section ──────────────────────────────────────────────────── */}
@@ -778,6 +754,9 @@ export default function WalletPage() {
           </div>
         </BottomSheet>
       </div>
+
+      {/* ── AI Wallet Insights — Certe+ only ─────────────────────────────── */}
+      <WalletForecastWidget />
 
       {/* ── Transaction history ────────────────────────────────────────────── */}
       <Card>

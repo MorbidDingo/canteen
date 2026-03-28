@@ -100,7 +100,6 @@ export default function CartPage() {
     getTotal,
   } = useCartStore();
   const { data: session } = useSession();
-  const isGeneralAccount = session?.user?.role === "GENERAL";
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("ONLINE");
@@ -156,11 +155,7 @@ export default function CartPage() {
     }
   }, [paymentMethod, fetchWallets]);
 
-  useEffect(() => {
-    if (isGeneralAccount && paymentMethod === "WALLET") {
-      setPaymentMethod("ONLINE");
-    }
-  }, [isGeneralAccount, paymentMethod]);
+
 
   useEffect(() => {
     (async () => {
@@ -597,7 +592,7 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto flex flex-col items-center justify-center px-4 py-16 text-center">
+      <div className="app-shell flex flex-col items-center justify-center py-16 text-center">
         <ShoppingCart className="h-16 w-16 text-muted-foreground/30 mb-4" />
         <h1 className="text-2xl font-bold">Your cart is empty</h1>
         <p className="mt-2 text-muted-foreground">
@@ -614,10 +609,10 @@ export default function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="mb-6 animate-fade-in">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Cart</h1>
-        <p className="text-muted-foreground">
+    <div className="app-shell">
+      <div className="app-header-card mb-5 animate-fade-in">
+        <h1 className="app-title">Cart</h1>
+        <p className="app-subtitle">
           Review your items and place your order
         </p>
       </div>
@@ -853,8 +848,7 @@ export default function CartPage() {
                     )}
                   </button>
 
-                  {!isGeneralAccount && (
-                    <button
+                  <button
                       type="button"
                       onClick={() => setPaymentMethod("WALLET")}
                       className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
@@ -884,16 +878,10 @@ export default function CartPage() {
                         </div>
                       )}
                     </button>
-                  )}
                 </div>
                 {children.length > 1 && (
                   <p className="text-[11px] text-muted-foreground">
                     Online checkout currently supports one child per order. Use Wallet for multi-child checkout.
-                  </p>
-                )}
-                {isGeneralAccount && (
-                  <p className="text-[11px] text-muted-foreground">
-                    General accounts currently checkout using Razorpay.
                   </p>
                 )}
 
@@ -1132,7 +1120,7 @@ export default function CartPage() {
       {/* ── Mobile: Fixed checkout bar + BottomSheet ── */}
       {items.length > 0 && (
         <>
-          <div className="fixed inset-x-0 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-40 px-4 lg:hidden">
+          <div className="fixed inset-x-0 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] z-40 px-4 lg:hidden">
             <button
               type="button"
               onClick={() => setCheckoutOpen(true)}
@@ -1212,8 +1200,7 @@ export default function CartPage() {
                     )}
                   </button>
 
-                  {!isGeneralAccount && (
-                    <button
+                  <button
                       type="button"
                       onClick={() => setPaymentMethod("WALLET")}
                       className={cn(
@@ -1239,7 +1226,6 @@ export default function CartPage() {
                         </div>
                       )}
                     </button>
-                  )}
                 </div>
               </div>
 

@@ -311,17 +311,17 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
 
       {discountsOnly && (
         <div className="flex items-center gap-2 mb-4 animate-fade-in justify-between w-full">
-          <Badge className="bg-gold-600 hover:bg-gold-700 text-gold gap-1 py-1 px-3">
+          <Badge className="border border-amber-200/70 bg-amber-100 text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/15 dark:text-amber-200 gap-1 py-1 px-3">
             <Tag className="h-3 w-3" />
             Showing discounted items only
           </Badge>
-          <Button variant='ghost' onClick={() => setDiscountsOnly(false)} className="">
+          <Button variant="ghost" onClick={() => setDiscountsOnly(false)}>
             <X className="bg-none" />
           </Button>
         </div>
       )}
 
-      <div className="mb-6 space-y-3 rounded-2xl bg-amber-50/35 p-3 animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
+      <div className="mb-6 space-y-3 rounded-2xl border border-amber-200/50 bg-amber-50/35 p-3 shadow-sm animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -462,7 +462,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}

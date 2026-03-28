@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -29,7 +28,6 @@ import {
   Save,
   X,
   AlertTriangle,
-  ArrowLeft,
   BookOpen,
   Search,
   Clock,
@@ -41,6 +39,7 @@ import {
   BOOK_CATEGORY_LABELS,
   type BookCategory,
 } from "@/lib/constants";
+import { AnomalyInsights } from "@/components/recommendations/anomaly-insights";
 
 type LibraryBook = {
   id: string;
@@ -86,8 +85,7 @@ type ControlMode = "canteen" | "library";
 
 export default function ControlsPage() {
   const router = useRouter();
-  const { data: session } = useSession();
-  const isGeneralAccount = session?.user?.role === "GENERAL";
+  const searchParams = useSearchParams();
   const [children, setChildren] = useState<ChildControl[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [controlMode, setControlMode] = useState<ControlMode>("canteen");
@@ -114,6 +112,13 @@ export default function ControlsPage() {
   const [preIssueSearchLoading, setPreIssueSearchLoading] = useState(false);
   const [preIssueExpiresAt, setPreIssueExpiresAt] = useState<string | null>(null);
   const [preIssueDeclinedUntil, setPreIssueDeclinedUntil] = useState<string | null>(null);
+
+  useEffect(() => {
+    const requestedMode = searchParams.get("mode");
+    if (requestedMode === "canteen" || requestedMode === "library") {
+      setControlMode(requestedMode);
+    }
+  }, [searchParams]);
 
   const fetchControls = useCallback(async () => {
     try {
@@ -201,6 +206,16 @@ export default function ControlsPage() {
     return () => clearTimeout(t);
   }, [preIssueSearchQuery, controlMode, searchBooks]);
 
+  const switchControlMode = useCallback(
+    (mode: ControlMode) => {
+      setControlMode(mode);
+      if (searchParams.get("mode") !== mode) {
+        router.replace(`/controls?mode=${mode}`, { scroll: false });
+      }
+    },
+    [router, searchParams],
+  );
+
   const toggleCategory = (cat: string) => {
     setBlockedCategories((prev) =>
       prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
@@ -286,21 +301,6 @@ export default function ControlsPage() {
     }
   };
 
-  if (isGeneralAccount) {
-    return (
-      <div className="container mx-auto max-w-xl px-4 py-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Controls Not Applicable</CardTitle>
-            <CardDescription>
-              General and teacher accounts do not support child-specific controls.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -311,7 +311,7 @@ export default function ControlsPage() {
 
   if (children.length === 0) {
     return (
-      <div className="container mx-auto max-w-lg px-4 py-6 space-y-4">
+      <div className="app-shell-compact space-y-4">
         <Card>
           <CardContent className="pt-8 pb-8 text-center">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -325,23 +325,26 @@ export default function ControlsPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-lg px-4 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+    <div className="app-shell-compact space-y-6">
+      <div className="app-header-card">
+        <h1 className="app-title flex items-center gap-2">
           <Shield className="h-6 w-6 text-[#d4891a]" />
           Controls
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="app-subtitle">
           Manage canteen and library restrictions for your child
         </p>
       </div>
+
+      {/* AI Anomaly Insights */}
+      <AnomalyInsights />
 
       <div className="grid grid-cols-2 gap-2 rounded-xl border p-1">
         <Button
           type="button"
           variant={controlMode === "canteen" ? "default" : "ghost"}
           className="gap-2"
-          onClick={() => setControlMode("canteen")}
+          onClick={() => switchControlMode("canteen")}
         >
           <Shield className="h-4 w-4" />
           Canteen
@@ -350,7 +353,7 @@ export default function ControlsPage() {
           type="button"
           variant={controlMode === "library" ? "default" : "ghost"}
           className="gap-2"
-          onClick={() => setControlMode("library")}
+          onClick={() => switchControlMode("library")}
         >
           <BookOpen className="h-4 w-4" />
           Library

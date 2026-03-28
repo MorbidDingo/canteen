@@ -16,7 +16,11 @@ export type ParentNotificationType =
   | "LIBRARY_RETURN"
   | "LIBRARY_REISSUE"
   | "BLOCKED_FOOD_ATTEMPT"
-  | "BLOCKED_BOOK_ATTEMPT";
+  | "BLOCKED_BOOK_ATTEMPT"
+  | "ANOMALY_SPENDING_SPIKE"
+  | "ANOMALY_SKIPPED_MEAL"
+  | "ANOMALY_RESTRICTED_ATTEMPT"
+  | "ANOMALY_TIMING_ANOMALY";
 
 export type ParentNotificationMetadata = Record<string, unknown>;
 

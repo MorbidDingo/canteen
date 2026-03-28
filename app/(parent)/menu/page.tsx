@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
-import { UtensilsCrossed, Loader2, Lock, Sparkles } from "lucide-react";
+import { UtensilsCrossed, Loader2, Lock, Sparkles, ShoppingCart, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import { AiQuickBar } from "@/components/ai/ai-quick-bar";
+import { MenuRecommendations } from "@/components/recommendations/menu-recs";
+import { useCartStore } from "@/lib/store/cart-store";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface MenuItem {
   id: string;
@@ -28,6 +33,9 @@ export default function MenuPage() {
   const certePlusActive = certePlusStatus?.active === true;
   const certePlusResolved = certePlusStatus !== null;
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
+  const cartCount = useCartStore((s) => s.getItemCount());
+  const cartTotal = useCartStore((s) => s.getTotal());
+  const router = useRouter();
 
   const fetchMenu = useCallback(async () => {
     try {
@@ -52,7 +60,7 @@ export default function MenuPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-6">
+      <div className="app-shell">
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -61,15 +69,15 @@ export default function MenuPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="mb-6 animate-fade-in">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Menu</h1>
-        <p className="text-muted-foreground">
+    <div className="app-shell">
+      <div className="app-header-card mb-5 animate-fade-in">
+        <h1 className="app-title">Menu</h1>
+        <p className="app-subtitle">
           Browse our menu and add items to your cart
         </p>
       </div>
 
-      <div className="mb-4 inline-flex w-fit gap-1 rounded-lg border p-1">
+      <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 bg-card/60 p-1 shadow-sm">
         <Link href="/menu">
           <Button type="button" variant="secondary" size="sm">
             Menu
@@ -107,6 +115,14 @@ export default function MenuPage() {
         </Link>
       </div>
 
+      {/* AI Quick Bar + ML Recommendations — Certe+ only */}
+      {certePlusActive && (
+        <div className="mb-6 space-y-4">
+          <AiQuickBar />
+          <MenuRecommendations />
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -118,6 +134,39 @@ export default function MenuPage() {
       ) : (
         <MenuClient items={items} />
       )}
+
+      {/* Floating View Cart bar — appears when cart has items */}
+      <AnimatePresence>
+        {cartCount > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            className="fixed bottom-[calc(5.4rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 md:hidden pointer-events-auto"
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push("/cart");
+              }}
+              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 py-3.5 text-primary-foreground shadow-lg"
+            >
+              <div className="flex items-center gap-2.5">
+                <ShoppingCart className="h-5 w-5" />
+                <span className="text-sm font-semibold">
+                  {cartCount} {cartCount === 1 ? "item" : "items"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold">₹{cartTotal.toFixed(0)}</span>
+                <ArrowRight className="h-4 w-4" />
+              </div>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

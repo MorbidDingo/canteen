@@ -7,8 +7,9 @@ import {
   bookIssuance,
   librarySetting,
   parentControl,
+  libraryAppIssueRequest,
 } from "@/lib/db/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, desc } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -48,11 +49,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { rfidCardId, scanInput, preIssueAccepted, deviceCode } = body as {
+    const { rfidCardId, scanInput, preIssueAccepted, deviceCode, appIssueRequestId } = body as {
       rfidCardId: string;
       scanInput?: string;
       preIssueAccepted?: boolean;
       deviceCode?: string;
+      appIssueRequestId?: string;
     };
 
     const resolvedDevice = await resolveOrganizationDeviceFromRequest({
@@ -67,7 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Basic validation ──────────────────────────────
-    if (!rfidCardId || (!scanInput && !preIssueAccepted)) {
+    if (!rfidCardId || (!scanInput && !preIssueAccepted && !appIssueRequestId)) {
       return NextResponse.json(
         { success: false, reason: "Missing RFID card or book scan input" },
         { status: 400 }
@@ -107,6 +109,21 @@ export async function POST(request: NextRequest) {
 
     const studentChild = children[0];
     const now = new Date();
+
+    await db
+      .update(libraryAppIssueRequest)
+      .set({
+        status: "EXPIRED",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(libraryAppIssueRequest.organizationId, requestOrgId),
+          eq(libraryAppIssueRequest.childId, studentChild.id),
+          eq(libraryAppIssueRequest.status, "REQUESTED"),
+          sql`${libraryAppIssueRequest.expiresAt} <= ${now}`
+        )
+      );
 
     const controlRows = await db
       .select({
@@ -188,6 +205,74 @@ export async function POST(request: NextRequest) {
     // Try accession number first, then ISBN
     let resolvedCopy: typeof bookCopy.$inferSelect | null = null;
     let resolvedBook: typeof book.$inferSelect | null = null;
+    let confirmedAppIssueRequestId: string | null = null;
+
+    if (appIssueRequestId) {
+      const requestRows = await db
+        .select({
+          id: libraryAppIssueRequest.id,
+          bookId: libraryAppIssueRequest.bookId,
+        })
+        .from(libraryAppIssueRequest)
+        .where(
+          and(
+            eq(libraryAppIssueRequest.id, appIssueRequestId),
+            eq(libraryAppIssueRequest.organizationId, requestOrgId),
+            eq(libraryAppIssueRequest.childId, studentChild.id),
+            eq(libraryAppIssueRequest.status, "REQUESTED"),
+            sql`${libraryAppIssueRequest.expiresAt} > ${now}`
+          )
+        )
+        .limit(1);
+
+      const activeRequest = requestRows[0];
+      if (!activeRequest) {
+        return NextResponse.json(
+          { success: false, reason: "Pending app issue request not found or expired." },
+          { status: 200 }
+        );
+      }
+
+      confirmedAppIssueRequestId = activeRequest.id;
+
+      const books = await db
+        .select()
+        .from(book)
+        .where(and(eq(book.id, activeRequest.bookId), eq(book.organizationId, requestOrgId)))
+        .limit(1);
+
+      resolvedBook = books[0] ?? null;
+      if (!resolvedBook) {
+        return NextResponse.json(
+          { success: false, reason: "Requested app book is no longer available." },
+          { status: 200 }
+        );
+      }
+
+      const availableCopies = await db
+        .select()
+        .from(bookCopy)
+        .where(
+          and(
+            eq(bookCopy.bookId, resolvedBook.id),
+            eq(bookCopy.organizationId, requestOrgId),
+            eq(bookCopy.status, "AVAILABLE")
+          )
+        )
+        .limit(1);
+
+      if (availableCopies.length === 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            reason: `All copies of "${resolvedBook.title}" are currently issued.`,
+          },
+          { status: 200 }
+        );
+      }
+
+      resolvedCopy = availableCopies[0];
+    }
 
     if (activePreIssueBookId && !preIssueAccepted && scanInput) {
       const preIssueBookRows = await db
@@ -436,6 +521,39 @@ export async function POST(request: NextRequest) {
       })
       .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
 
+    let finalizedAppIssueRequestId: string | null = confirmedAppIssueRequestId;
+    if (!finalizedAppIssueRequestId) {
+      const matchingPendingRows = await db
+        .select({ id: libraryAppIssueRequest.id })
+        .from(libraryAppIssueRequest)
+        .where(
+          and(
+            eq(libraryAppIssueRequest.organizationId, requestOrgId),
+            eq(libraryAppIssueRequest.childId, studentChild.id),
+            eq(libraryAppIssueRequest.bookId, resolvedBook.id),
+            eq(libraryAppIssueRequest.status, "REQUESTED"),
+            sql`${libraryAppIssueRequest.expiresAt} > ${now}`
+          )
+        )
+        .orderBy(desc(libraryAppIssueRequest.createdAt))
+        .limit(1);
+
+      finalizedAppIssueRequestId = matchingPendingRows[0]?.id ?? null;
+    }
+
+    if (finalizedAppIssueRequestId) {
+      await db
+        .update(libraryAppIssueRequest)
+        .set({
+          status: "CONFIRMED",
+          confirmedAt: now,
+          issuanceId,
+          confirmedDeviceId: resolvedDevice?.id ?? null,
+          updatedAt: now,
+        })
+        .where(eq(libraryAppIssueRequest.id, finalizedAppIssueRequestId));
+    }
+
     if (activePreIssueBookId && resolvedBook.id === activePreIssueBookId) {
       await db
         .update(parentControl)
@@ -458,6 +576,7 @@ export async function POST(request: NextRequest) {
       message: `Issued: ${resolvedBook.title} (${resolvedCopy.accessionNumber}).`,
       metadata: {
         issuanceId,
+        appIssueRequestId: finalizedAppIssueRequestId,
         bookId: resolvedBook.id,
         bookTitle: resolvedBook.title,
         bookAuthor: resolvedBook.author,
@@ -472,6 +591,7 @@ export async function POST(request: NextRequest) {
       action: AUDIT_ACTIONS.BOOK_ISSUED,
       details: {
         issuanceId,
+        appIssueRequestId: finalizedAppIssueRequestId,
         bookTitle: resolvedBook.title,
         accessionNumber: resolvedCopy.accessionNumber,
         childName: studentChild.name,
@@ -491,6 +611,7 @@ export async function POST(request: NextRequest) {
         dueDate: dueDate.toISOString(),
         childName: studentChild.name,
         className: studentChild.className,
+        appIssueRequestId: finalizedAppIssueRequestId,
       },
     });
   } catch (error) {

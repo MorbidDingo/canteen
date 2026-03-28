@@ -37,9 +37,11 @@ type IncomingPayload = {
 export function ParentNotificationBell({
   parentId,
   className,
+  href = "/notifications",
 }: {
   parentId?: string;
   className?: string;
+  href?: string;
 }) {
   const [notifications, setNotifications] = useState<ParentNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +91,7 @@ export function ParentNotificationBell({
 
   return (
     <Link
-      href="/notifications"
+      href={href}
       className={cn(
         "group relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent",
         className,

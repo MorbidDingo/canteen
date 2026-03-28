@@ -136,10 +136,10 @@ export default function ParentNotificationsPage() {
   }, []);
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6 space-y-4">
+    <div className="app-shell-compact space-y-4">
       <Card className="border-orange-100">
         <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-xl flex items-center gap-2 text-orange-900">
                 <Bell className="h-5 w-5 text-orange-700" />
@@ -154,7 +154,7 @@ export default function ParentNotificationsPage() {
               size="sm"
               onClick={markAllRead}
               disabled={unreadCount === 0}
-              className="border-orange-200 text-orange-800 hover:bg-orange-50"
+              className="w-full border-orange-200 text-orange-800 hover:bg-orange-50 sm:w-auto"
             >
               Mark all read
             </Button>

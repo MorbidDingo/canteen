@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback } from "react";
+import { forwardRef, useCallback, useEffect } from "react";
 import {
   motion,
   AnimatePresence,
@@ -146,6 +146,25 @@ export function BottomSheet({
 }: BottomSheetProps) {
   const maxSnap = Math.max(...snapPoints);
 
+  // Lock body scroll when sheet is open to prevent background scrolling
+  useEffect(() => {
+    if (!open) return;
+    const scrollY = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       if (info.velocity.y > 500 || info.offset.y > 150) {
@@ -184,7 +203,7 @@ export function BottomSheet({
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
             className={cn(
-              "fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-[20px]",
+              "fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-y rounded-t-[20px]",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",
@@ -194,14 +213,14 @@ export function BottomSheet({
             style={{ maxHeight: `${maxSnap}dvh` }}
           >
             {/* Drag handle — iOS pill */}
-            <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing">
+            <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing shrink-0">
               <div className="h-[5px] w-9 rounded-full bg-muted-foreground/25 dark:bg-white/20" />
             </div>
             {bare ? (
               <div className="flex-1 min-h-0">{children}</div>
             ) : (
               <div
-                className="flex-1 overflow-y-auto overscroll-contain px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))]"
                 style={{ maxHeight: `calc(${maxSnap}dvh - 2.5rem)` }}
               >
                 {children}

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { child, wallet } from "@/lib/db/schema";
 import { asc, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
+import { ensureGeneralSelfProfile } from "@/lib/general-account";
 
 // GET /api/wallet — return a single family wallet for the parent
 export async function GET() {
@@ -18,8 +19,9 @@ export async function GET() {
 
   const session = access.session;
 
+  // Ensure general accounts have a self-profile + wallet provisioned
   if (session.user.role === "GENERAL") {
-    return NextResponse.json([]);
+    await ensureGeneralSelfProfile(session.user.id, session.user.name);
   }
 
   const children = await db

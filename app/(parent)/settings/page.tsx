@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,10 @@ import {
   Sparkles,
   CheckCircle,
   Loader2,
+  Shield,
+  Check,
+  Clock3,
+  LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -22,7 +27,9 @@ import {
   CERTE_PLUS,
 } from "@/lib/constants";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
+import { ThemeSelector } from "@/components/theme-toggle";
 
 declare global {
   interface Window {
@@ -68,6 +75,12 @@ const settingItems = [
     icon: Wallet,
   },
   {
+    href: "/controls",
+    label: "Controls",
+    description: "Set spending limits and block items",
+    icon: Shield,
+  },
+  {
     href: "/notifications",
     label: "Notifications",
     description: "Search and review activity alerts",
@@ -82,6 +95,7 @@ const settingItems = [
 ];
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const certePlus = useCertePlusStore((s) => s.status);
   const refreshCertePlusStatus = useCertePlusStore((s) => s.refresh);
@@ -89,6 +103,15 @@ export default function SettingsPage() {
   const [subscribing, setSubscribing] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
   const isGeneralAccount = session?.user?.role === "GENERAL";
+  const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
+
+  const withParentMode = useCallback(
+    (href: string) => {
+      const separator = href.includes("?") ? "&" : "?";
+      return `${href}${separator}mode=${parentMode}`;
+    },
+    [parentMode],
+  );
 
   useEffect(() => {
     void ensureCertePlusFresh(45_000);
@@ -237,17 +260,44 @@ export default function SettingsPage() {
     totalPenaltyAllowance - totalPenaltyUsed,
   );
   const certePlusResolved = certePlus !== null;
-  const visibleSettingItems = isGeneralAccount
-    ? settingItems.filter((item) =>
-        ["/notifications", "/messaging-settings"].includes(item.href),
-      )
-    : settingItems;
+  const visibleSettingItems = settingItems;
+  const certePlusBenefits = [
+    {
+      title: `${CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} library late-return protections`,
+      description:
+        "Reduce surprise library penalties across your family during the active cycle.",
+    },
+    {
+      title: "Scheduled meal pre-orders",
+      description:
+        "Pre-book meals for school days with faster pickups and planned spending.",
+    },
+    {
+      title: `Wallet safety net up to INR ${CERTE_PLUS.WALLET_OVERDRAFT_LIMIT}`,
+      description:
+        "Allow checkout even on low balance so children are not blocked at the counter.",
+      parentOnly: true,
+    },
+    {
+      title: "Advanced controls for canteen and library",
+      description:
+        "Apply spend limits and item restrictions with better family-level control.",
+    },
+    {
+      title: "Healthy Food access",
+      description: "Priority rollout when curated healthy menus go live.",
+      comingSoon: true,
+    },
+  ];
+  const visibleCertePlusBenefits = certePlusBenefits.filter(
+    (benefit) => !benefit.parentOnly || !isGeneralAccount,
+  );
 
   return (
-    <div className="container mx-auto max-w-xl space-y-4 px-4 py-6">
-      <div className="rounded-2xl border border-white/20 bg-[linear-gradient(120deg,rgba(251,146,60,0.14),rgba(251,191,36,0.06)_45%,transparent_100%)] p-4 shadow-[0_10px_30px_rgba(18,18,30,0.08)]">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+    <div className="app-shell-compact space-y-4">
+      <div className="app-header-card bg-[linear-gradient(120deg,rgba(251,146,60,0.14),rgba(251,191,36,0.06)_45%,transparent_100%)]">
+        <h1 className="app-title">Settings</h1>
+        <p className="app-subtitle">
           Manage family controls, communication preferences, and premium features.
         </p>
       </div>
@@ -263,7 +313,9 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-bold text-sm">Certe+</h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Premium subscription
+                  {certePlus?.active
+                    ? "What you currently have"
+                    : "What you unlock after subscribing"}
                 </p>
               </div>
             </div>
@@ -277,7 +329,7 @@ export default function SettingsPage() {
                   variant="outline"
                   className="border-amber-300 text-amber-700"
                 >
-                  From 79 credits/week
+                  Starts at 79 credits/week
                 </Badge>
               )
             ) : (
@@ -297,79 +349,118 @@ export default function SettingsPage() {
               Syncing your Certe+ status...
             </div>
           ) : certePlus?.active && certePlus.subscription ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
+            <div className="space-y-3">
+              <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/60 p-3 dark:border-emerald-800/50 dark:bg-emerald-950/20">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  Your Certe+ access is active
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  These premium benefits are currently live for your account.
+                </p>
+              </div>
+
+              <div
+                className={cn(
+                  "grid gap-2",
+                  isGeneralAccount ? "grid-cols-2" : "grid-cols-3",
+                )}
+              >
+                <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
                   <p className="text-xs text-muted-foreground">Expires</p>
                   <p className="text-xs font-semibold">
-                    {new Date(
-                      certePlus.subscription.endDate,
-                    ).toLocaleDateString()}
+                    {new Date(certePlus.subscription.endDate).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
-                  <p className="text-xs text-muted-foreground">Overdraft</p>
-                  <p className="text-xs font-semibold">
-                    {(
-                      CERTE_PLUS.WALLET_OVERDRAFT_LIMIT -
-                      certePlus.subscription.walletOverdraftUsed
-                    ).toFixed(0)}{" "}
-                    cr left
-                  </p>
-                </div>
-                <div className="rounded-lg bg-white/60 dark:bg-white/10 p-2 text-center">
+                {!isGeneralAccount && (
+                  <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
+                    <p className="text-xs text-muted-foreground">Overdraft</p>
+                    <p className="text-xs font-semibold">
+                      {(
+                        CERTE_PLUS.WALLET_OVERDRAFT_LIMIT -
+                        certePlus.subscription.walletOverdraftUsed
+                      ).toFixed(0)}{" "}
+                      credits left
+                    </p>
+                  </div>
+                )}
+                <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
                   <p className="text-xs text-muted-foreground">Late returns</p>
-                  <p className="text-xs font-semibold">
-                    {totalPenaltyLeft} left
-                  </p>
+                  <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
                 </div>
               </div>
-              <ul className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-amber-200/40">
-                <li className="flex items-center gap-1">
-                  <span className="text-emerald-600">✓</span>{" "}
-                  {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return
-                  penalties
-                </li>
-                <li className="flex items-center gap-1">
-                  <span className="text-emerald-600">✓</span> Pre-ordering meals
-                  (wallet only, min 1 week)
-                </li>
-                {!isGeneralAccount && (
-                  <li className="flex items-center gap-1">
-                    <span className="text-emerald-600">✓</span> Overdraft up to
-                    ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} · 1 credit = ₹1
+
+              <ul className="space-y-2 border-t border-amber-200/40 pt-2">
+                {visibleCertePlusBenefits.map((benefit) => (
+                  <li key={benefit.title} className="flex items-start gap-2">
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full ${
+                        benefit.comingSoon
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                      }`}
+                    >
+                      {benefit.comingSoon ? (
+                        <Clock3 className="h-2.5 w-2.5" />
+                      ) : (
+                        <Check className="h-2.5 w-2.5" />
+                      )}
+                    </span>
+                    <div>
+                      <p className="text-[11px] font-medium text-foreground">
+                        {benefit.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {benefit.description}
+                      </p>
+                    </div>
                   </li>
-                )}
-                <li className="flex items-center gap-1">
-                  <span className="text-emerald-600">✓</span> Controls on
-                  library and canteen
-                </li>
-                <li className="flex items-center gap-1 text-muted-foreground/50">
-                  <span>⏳</span> Access to Healthy Food (coming soon)
-                </li>
+                ))}
               </ul>
             </div>
           ) : (
             <div className="space-y-3">
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>
-                  ✓ {CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late book return
-                  penalties
-                </li>
-                <li>✓ Pre-ordering meals (wallet payment, min 1 week)</li>
-                {!isGeneralAccount && (
-                  <li>
-                    ✓ Overdraft up to ₹{CERTE_PLUS.WALLET_OVERDRAFT_LIMIT} if
-                    balance is low at kiosk
+              <div className="rounded-xl border border-amber-200/60 bg-white/65 p-3 dark:bg-white/5">
+                <p className="text-xs font-semibold text-foreground">
+                  What you unlock with Certe+
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Upgrade once and these premium protections and conveniences go
+                  live instantly.
+                </p>
+              </div>
+
+              <ul className="space-y-2">
+                {visibleCertePlusBenefits.map((benefit) => (
+                  <li key={benefit.title} className="flex items-start gap-2">
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full ${
+                        benefit.comingSoon
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                      }`}
+                    >
+                      {benefit.comingSoon ? (
+                        <Clock3 className="h-2.5 w-2.5" />
+                      ) : (
+                        <Check className="h-2.5 w-2.5" />
+                      )}
+                    </span>
+                    <div>
+                      <p className="text-[11px] font-medium text-foreground">
+                        {benefit.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {benefit.description}
+                      </p>
+                    </div>
                   </li>
-                )}
-                <li>✓ Controls on library and canteen</li>
-                <li className="text-muted-foreground/60">
-                  ⏳ Access to Healthy Food (coming soon)
-                </li>
+                ))}
               </ul>
 
               {/* Plan Selection */}
+              <p className="text-[11px] font-medium text-foreground">
+                Choose a plan
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 {CERTE_PLUS_PLAN_LIST.map((plan) => (
                   <button
@@ -416,7 +507,7 @@ export default function SettingsPage() {
                 {isGeneralAccount
                   ? "Payment will be collected using Razorpay."
                   : "Payment will be deducted from your family wallet balance."}{" "}
-                <span className="font-medium">1 credit = ₹1</span>
+                <span className="font-medium">1 credit = INR 1</span>
               </p>
             </div>
           )}
@@ -429,7 +520,7 @@ export default function SettingsPage() {
             ({ href, label, description, icon: Icon }) => (
               <Link
                 key={href}
-                href={href}
+                href={withParentMode(href)}
                 className="flex items-center gap-3 border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/50 last:border-b-0"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/80">
@@ -447,6 +538,46 @@ export default function SettingsPage() {
           )}
         </div>
       </CardContent>
+
+      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Theme</h3>
+            <p className="text-xs text-muted-foreground">
+              Choose your preferred app appearance.
+            </p>
+          </div>
+          <ThemeSelector />
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden rounded-2xl border border-destructive/30 bg-card/70 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Sign out</h3>
+            <p className="text-xs text-muted-foreground">
+              Securely sign out from this device.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            className="gap-2"
+            onClick={() =>
+              signOut({
+                fetchOptions: {
+                  onSuccess: () => {
+                    window.location.href = "/login";
+                  },
+                },
+              })
+            }
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }
+

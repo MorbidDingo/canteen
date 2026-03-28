@@ -11,10 +11,6 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.user.role === "GENERAL") {
-    return NextResponse.json([]);
-  }
-
   const results = await db
     .select({
       childId: child.id,
@@ -90,13 +86,6 @@ export async function PUT(request: NextRequest) {
   const session = await getSession();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (session.user.role === "GENERAL") {
-    return NextResponse.json(
-      { error: "General accounts do not support parent controls" },
-      { status: 403 },
-    );
   }
 
   const body = await request.json();

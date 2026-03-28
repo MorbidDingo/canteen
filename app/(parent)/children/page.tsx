@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import {
   Card,
@@ -46,7 +46,10 @@ type Child = {
 
 export default function ChildrenPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
+  const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
+  const settingsHref = `/settings?mode=${parentMode}`;
   const isGeneralAccount = session?.user?.role === "GENERAL";
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +83,7 @@ export default function ChildrenPage() {
 
   if (isGeneralAccount) {
     return (
-      <div className="container mx-auto max-w-xl px-4 py-6">
+      <div className="app-shell-compact">
         <Card>
           <CardHeader>
             <CardTitle>General Account</CardTitle>
@@ -89,7 +92,7 @@ export default function ChildrenPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" onClick={() => router.push("/settings")}>
+            <Button variant="outline" onClick={() => router.push(settingsHref)}>
               Back to Settings
             </Button>
           </CardContent>
@@ -163,31 +166,31 @@ export default function ChildrenPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-6 space-y-6">
+    <div className="app-shell-compact space-y-6">
       <Button
         type="button"
         variant="ghost"
         size="sm"
         className="-ml-2 w-fit gap-1.5"
-        onClick={() => router.push("/settings")}
+        onClick={() => router.push(settingsHref)}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Settings
       </Button>
 
-      <div className="flex items-center justify-between">
+      <div className="app-header-card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="app-title flex items-center gap-2">
             <Users className="h-6 w-6 text-[#d4891a]" />
             My Children
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="app-subtitle">
             Manage your children&apos;s profiles and view their wallet balance
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openAddDialog} className="gap-2">
+            <Button onClick={openAddDialog} className="w-full gap-2 sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Child
             </Button>

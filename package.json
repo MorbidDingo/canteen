@@ -12,9 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx lib/db/seed.ts",
+    "db:seed:library": "npx tsx scripts/db/seed-library-books.ts",
     "test:security-matrix": "npx tsx scripts/security/access-matrix.ts scripts/security/matrix.sample.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@libsql/client": "^0.17.0",
     "@sqlitecloud/drivers": "^1.0.779",
     "better-auth": "^1.4.6",
@@ -34,6 +36,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.8.0",
+    "simple-statistics": "^7.8.9",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "xlsx": "^0.18.5",

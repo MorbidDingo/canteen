@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, bookIssuance, bookCopy, book, parentControl } from "@/lib/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import {
+  child,
+  bookIssuance,
+  bookCopy,
+  book,
+  parentControl,
+  libraryAppIssueRequest,
+} from "@/lib/db/schema";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { resolveChildByRfid } from "@/lib/rfid-access";
 
 // POST /api/library/student — look up child by RFID, return issued books
@@ -107,6 +114,21 @@ export async function POST(request: NextRequest) {
         ? studentChild.preIssueDeclinedUntil.toISOString()
         : null;
 
+    await db
+      .update(libraryAppIssueRequest)
+      .set({
+        status: "EXPIRED",
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(libraryAppIssueRequest.organizationId, requestOrgId),
+          eq(libraryAppIssueRequest.childId, studentChild.id),
+          eq(libraryAppIssueRequest.status, "REQUESTED"),
+          sql`${libraryAppIssueRequest.expiresAt} <= ${now}`
+        )
+      );
+
     // Get active issuances (ISSUED or RETURN_PENDING)
     const issuances = await db
       .select({
@@ -136,6 +158,31 @@ export async function POST(request: NextRequest) {
         )
       );
 
+    const pendingRequests = await db
+      .select({
+        requestId: libraryAppIssueRequest.id,
+        requestedAt: libraryAppIssueRequest.createdAt,
+        expiresAt: libraryAppIssueRequest.expiresAt,
+        notes: libraryAppIssueRequest.notes,
+        bookId: book.id,
+        title: book.title,
+        author: book.author,
+        category: book.category,
+        coverImageUrl: book.coverImageUrl,
+      })
+      .from(libraryAppIssueRequest)
+      .innerJoin(book, eq(libraryAppIssueRequest.bookId, book.id))
+      .where(
+        and(
+          eq(libraryAppIssueRequest.organizationId, requestOrgId),
+          eq(libraryAppIssueRequest.childId, studentChild.id),
+          eq(libraryAppIssueRequest.status, "REQUESTED"),
+          sql`${libraryAppIssueRequest.expiresAt} > ${now}`,
+          eq(book.organizationId, requestOrgId)
+        )
+      )
+      .orderBy(desc(libraryAppIssueRequest.createdAt));
+
     return NextResponse.json({
       success: true,
       child: {
@@ -162,6 +209,7 @@ export async function POST(request: NextRequest) {
         coverImageUrl: i.coverImageUrl,
         isOverdue: i.status === "ISSUED" && new Date(i.dueDate) < new Date(),
       })),
+      pendingAppIssueRequests: pendingRequests,
     });
   } catch (error) {
     console.error("[Library Student Lookup] Error:", error);

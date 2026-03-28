@@ -70,6 +70,18 @@ type PreIssueBook = {
   expiresAt: string;
 };
 
+type PendingAppIssueRequest = {
+  requestId: string;
+  requestedAt: string;
+  expiresAt: string;
+  notes: string | null;
+  bookId: string;
+  title: string;
+  author: string;
+  category: string;
+  coverImageUrl: string | null;
+};
+
 type TerminalPhase =
   | "idle"
   | "identified"
@@ -105,6 +117,7 @@ export default function LibraryTerminalPage() {
   const [countdown, setCountdown] = useState(30);
   const [rfidCardId, setRfidCardId] = useState("");
   const [preIssueBook, setPreIssueBook] = useState<PreIssueBook | null>(null);
+  const [pendingAppIssueRequests, setPendingAppIssueRequests] = useState<PendingAppIssueRequest[]>([]);
   const [issueBlockedUntil, setIssueBlockedUntil] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string>("Organization");
   const [deviceLabel, setDeviceLabel] = useState<string>("Library");
@@ -126,6 +139,7 @@ export default function LibraryTerminalPage() {
     setResult(null);
     setRfidCardId("");
     setPreIssueBook(null);
+    setPendingAppIssueRequests([]);
     setIssueBlockedUntil(null);
   }, []);
 
@@ -257,6 +271,7 @@ export default function LibraryTerminalPage() {
       setIssuedBooks(data.issuedBooks);
       setRfidCardId(cardId);
       setPreIssueBook(data.preIssueBook ?? null);
+      setPendingAppIssueRequests(Array.isArray(data.pendingAppIssueRequests) ? data.pendingAppIssueRequests : []);
       setIssueBlockedUntil(data.issueBlockedUntil ?? null);
 
       if (data.preIssueBook) {
@@ -319,14 +334,24 @@ export default function LibraryTerminalPage() {
 
   // ─── Issue a book ──────────────────────────────────────
 
-  const handleIssue = async (scanInput: string) => {
-    if (!rfidCardId || !scanInput) return;
+  const handleIssue = async (
+    scanInput: string,
+    options?: { appIssueRequestId?: string },
+  ) => {
+    const appIssueRequestId = options?.appIssueRequestId;
+
+    if (!rfidCardId || (!scanInput && !appIssueRequestId)) return;
     setActionLoading(true);
     try {
       const res = await fetch("/api/library/issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfidCardId, scanInput, deviceCode: selectedDeviceCode || undefined }),
+        body: JSON.stringify({
+          rfidCardId,
+          scanInput: scanInput || undefined,
+          appIssueRequestId,
+          deviceCode: selectedDeviceCode || undefined,
+        }),
       });
       const data = await res.json();
 
@@ -345,10 +370,22 @@ export default function LibraryTerminalPage() {
           "Accession #": data.issuance.accessionNumber,
           "Due Date": new Date(data.issuance.dueDate).toLocaleDateString(),
           Student: data.issuance.childName,
+          ...(data.issuance.appIssueRequestId
+            ? { "App Request": data.issuance.appIssueRequestId }
+            : {}),
         },
       });
       setPhase("result");
     } catch {
+      if (appIssueRequestId) {
+        setResult({
+          success: false,
+          message: "Network is required to confirm app issue requests.",
+        });
+        setPhase("result");
+        return;
+      }
+
       const queued = await enqueueOfflineAction({
         type: "LIBRARY_ISSUE",
         payload: { rfidCardId, scanInput, deviceCode: selectedDeviceCode || undefined },
@@ -706,6 +743,52 @@ export default function LibraryTerminalPage() {
               </p>
               <p className="text-amber-700 mt-1">
                 Try again after {new Date(issueBlockedUntil).toLocaleString("en-IN")}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {pendingAppIssueRequests.length > 0 && (
+          <Card className="border-sky-300 bg-sky-50">
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-sky-900">Pending app issue requests</p>
+                <Badge className="bg-sky-600">{pendingAppIssueRequests.length}</Badge>
+              </div>
+
+              <div className="space-y-2">
+                {pendingAppIssueRequests.map((requestItem) => (
+                  <div
+                    key={requestItem.requestId}
+                    className="flex flex-col gap-2 rounded-xl border border-sky-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-900">{requestItem.title}</p>
+                      <p className="truncate text-xs text-slate-600">{requestItem.author}</p>
+                      <p className="text-[11px] text-slate-500">
+                        Expires {new Date(requestItem.expiresAt).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="bg-sky-700 text-white hover:bg-sky-800"
+                      disabled={actionLoading || Boolean(issueBlockedUntil)}
+                      onClick={() => handleIssue("", { appIssueRequestId: requestItem.requestId })}
+                    >
+                      {actionLoading ? (
+                        <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      Confirm Issue
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-sky-800">
+                These were requested in the app. Confirming here issues the first available copy.
               </p>
             </CardContent>
           </Card>

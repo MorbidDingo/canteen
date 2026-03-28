@@ -33,7 +33,7 @@ export async function ensureGeneralSelfProfile(
         grNumber: generatedGr,
         className: "GENERAL_ACCOUNT",
       })
-      .onConflictDoNothing({ target: child.grNumber })
+      .onConflictDoNothing({ target: [child.organizationId, child.grNumber] })
       .returning({ id: child.id });
 
     childId = createdChild?.id;

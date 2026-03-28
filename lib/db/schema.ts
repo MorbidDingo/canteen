@@ -409,6 +409,7 @@ export const parentControl = pgTable("parent_control", {
   preIssueBookId: text("pre_issue_book_id"),
   preIssueExpiresAt: timestamp("pre_issue_expires_at"),
   preIssueDeclinedUntil: timestamp("pre_issue_declined_until"),
+  aiAutoOrderEnabled: boolean("ai_auto_order_enabled").notNull().default(false),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -1064,6 +1065,40 @@ export const bookIssuance = pgTable("book_issuance", {
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
 
+// ─── Library: App Issue Request (app -> kiosk confirmation) ──
+
+export const libraryAppIssueRequest = pgTable("library_app_issue_request", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  parentId: text("parent_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => book.id, { onDelete: "cascade" }),
+  status: text("status", {
+    enum: ["REQUESTED", "CONFIRMED", "CANCELLED", "EXPIRED", "REJECTED"],
+  })
+    .notNull()
+    .default("REQUESTED"),
+  expiresAt: timestamp("expires_at").notNull(),
+  confirmedAt: timestamp("confirmed_at"),
+  confirmedDeviceId: text("confirmed_device_id").references(() => organizationDevice.id, {
+    onDelete: "set null",
+  }),
+  issuanceId: text("issuance_id").references(() => bookIssuance.id, {
+    onDelete: "set null",
+  }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
 // ─── Library: Settings (key-value config) ────────────────
 
 export const librarySetting = pgTable("library_setting", {
@@ -1177,6 +1212,33 @@ export const bookIssuanceRelations = relations(bookIssuance, ({ one }) => ({
   returnConfirmer: one(user, { fields: [bookIssuance.returnConfirmedBy], references: [user.id] }),
 }));
 
+export const libraryAppIssueRequestRelations = relations(libraryAppIssueRequest, ({ one }) => ({
+  organization: one(organization, {
+    fields: [libraryAppIssueRequest.organizationId],
+    references: [organization.id],
+  }),
+  parent: one(user, {
+    fields: [libraryAppIssueRequest.parentId],
+    references: [user.id],
+  }),
+  child: one(child, {
+    fields: [libraryAppIssueRequest.childId],
+    references: [child.id],
+  }),
+  book: one(book, {
+    fields: [libraryAppIssueRequest.bookId],
+    references: [book.id],
+  }),
+  confirmedDevice: one(organizationDevice, {
+    fields: [libraryAppIssueRequest.confirmedDeviceId],
+    references: [organizationDevice.id],
+  }),
+  issuance: one(bookIssuance, {
+    fields: [libraryAppIssueRequest.issuanceId],
+    references: [bookIssuance.id],
+  }),
+}));
+
 export const librarySettingRelations = relations(librarySetting, ({ one }) => ({
   organization: one(organization, {
     fields: [librarySetting.organizationId],
@@ -1231,4 +1293,164 @@ export const messagingLogRelations = relations(messagingLog, ({ one }) => ({
 
 export const parentMessagingPreferenceRelations = relations(parentMessagingPreference, ({ one }) => ({
   parent: one(user, { fields: [parentMessagingPreference.parentId], references: [user.id] }),
+}));
+
+// ─── AI/ML Infrastructure ────────────────────────────────
+
+export const anomalyAlert = pgTable("anomaly_alert", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  type: text("type", {
+    enum: ["SPENDING_SPIKE", "SKIPPED_MEAL", "RESTRICTED_ATTEMPT", "TIMING_ANOMALY"],
+  }).notNull(),
+  severity: text("severity", { enum: ["LOW", "MEDIUM", "HIGH"] }).notNull(),
+  message: text("message").notNull(),
+  data: text("data"), // JSON string
+  acknowledged: boolean("acknowledged").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const mlRecommendationCache = pgTable("ml_recommendation_cache", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  timeSlot: text("time_slot").notNull(), // e.g. "MORNING", "LUNCH", "AFTERNOON"
+  recommendations: text("recommendations").notNull(), // JSON array of scored recommendations
+  computedAt: timestamp("computed_at").notNull().$defaultFn(() => new Date()),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const aiScheduledAction = pgTable("ai_scheduled_action", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  actionType: text("action_type", { enum: ["ORDER", "REMINDER"] }).notNull(),
+  payload: text("payload").notNull(), // JSON string
+  scheduledFor: timestamp("scheduled_for").notNull(),
+  executedAt: timestamp("executed_at"),
+  status: text("status", { enum: ["PENDING", "EXECUTED", "FAILED", "CANCELLED"] })
+    .notNull()
+    .default("PENDING"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Order Feedback & Cancellation Reasons ───────────────
+
+export const orderFeedback = pgTable("order_feedback", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text("order_id")
+    .notNull()
+    .unique()
+    .references(() => order.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  healthyRating: integer("healthy_rating").notNull(), // 1-5 stars
+  tasteRating: integer("taste_rating").notNull(),     // 1-5 stars
+  quantityRating: integer("quantity_rating").notNull(), // 1-5 stars
+  overallReview: text("overall_review"),               // free-text
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const orderCancellationReason = pgTable("order_cancellation_reason", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  orderId: text("order_id")
+    .notNull()
+    .unique()
+    .references(() => order.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  reason: text("reason", {
+    enum: [
+      "ORDERED_BY_MISTAKE",
+      "FOUND_BETTER_OPTION",
+      "CHILD_NOT_IN_SCHOOL",
+      "TAKING_HOMEMADE_FOOD",
+      "TOO_EXPENSIVE",
+      "OTHER",
+    ],
+  }).notNull(),
+  otherText: text("other_text"), // free-text when reason = OTHER
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Library: Book Feedback (post-return ratings) ────────
+
+export const bookFeedback = pgTable("book_feedback", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bookId: text("book_id")
+    .notNull()
+    .references(() => book.id, { onDelete: "cascade" }),
+  issuanceId: text("issuance_id")
+    .notNull()
+    .unique()
+    .references(() => bookIssuance.id, { onDelete: "cascade" }),
+  childId: text("child_id")
+    .notNull()
+    .references(() => child.id, { onDelete: "cascade" }),
+  parentId: text("parent_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  enjoymentRating: integer("enjoyment_rating").notNull(), // 1-5 how much the child enjoyed
+  difficultyRating: integer("difficulty_rating").notNull(), // 1-5 reading difficulty
+  wouldRecommend: boolean("would_recommend").notNull(),
+  tags: text("tags"), // JSON array: ["page-turner","educational","boring","too-long","inspiring","funny"]
+  review: text("review"), // free-text review
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const bookFeedbackRelations = relations(bookFeedback, ({ one }) => ({
+  book: one(book, { fields: [bookFeedback.bookId], references: [book.id] }),
+  issuance: one(bookIssuance, { fields: [bookFeedback.issuanceId], references: [bookIssuance.id] }),
+  child: one(child, { fields: [bookFeedback.childId], references: [child.id] }),
+  parent: one(user, { fields: [bookFeedback.parentId], references: [user.id] }),
+  organization: one(organization, { fields: [bookFeedback.organizationId], references: [organization.id] }),
+}));
+
+// ─── AI/ML Relations ─────────────────────────────────────
+
+export const anomalyAlertRelations = relations(anomalyAlert, ({ one }) => ({
+  child: one(child, { fields: [anomalyAlert.childId], references: [child.id] }),
+  organization: one(organization, { fields: [anomalyAlert.organizationId], references: [organization.id] }),
+}));
+
+export const mlRecommendationCacheRelations = relations(mlRecommendationCache, ({ one }) => ({
+  child: one(child, { fields: [mlRecommendationCache.childId], references: [child.id] }),
+  organization: one(organization, { fields: [mlRecommendationCache.organizationId], references: [organization.id] }),
+}));
+
+export const aiScheduledActionRelations = relations(aiScheduledAction, ({ one }) => ({
+  user: one(user, { fields: [aiScheduledAction.userId], references: [user.id] }),
+  child: one(child, { fields: [aiScheduledAction.childId], references: [child.id] }),
+  organization: one(organization, { fields: [aiScheduledAction.organizationId], references: [organization.id] }),
+}));
+
+export const orderFeedbackRelations = relations(orderFeedback, ({ one }) => ({
+  order: one(order, { fields: [orderFeedback.orderId], references: [order.id] }),
+  user: one(user, { fields: [orderFeedback.userId], references: [user.id] }),
+}));
+
+export const orderCancellationReasonRelations = relations(orderCancellationReason, ({ one }) => ({
+  order: one(order, { fields: [orderCancellationReason.orderId], references: [order.id] }),
+  user: one(user, { fields: [orderCancellationReason.userId], references: [user.id] }),
 }));
