@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const resolved = await resolveChildByRfid(rfid, requestOrgId);
   if (!resolved) {
-    return NextResponse.json({ error: "Card not found or not assigned to any student" }, { status: 404 });
+    return NextResponse.json({ error: "Card not found or not assigned to any account" }, { status: 404 });
   }
 
   const row = resolved.child;

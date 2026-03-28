@@ -192,7 +192,7 @@ export default function OperatorTopupPage() {
       setStudentTempCardId("");
       setStudentTempHours("1");
     } catch {
-      toast.error("Failed to look up student");
+      toast.error("Failed to look up account");
     } finally {
       setStudentLookupLoading(false);
     }
@@ -279,7 +279,7 @@ export default function OperatorTopupPage() {
         return;
       }
 
-      toast.success("Temporary card assigned to student");
+      toast.success("Temporary card assigned");
       setStudentTempCardId("");
       setStudentTempHours("1");
       await fetchTemporaryCards();
@@ -422,12 +422,12 @@ export default function OperatorTopupPage() {
     <Wallet className="w-4 h-4 shrink-0" />
     <span className="hidden sm:inline ml-2">Top-Up</span>
   </TabsTrigger>
-  <TabsTrigger
+          <TabsTrigger
     value="student-temp"
     className="min-w-[44px] sm:min-w-[170px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
   >
     <ShieldCheck className="w-4 h-4 shrink-0" />
-    <span className="hidden sm:inline ml-2">Student Temp Card</span>
+    <span className="hidden sm:inline ml-2">Temp Card</span>
   </TabsTrigger>
   <TabsTrigger
     value="guest"
@@ -608,15 +608,15 @@ export default function OperatorTopupPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                   <ShieldCheck className="h-5 w-5 text-primary" />
-                  Assign Temporary Student Card
+                  Assign Temporary Access Card
                 </CardTitle>
                 <CardDescription>
-                  For students who forgot permanent cards. Duration: 1 to 48 hours.
+                  For student and general accounts who forgot permanent cards. Duration: 1 to 48 hours.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Scan Existing Student Card</Label>
+                  <Label>Scan Existing Permanent Card</Label>
                   <Input
                     ref={studentLookupRef}
                     value={studentLookupCard}
@@ -637,7 +637,7 @@ export default function OperatorTopupPage() {
                     disabled={studentLookupLoading || !studentLookupCard.trim()}
                   >
                     {studentLookupLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CreditCard className="mr-2 h-4 w-4" />}
-                    Find Student
+                    Find Account
                   </Button>
                 </div>
 
@@ -788,7 +788,7 @@ function TemporaryCardsPanel({
           <CreditCard className="h-5 w-5 text-primary" />
           Active Temporary Cards
         </CardTitle>
-        <CardDescription>Student temporary cards and guest cards</CardDescription>
+        <CardDescription>Student/general temporary cards and guest cards</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (

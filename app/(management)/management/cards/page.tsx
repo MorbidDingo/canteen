@@ -26,6 +26,8 @@ import {
   ListOrdered,
   X,
   ChevronRight,
+  Clock,
+  Trash2,
 } from "lucide-react";
 
 type ChildInfo = {
@@ -36,9 +38,24 @@ type ChildInfo = {
   section: string | null;
   rfidCardId: string | null;
   parentName: string;
+  accountRole?: string;
 };
 
 type ClassOption = { className: string; section: string | null };
+
+type TemporaryCard = {
+  id: string;
+  childId: string;
+  childName: string;
+  className: string | null;
+  section: string | null;
+  accessType: "STUDENT_TEMP" | "GUEST_TEMP";
+  temporaryRfidCardId: string;
+  validFrom: string;
+  validUntil: string;
+  revokedAt: string | null;
+  isActive: boolean;
+};
 
 // ─── Sequential Assignment Mode ──────────────────────────
 
@@ -349,10 +366,324 @@ function SequentialAssignment() {
   );
 }
 
+// ─── Temporary Card Management ───────────────────────────
+
+function TemporaryCardManagement() {
+  const [cards, setCards] = useState<TemporaryCard[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedChild, setSelectedChild] = useState<ChildInfo | null>(null);
+  const [searchResults, setSearchResults] = useState<ChildInfo[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [tempCardId, setTempCardId] = useState("");
+  const [durationHours, setDurationHours] = useState("1");
+  const [assigning, setAssigning] = useState(false);
+  const [revoking, setRevoking] = useState<string | null>(null);
+
+  // Load all temporary cards on mount
+  useEffect(() => {
+    const loadCards = async () => {
+      try {
+        const res = await fetch("/api/operator/temporary-cards");
+        if (res.ok) {
+          const data = await res.json();
+          setCards(data.cards || []);
+        }
+      } catch {
+        toast.error("Failed to load temporary cards");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadCards();
+  }, []);
+
+  const handleSearch = async (query: string) => {
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(
+        `/api/management/children?q=${encodeURIComponent(query.trim())}`,
+      );
+      if (res.ok) {
+        setSearchResults(await res.json());
+      }
+    } catch {
+      toast.error("Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleAssignTemp = async () => {
+    if (!selectedChild || !tempCardId.trim() || !durationHours) {
+      toast.error("All fields are required");
+      return;
+    }
+
+    const hours = parseInt(durationHours, 10);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 48) {
+      toast.error("Duration must be between 1 and 48 hours");
+      return;
+    }
+
+    setAssigning(true);
+    try {
+      const res = await fetch("/api/operator/temporary-cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          childId: selectedChild.id,
+          temporaryRfidCardId: tempCardId.trim(),
+          durationHours: hours,
+          accessType: "STUDENT_TEMP",
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || "Failed to assign temporary card");
+        return;
+      }
+
+      toast.success("Temporary card assigned");
+      setTempCardId("");
+      setDurationHours("1");
+      setSelectedChild(null);
+      setSearchQuery("");
+      setSearchResults([]);
+
+      // Refresh cards list
+      const listRes = await fetch("/api/operator/temporary-cards");
+      if (listRes.ok) {
+        const data = await listRes.json();
+        setCards(data.cards || []);
+      }
+    } catch {
+      toast.error("Failed to assign temporary card");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleRevoke = async (cardId: string) => {
+    setRevoking(cardId);
+    try {
+      const res = await fetch(`/api/operator/temporary-cards?id=${encodeURIComponent(cardId)}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        toast.error("Failed to revoke card");
+        return;
+      }
+
+      toast.success("Temporary card revoked");
+
+      // Refresh cards list
+      const listRes = await fetch("/api/operator/temporary-cards");
+      if (listRes.ok) {
+        const data = await listRes.json();
+        setCards(data.cards || []);
+      }
+    } catch {
+      toast.error("Failed to revoke card");
+    } finally {
+      setRevoking(null);
+    }
+  };
+
+  const activeCards = cards.filter((c) => c.isActive);
+  const revokedCards = cards.filter((c) => !c.isActive);
+
+  return (
+    <div className="space-y-6">
+      {/* Assign New Temp Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-[#d4891a]" />
+            Assign Temporary Card
+          </CardTitle>
+          <CardDescription>Issue a time-limited access card</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!selectedChild ? (
+            <>
+              <div className="space-y-2">
+                <Label>Search for Account</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch(searchQuery)}
+                    placeholder="Name, GR number, or account holder..."
+                  />
+                  <Button onClick={() => handleSearch(searchQuery)} disabled={searching}>
+                    {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="space-y-2">
+                  {searchResults.map((child) => (
+                    <button
+                      key={child.id}
+                      onClick={() => {
+                        setSelectedChild(child);
+                        setSearchResults([]);
+                      }}
+                      className="w-full text-left p-2.5 rounded-lg border hover:bg-muted transition-colors"
+                    >
+                      <div>
+                        <p className="font-medium text-sm">{child.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {child.className || "No class"} • {child.parentName}
+                          {child.accountRole && ` (${child.accountRole})`}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="p-3 rounded-lg bg-muted">
+                <p className="text-sm font-medium">{selectedChild.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedChild.className || "No class"} • {selectedChild.parentName}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedChild(null)}
+                  className="mt-2"
+                >
+                  Change Selection
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Temporary Card ID</Label>
+                <Input
+                  value={tempCardId}
+                  onChange={(e) => setTempCardId(e.target.value)}
+                  placeholder="Enter temporary card ID"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Valid for (hours)</Label>
+                <select
+                  value={durationHours}
+                  onChange={(e) => setDurationHours(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+                >
+                  {[1, 2, 4, 8, 12, 24, 48].map((h) => (
+                    <option key={h} value={h}>
+                      {h} hour{h > 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <Button
+                onClick={handleAssignTemp}
+                disabled={assigning}
+                className="w-full bg-[#d4891a] hover:bg-[#b87314]"
+              >
+                {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Assign Card
+              </Button>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Active Cards */}
+      {activeCards.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Active Cards ({activeCards.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {activeCards.map((card) => (
+                <div
+                  key={card.id}
+                  className="p-3 rounded-lg border bg-green-50/30 flex items-start justify-between"
+                >
+                  <div>
+                    <p className="font-medium text-sm">{card.childName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Card: {card.temporaryRfidCardId}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Valid until{" "}
+                      {new Date(card.validUntil).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleRevoke(card.id)}
+                    disabled={revoking === card.id}
+                  >
+                    {revoking === card.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* History */}
+      {revokedCards.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Revoked Cards ({revokedCards.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {revokedCards.slice(0, 10).map((card) => (
+                <div key={card.id} className="p-2 rounded-lg border text-xs opacity-60">
+                  <p>
+                    {card.childName} • {card.temporaryRfidCardId} • Revoked
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {loading && !cards.length && (
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────
 
 export default function ManagementCardsPage() {
-  const [mode, setMode] = useState<"individual" | "sequential">("individual");
+  const [mode, setMode] = useState<"individual" | "sequential" | "temporary">("individual");
   const [searchQuery, setSearchQuery] = useState("");
   const [rfidInput, setRfidInput] = useState("");
   const [searchResults, setSearchResults] = useState<ChildInfo[]>([]);
@@ -453,9 +784,22 @@ export default function ManagementCardsPage() {
           <ListOrdered className="h-4 w-4 inline mr-1.5 -mt-0.5" />
           Sequential (by Class)
         </button>
+        <button
+          onClick={() => setMode("temporary")}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            mode === "temporary"
+              ? "bg-[#d4891a] text-white"
+              : "hover:bg-muted"
+          }`}
+        >
+          <Clock className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+          Temporary
+        </button>
       </div>
 
-      {mode === "sequential" ? (
+      {mode === "temporary" ? (
+        <TemporaryCardManagement />
+      ) : mode === "sequential" ? (
         <SequentialAssignment />
       ) : (
         <>
@@ -464,10 +808,10 @@ export default function ManagementCardsPage() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-[#d4891a]" />
-                Search Student
+                Search Account
               </CardTitle>
               <CardDescription>
-                Search by student name, GR number, or parent name
+                Search by name, GR number, or account holder name
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -513,10 +857,13 @@ export default function ManagementCardsPage() {
                         <p className="font-medium">{child.name}</p>
                         <p className="text-sm text-muted-foreground">
                           {child.className}
-                          {child.section ? ` — ${child.section}` : ""} • Parent: {child.parentName}
+                          {child.section ? ` — ${child.section}` : ""} • Account: {child.parentName}
                         </p>
                         {child.grNumber && (
                           <p className="text-xs text-muted-foreground">GR: {child.grNumber}</p>
+                        )}
+                        {child.accountRole && (
+                          <p className="text-xs text-muted-foreground">Role: {child.accountRole}</p>
                         )}
                       </div>
                       {child.rfidCardId ? (

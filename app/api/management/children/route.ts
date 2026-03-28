@@ -35,7 +35,13 @@ export async function GET(request: NextRequest) {
       .select({ className: child.className, section: child.section })
       .from(child)
       .innerJoin(user, eq(user.id, child.parentId))
-      .where(and(eq(child.organizationId, organizationId), isNotNull(child.className), eq(user.role, "PARENT")))
+      .where(
+        and(
+          eq(child.organizationId, organizationId),
+          isNotNull(child.className),
+          or(eq(user.role, "PARENT"), eq(user.role, "GENERAL")),
+        ),
+      )
       .groupBy(child.className, child.section)
       .orderBy(asc(child.className), asc(child.section));
     return NextResponse.json(rows);
@@ -60,10 +66,11 @@ export async function GET(request: NextRequest) {
         section: child.section,
         rfidCardId: child.rfidCardId,
         parentName: user.name,
+        accountRole: user.role,
       })
       .from(child)
       .innerJoin(user, eq(user.id, child.parentId))
-      .where(and(eq(user.role, "PARENT"), ...conditions))
+      .where(and(or(eq(user.role, "PARENT"), eq(user.role, "GENERAL")), ...conditions))
       .orderBy(asc(child.name));
 
     return NextResponse.json(results);
@@ -86,13 +93,13 @@ export async function GET(request: NextRequest) {
       section: child.section,
       rfidCardId: child.rfidCardId,
       parentName: user.name,
+      accountRole: user.role,
     })
     .from(child)
     .innerJoin(user, eq(user.id, child.parentId))
     .where(
       and(
         eq(child.organizationId, organizationId),
-        eq(user.role, "PARENT"),
         or(
           ilike(child.name, pattern),
           ilike(child.grNumber, pattern),

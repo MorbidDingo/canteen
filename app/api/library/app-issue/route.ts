@@ -138,16 +138,28 @@ export async function POST(request: NextRequest) {
     db
       .select({ count: sql<number>`count(*)` })
       .from(bookIssuance)
+      .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
       .where(
         and(
           eq(bookIssuance.childId, childId),
+          eq(bookCopy.organizationId, organizationId),
           inArray(bookIssuance.status, [...ACTIVE_ISSUANCE_STATUSES]),
         ),
       ),
     db
       .select({ id: bookIssuance.id })
       .from(bookIssuance)
-      .where(and(eq(bookIssuance.childId, childId), eq(bookIssuance.status, "OVERDUE")))
+      .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+      .where(
+        and(
+          eq(bookIssuance.childId, childId),
+          eq(bookCopy.organizationId, organizationId),
+          or(
+            eq(bookIssuance.status, "OVERDUE"),
+            and(eq(bookIssuance.status, "ISSUED"), sql`${bookIssuance.dueDate} < ${now}`),
+          ),
+        ),
+      )
       .limit(1),
     db
       .select({

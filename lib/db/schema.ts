@@ -920,9 +920,7 @@ export const book = pgTable("book", {
   author: text("author").notNull(),
   publisher: text("publisher"),
   edition: text("edition"),
-  category: text("category", {
-    enum: ["FICTION", "NON_FICTION", "TEXTBOOK", "REFERENCE", "PERIODICAL", "GENERAL"],
-  }).notNull().default("GENERAL"),
+  category: text("category").notNull().default("GENERAL"),
   description: text("description"),
   coverImageUrl: text("cover_image_url"),
   totalCopies: integer("total_copies").notNull().default(0),
@@ -1390,6 +1388,38 @@ export const orderCancellationReason = pgTable("order_cancellation_reason", {
   otherText: text("other_text"), // free-text when reason = OTHER
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
+
+// ─── Library: Book Favourite (ML interest signal) ────────
+
+export const bookFavourite = pgTable(
+  "book_favourite",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    bookId: text("book_id")
+      .notNull()
+      .references(() => book.id, { onDelete: "cascade" }),
+    parentId: text("parent_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    uniquePerUser: unique("book_favourite_book_parent_org_unique").on(
+      table.bookId,
+      table.parentId,
+      table.organizationId,
+    ),
+  }),
+);
+
+export const bookFavouriteRelations = relations(bookFavourite, ({ one }) => ({
+  book: one(book, { fields: [bookFavourite.bookId], references: [book.id] }),
+  parent: one(user, { fields: [bookFavourite.parentId], references: [user.id] }),
+  organization: one(organization, { fields: [bookFavourite.organizationId], references: [organization.id] }),
+}));
 
 // ─── Library: Book Feedback (post-return ratings) ────────
 

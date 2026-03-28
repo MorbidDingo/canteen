@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   book,
   bookCopy,
+  bookFavourite,
   bookFeedback,
   bookIssuance,
   certeSubscription,
@@ -44,6 +45,8 @@ type ShelfBook = {
   avgEnjoyment: number;
   recommendationRate: number;
   feedbackCount: number;
+  favouriteCount: number;
+  isFavourited: boolean;
   isIssued: boolean;
   issuedAt: Date | null;
   issuedStatus: string | null;
@@ -80,8 +83,9 @@ function normalize(value: number, max: number): number {
 function buildPersonalizedRanking(params: {
   books: ShelfBook[];
   history: Array<{ category: string; author: string }>;
+  favouritedBookIds: Set<string>;
 }) {
-  const { books, history } = params;
+  const { books, history, favouritedBookIds } = params;
 
   const categoryAffinity = new Map<string, number>();
   const authorAffinity = new Map<string, number>();
@@ -90,6 +94,14 @@ function buildPersonalizedRanking(params: {
     categoryAffinity.set(item.category, (categoryAffinity.get(item.category) ?? 0) + 1);
     const authorKey = item.author.trim().toLowerCase();
     authorAffinity.set(authorKey, (authorAffinity.get(authorKey) ?? 0) + 1);
+  }
+
+  // Favourites boost — treat each favourited book's category/author as strong affinity signal
+  for (const b of books) {
+    if (!favouritedBookIds.has(b.id)) continue;
+    categoryAffinity.set(b.category, (categoryAffinity.get(b.category) ?? 0) + 3);
+    const authorKey = b.author.trim().toLowerCase();
+    authorAffinity.set(authorKey, (authorAffinity.get(authorKey) ?? 0) + 3);
   }
 
   const maxCategoryAffinity = Math.max(...categoryAffinity.values(), 0);
@@ -116,19 +128,22 @@ function buildPersonalizedRanking(params: {
       const socialProof = normalize(item.feedbackCount, maxFeedbackCount);
       const freshnessScore = Math.max(0, 1 - (now - new Date(item.createdAt).getTime()) / ninetyDaysMs);
       const availabilityScore = item.availableCopies > 0 ? 1 : 0;
+      const favouriteScore = favouritedBookIds.has(item.id) ? 1 : 0;
 
       const mlScore =
-        categoryScore * 0.26 +
-        authorScore * 0.14 +
-        hotScore * 0.16 +
-        mustReadScore * 0.14 +
-        enjoymentScore * 0.12 +
-        recScore * 0.1 +
+        categoryScore * 0.24 +
+        authorScore * 0.13 +
+        hotScore * 0.15 +
+        mustReadScore * 0.13 +
+        enjoymentScore * 0.11 +
+        recScore * 0.09 +
         socialProof * 0.04 +
         freshnessScore * 0.02 +
-        availabilityScore * 0.02;
+        availabilityScore * 0.02 +
+        favouriteScore * 0.07;
 
       const reasons: string[] = [];
+      if (favouriteScore === 1) reasons.push("You marked this as a favourite");
       if (categoryScore >= 0.45) reasons.push("Matches your reading category trend");
       if (authorScore >= 0.35) reasons.push("Author aligns with prior picks");
       if (enjoymentScore >= 0.7 && item.feedbackCount >= 2) reasons.push("High student enjoyment ratings");
@@ -308,6 +323,8 @@ export async function GET(request: NextRequest) {
     feedbackAggRows,
     feedbackGivenRows,
     pendingRequestRows,
+    favouriteCountRows,
+    userFavouriteRows,
   ] = await Promise.all([
     db
       .select({
@@ -469,6 +486,25 @@ export async function GET(request: NextRequest) {
         ),
       )
       .orderBy(desc(libraryAppIssueRequest.createdAt)),
+    // Favourite counts per book (org-scoped, all users)
+    db
+      .select({
+        bookId: bookFavourite.bookId,
+        count: sql<number>`count(${bookFavourite.id})`,
+      })
+      .from(bookFavourite)
+      .where(eq(bookFavourite.organizationId, organizationId))
+      .groupBy(bookFavourite.bookId),
+    // Current user's favourites
+    db
+      .select({ bookId: bookFavourite.bookId })
+      .from(bookFavourite)
+      .where(
+        and(
+          eq(bookFavourite.parentId, session.user.id),
+          eq(bookFavourite.organizationId, organizationId),
+        ),
+      ),
   ]);
 
   const blockedBookCategories = new Set(parseJsonArray(controlRow[0]?.blockedBookCategories ?? null));
@@ -498,6 +534,13 @@ export async function GET(request: NextRequest) {
       feedbackCount: Number(row.feedbackCount ?? 0),
     });
   }
+
+  const favouriteCountMap = new Map<string, number>();
+  for (const row of favouriteCountRows) {
+    favouriteCountMap.set(row.bookId, Number(row.count));
+  }
+
+  const userFavouriteSet = new Set(userFavouriteRows.map((row) => row.bookId));
 
   const issuedByBookId = new Map(
     activeIssuanceRows.map((row) => [
@@ -540,6 +583,8 @@ export async function GET(request: NextRequest) {
       avgEnjoyment: feedbackAgg?.avgEnjoyment ?? 0,
       recommendationRate: feedbackAgg?.recommendationRate ?? 0,
       feedbackCount: feedbackAgg?.feedbackCount ?? 0,
+      favouriteCount: favouriteCountMap.get(item.id) ?? 0,
+      isFavourited: userFavouriteSet.has(item.id),
       isIssued: Boolean(issued),
       issuedAt: issued?.issuedAt ?? null,
       issuedStatus: issued?.status ?? null,
@@ -584,6 +629,7 @@ export async function GET(request: NextRequest) {
     ? buildPersonalizedRanking({
         books: booksWithSignals,
         history: childReadingHistory,
+        favouritedBookIds: userFavouriteSet,
       })
     : booksWithSignals.map((item) => ({ ...item, mlScore: 0, mlReasons: [] as string[] }));
 

@@ -5,7 +5,115 @@ import { eq, and, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
-// GET — single book with copies
+const MAX_EDITABLE_QUANTITY = 5000;
+const ACTIVE_ISSUANCE_STATUSES = ["ISSUED", "OVERDUE", "RETURN_PENDING"] as const;
+
+function normalizeCategoryInput(input: unknown): string {
+  if (typeof input !== "string") return "GENERAL";
+  const normalized = input.trim().replace(/\s+/g, "_").toUpperCase();
+  return normalized || "GENERAL";
+}
+
+function parseQuantityInput(input: unknown): number | null {
+  if (input === undefined || input === null || input === "") return 0;
+
+  const parsed = Number.parseInt(String(input), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  if (parsed > MAX_EDITABLE_QUANTITY) return null;
+  return parsed;
+}
+
+function generateAutoAccessionNumber(bookId: string): string {
+  const bookHint = bookId.replace(/-/g, "").slice(0, 6).toUpperCase() || "BOOK";
+  const randomPart = crypto.randomUUID().replace(/-/g, "").slice(0, 10).toUpperCase();
+  return `AUTO-${bookHint}-${randomPart}`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createAutoCopies(tx: any, organizationId: string, bookId: string, quantity: number) {
+  if (quantity <= 0) return;
+
+  const values = Array.from({ length: quantity }, () => ({
+    organizationId,
+    bookId,
+    accessionNumber: generateAutoAccessionNumber(bookId),
+    condition: "NEW" as const,
+    status: "AVAILABLE" as const,
+    location: "AUTO",
+  }));
+
+  await tx.insert(bookCopy).values(values);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recalcCopyCounts(tx: any, bookId: string, organizationId: string, now: Date) {
+  const allCopies = await tx
+    .select({ status: bookCopy.status })
+    .from(bookCopy)
+    .where(and(eq(bookCopy.bookId, bookId), eq(bookCopy.organizationId, organizationId)));
+
+  const total = allCopies.filter((c: { status: string }) => c.status !== "RETIRED").length;
+  const available = allCopies.filter((c: { status: string }) => c.status === "AVAILABLE").length;
+
+  await tx
+    .update(book)
+    .set({ totalCopies: total, availableCopies: available, updatedAt: now })
+    .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function adjustBookQuantity(tx: any, params: { organizationId: string; bookId: string; targetAvailable: number; now: Date }) {
+  const { organizationId, bookId, targetAvailable, now } = params;
+
+  const [currentBook] = await tx
+    .select({ availableCopies: book.availableCopies })
+    .from(book)
+    .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)))
+    .limit(1);
+
+  if (!currentBook) {
+    throw new Error("Book not found");
+  }
+
+  const currentAvailable = currentBook.availableCopies;
+
+  if (targetAvailable > currentAvailable) {
+    await createAutoCopies(tx, organizationId, bookId, targetAvailable - currentAvailable);
+  } else if (targetAvailable < currentAvailable) {
+    const toRetireCount = currentAvailable - targetAvailable;
+    const availableCopies = await tx
+      .select({ id: bookCopy.id, accessionNumber: bookCopy.accessionNumber })
+      .from(bookCopy)
+      .where(
+        and(
+          eq(bookCopy.bookId, bookId),
+          eq(bookCopy.organizationId, organizationId),
+          eq(bookCopy.status, "AVAILABLE"),
+        ),
+      );
+
+    if (availableCopies.length < toRetireCount) {
+      throw new Error("Not enough available copies to reduce quantity");
+    }
+
+    const sorted = [...availableCopies].sort((a, b) => {
+      const aAuto = a.accessionNumber.startsWith("AUTO-") ? 0 : 1;
+      const bAuto = b.accessionNumber.startsWith("AUTO-") ? 0 : 1;
+      return aAuto - bAuto;
+    });
+
+    const idsToRetire = sorted.slice(0, toRetireCount).map((copy) => copy.id);
+
+    await tx
+      .update(bookCopy)
+      .set({ status: "RETIRED", updatedAt: now })
+      .where(inArray(bookCopy.id, idsToRetire));
+  }
+
+  await recalcCopyCounts(tx, bookId, organizationId, now);
+}
+
+// GET - single book with copies
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -44,7 +152,7 @@ export async function GET(
   }
 }
 
-// PATCH — update book details
+// PATCH - update book details
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -57,10 +165,13 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { title, author, isbn, publisher, edition, category, description } = body;
+    const { title, author, isbn, publisher, edition, category, description, quantity } = body;
 
     const [existing] = await db
-      .select({ id: book.id })
+      .select({
+        id: book.id,
+        availableCopies: book.availableCopies,
+      })
       .from(book)
       .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .limit(1);
@@ -84,20 +195,80 @@ export async function PATCH(
       }
     }
 
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-    if (title !== undefined) updates.title = title.trim();
-    if (author !== undefined) updates.author = author.trim();
+    const quantityProvided = Object.prototype.hasOwnProperty.call(body, "quantity");
+    const parsedQuantity = quantityProvided ? parseQuantityInput(quantity) : null;
+
+    if (quantityProvided && parsedQuantity === null) {
+      return NextResponse.json(
+        { error: `Quantity must be a whole number between 0 and ${MAX_EDITABLE_QUANTITY}` },
+        { status: 400 },
+      );
+    }
+
+    const now = new Date();
+    const updates: Record<string, unknown> = { updatedAt: now };
+    if (title !== undefined) {
+      if (!String(title).trim()) {
+        return NextResponse.json({ error: "Title cannot be empty" }, { status: 400 });
+      }
+      updates.title = String(title).trim();
+    }
+    if (author !== undefined) {
+      if (!String(author).trim()) {
+        return NextResponse.json({ error: "Author cannot be empty" }, { status: 400 });
+      }
+      updates.author = String(author).trim();
+    }
     if (isbn !== undefined) updates.isbn = isbn?.trim() || null;
     if (publisher !== undefined) updates.publisher = publisher?.trim() || null;
     if (edition !== undefined) updates.edition = edition?.trim() || null;
-    if (category !== undefined) updates.category = category;
+    if (category !== undefined) updates.category = normalizeCategoryInput(category);
     if (description !== undefined) updates.description = description?.trim() || null;
 
-    const [updated] = await db
-      .update(book)
-      .set(updates)
-      .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
-      .returning();
+    let updated: typeof book.$inferSelect | undefined;
+
+    try {
+      await db.transaction(async (tx) => {
+        if (Object.keys(updates).length > 1) {
+          await tx
+            .update(book)
+            .set(updates)
+            .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)));
+        }
+
+        if (quantityProvided) {
+          await adjustBookQuantity(tx, {
+            organizationId: access.activeOrganizationId!,
+            bookId: id,
+            targetAvailable: parsedQuantity!,
+            now,
+          });
+        }
+
+        const [latest] = await tx
+          .select()
+          .from(book)
+          .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
+          .limit(1);
+
+        updated = latest;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Not enough available copies")) {
+        return NextResponse.json(
+          {
+            error:
+              "Cannot reduce quantity below currently available stock constraints. Return or retire copies first.",
+          },
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
+
+    if (!updated) {
+      return NextResponse.json({ error: "Book not found" }, { status: 404 });
+    }
 
     await logAudit({
       userId: access.actorUserId,
@@ -107,6 +278,12 @@ export async function PATCH(
         organizationId: access.activeOrganizationId,
         bookId: id,
         changes: Object.keys(updates).filter((k) => k !== "updatedAt"),
+        quantityChange: quantityProvided
+          ? {
+              from: existing.availableCopies,
+              to: parsedQuantity,
+            }
+          : null,
       },
       request,
     });
@@ -121,7 +298,7 @@ export async function PATCH(
   }
 }
 
-// DELETE — archive book (retire all copies)
+// DELETE - archive book (retire all copies)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -158,7 +335,7 @@ export async function DELETE(
         .where(
           and(
             inArray(bookIssuance.bookCopyId, copyIds),
-            inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"]),
+            inArray(bookIssuance.status, [...ACTIVE_ISSUANCE_STATUSES]),
           ),
         )
         .limit(1);

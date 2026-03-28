@@ -223,9 +223,9 @@ export const BOOK_CATEGORIES = {
   GENERAL: "GENERAL",
 } as const;
 
-export type BookCategory = (typeof BOOK_CATEGORIES)[keyof typeof BOOK_CATEGORIES];
+export type BookCategory = string;
 
-export const BOOK_CATEGORY_LABELS: Record<BookCategory, string> = {
+export const BOOK_CATEGORY_LABELS: Record<string, string> = {
   FICTION: "Fiction",
   NON_FICTION: "Non-Fiction",
   TEXTBOOK: "Textbook",

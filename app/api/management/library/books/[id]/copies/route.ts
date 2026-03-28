@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
-// GET — list copies for a book
+// GET - list copies for a book
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -34,7 +34,7 @@ export async function GET(
   }
 }
 
-// POST — add a new copy
+// POST - add a new copy
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -90,15 +90,6 @@ export async function POST(
           location: location?.trim() || null,
         })
         .returning();
-
-      // Update cached counts
-      await tx
-        .update(book)
-        .set({
-          totalCopies: parentBook.title ? undefined : 0, // placeholder
-          updatedAt: new Date(),
-        })
-        .where(eq(book.id, id));
 
       // Recalculate counts from source of truth
       const allCopies = await tx

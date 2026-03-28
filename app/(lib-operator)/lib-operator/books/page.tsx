@@ -46,7 +46,6 @@ import {
   BOOK_CATEGORY_LABELS,
   BOOK_COPY_STATUS_LABELS,
   BOOK_COPY_CONDITION_LABELS,
-  type BookCategory,
   type BookCopyStatus,
   type BookCopyCondition,
 } from "@/lib/constants";
@@ -77,6 +76,7 @@ interface BookCopyData {
 
 export default function LibOperatorBooksPage() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
@@ -93,6 +93,7 @@ export default function LibOperatorBooksPage() {
   const [formPublisher, setFormPublisher] = useState("");
   const [formEdition, setFormEdition] = useState("");
   const [formCategory, setFormCategory] = useState<string>("GENERAL");
+  const [formQuantity, setFormQuantity] = useState("0");
   const [formDescription, setFormDescription] = useState("");
 
   const [expandedBookId, setExpandedBookId] = useState<string | null>(null);
@@ -114,6 +115,15 @@ export default function LibOperatorBooksPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [retiringCopy, setRetiringCopy] = useState<string | null>(null);
 
+  const formatCategoryLabel = useCallback((category: string) => {
+    if (!category) return "General";
+    if (BOOK_CATEGORY_LABELS[category]) return BOOK_CATEGORY_LABELS[category];
+    return category
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  }, []);
+
   // ─── Fetch books ───────────────────────────────────────
 
   const fetchBooks = useCallback(
@@ -130,6 +140,10 @@ export default function LibOperatorBooksPage() {
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         setBooks(data.books);
+        const nextCategories = Array.isArray(data.categories)
+          ? data.categories.filter((item: unknown): item is string => typeof item === "string" && item.length > 0)
+          : Array.from(new Set((data.books as Book[]).map((item) => item.category).filter(Boolean)));
+        setCategories(nextCategories);
         setTotalPages(data.pagination.totalPages);
       } catch {
         toast.error("Failed to load books");
@@ -162,6 +176,7 @@ export default function LibOperatorBooksPage() {
     setFormPublisher("");
     setFormEdition("");
     setFormCategory("GENERAL");
+    setFormQuantity("0");
     setFormDescription("");
     setDialogOpen(true);
   }
@@ -174,6 +189,7 @@ export default function LibOperatorBooksPage() {
     setFormPublisher(b.publisher || "");
     setFormEdition(b.edition || "");
     setFormCategory(b.category);
+    setFormQuantity(String(b.availableCopies));
     setFormDescription(b.description || "");
     setDialogOpen(true);
   }
@@ -181,6 +197,12 @@ export default function LibOperatorBooksPage() {
   async function handleSaveBook() {
     if (!formTitle.trim() || !formAuthor.trim()) {
       toast.error("Title and author are required");
+      return;
+    }
+
+    const parsedQuantity = Number.parseInt(formQuantity, 10);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+      toast.error("Quantity must be 0 or more");
       return;
     }
 
@@ -192,7 +214,8 @@ export default function LibOperatorBooksPage() {
         isbn: formISBN || null,
         publisher: formPublisher || null,
         edition: formEdition || null,
-        category: formCategory,
+        category: formCategory.trim() || "GENERAL",
+        quantity: parsedQuantity,
         description: formDescription || null,
       };
 
@@ -484,23 +507,27 @@ export default function LibOperatorBooksPage() {
                     </div>
                     <div>
                       <Label>Category</Label>
-                      <Select
+                      <Input
                         value={formCategory}
-                        onValueChange={setFormCategory}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(BOOK_CATEGORY_LABELS).map(
-                            ([val, label]) => (
-                              <SelectItem key={val} value={val}>
-                                {label}
-                              </SelectItem>
-                            ),
-                          )}
-                        </SelectContent>
-                      </Select>
+                        onChange={(e) => setFormCategory(e.target.value)}
+                        placeholder="e.g. SCIENCE_FICTION"
+                        list="lib-operator-book-categories"
+                      />
+                      <datalist id="lib-operator-book-categories">
+                        {categories.map((item) => (
+                          <option key={item} value={item} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <Label>Quantity</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={formQuantity}
+                        onChange={(e) => setFormQuantity(e.target.value)}
+                        placeholder="0"
+                      />
                     </div>
                     <div>
                       <Label>Publisher</Label>
@@ -564,9 +591,9 @@ export default function LibOperatorBooksPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All Categories</SelectItem>
-              {Object.entries(BOOK_CATEGORY_LABELS).map(([val, label]) => (
-                <SelectItem key={val} value={val}>
-                  {label}
+              {categories.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {formatCategoryLabel(item)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -597,8 +624,7 @@ export default function LibOperatorBooksPage() {
                         variant="secondary"
                         className={categoryBadgeColor(b.category)}
                       >
-                        {BOOK_CATEGORY_LABELS[b.category as BookCategory] ||
-                          b.category}
+                        {formatCategoryLabel(b.category)}
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">

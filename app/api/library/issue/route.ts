@@ -17,6 +17,8 @@ import { notifyParentForChild } from "@/lib/parent-notifications";
 import { resolveChildByRfid } from "@/lib/rfid-access";
 import { resolveOrganizationDeviceFromRequest, touchOrganizationDevice } from "@/lib/device-context";
 
+const ACTIVE_ISSUANCE_STATUSES = ["ISSUED", "OVERDUE", "RETURN_PENDING"] as const;
+
 async function getSetting(key: string, organizationId: string): Promise<string> {
   const rows = await db
     .select({ value: librarySetting.value })
@@ -176,7 +178,7 @@ export async function POST(request: NextRequest) {
         and(
           eq(bookIssuance.childId, studentChild.id),
           eq(bookCopy.organizationId, requestOrgId),
-          inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"])
+          inArray(bookIssuance.status, ["ISSUED", "OVERDUE", "RETURN_PENDING"])
         )
       );
 
@@ -191,7 +193,7 @@ export async function POST(request: NextRequest) {
     const blockIfOverdue = await getSetting("block_issue_if_overdue", requestOrgId);
     if (blockIfOverdue === "true") {
       const hasOverdue = activeIssuances.some(
-        (i) => i.status === "ISSUED" && new Date(i.dueDate) < now
+        (i) => i.status === "OVERDUE" || (i.status === "ISSUED" && new Date(i.dueDate) < now)
       );
       if (hasOverdue) {
         return NextResponse.json(
@@ -475,7 +477,7 @@ export async function POST(request: NextRequest) {
               eq(bookIssuance.childId, studentChild.id),
               eq(bookCopy.bookId, resolvedBook.id),
               eq(bookCopy.organizationId, requestOrgId),
-              inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"])
+              inArray(bookIssuance.status, ["ISSUED", "OVERDUE", "RETURN_PENDING"])
             )
           )
           .limit(1)
@@ -497,29 +499,103 @@ export async function POST(request: NextRequest) {
     // ── 9. Create issuance, update copy & book ────────
     const issuanceId = crypto.randomUUID();
 
-    await db.insert(bookIssuance).values({
-      id: issuanceId,
-      bookCopyId: resolvedCopy.id,
-      childId: studentChild.id,
-      issuedAt: now,
-      dueDate,
-      status: "ISSUED",
-      deviceId: resolvedDevice?.id ?? null,
-      issuedBy: "SELF_SERVICE",
-    });
+    try {
+      await db.transaction(async (tx) => {
+        const inTxnActive = await tx
+          .select({ id: bookIssuance.id })
+          .from(bookIssuance)
+          .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+          .where(
+            and(
+              eq(bookIssuance.childId, studentChild.id),
+              eq(bookCopy.organizationId, requestOrgId),
+              inArray(bookIssuance.status, [...ACTIVE_ISSUANCE_STATUSES]),
+            ),
+          );
 
-    await db
-      .update(bookCopy)
-      .set({ status: "ISSUED", updatedAt: now })
-      .where(and(eq(bookCopy.id, resolvedCopy.id), eq(bookCopy.organizationId, requestOrgId)));
+        if (inTxnActive.length >= maxBooks) {
+          throw new Error("ISSUE_LIMIT_REACHED");
+        }
 
-    await db
-      .update(book)
-      .set({
-        availableCopies: sql`${book.availableCopies} - 1`,
-        updatedAt: now,
-      })
-      .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
+        const inTxnDuplicate = await tx
+          .select({ id: bookIssuance.id })
+          .from(bookIssuance)
+          .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+          .where(
+            and(
+              eq(bookIssuance.childId, studentChild.id),
+              eq(bookCopy.bookId, resolvedBook.id),
+              eq(bookCopy.organizationId, requestOrgId),
+              inArray(bookIssuance.status, [...ACTIVE_ISSUANCE_STATUSES]),
+            ),
+          )
+          .limit(1);
+
+        if (inTxnDuplicate.length > 0) {
+          throw new Error("DUPLICATE_BOOK");
+        }
+
+        const [copyUpdate] = await tx
+          .update(bookCopy)
+          .set({ status: "ISSUED", updatedAt: now })
+          .where(
+            and(
+              eq(bookCopy.id, resolvedCopy.id),
+              eq(bookCopy.organizationId, requestOrgId),
+              eq(bookCopy.status, "AVAILABLE"),
+            ),
+          )
+          .returning({ id: bookCopy.id });
+
+        if (!copyUpdate) {
+          throw new Error("COPY_NOT_AVAILABLE");
+        }
+
+        await tx.insert(bookIssuance).values({
+          id: issuanceId,
+          bookCopyId: resolvedCopy.id,
+          childId: studentChild.id,
+          issuedAt: now,
+          dueDate,
+          status: "ISSUED",
+          deviceId: resolvedDevice?.id ?? null,
+          issuedBy: "SELF_SERVICE",
+        });
+
+        await tx
+          .update(book)
+          .set({
+            availableCopies: sql`GREATEST(${book.availableCopies} - 1, 0)`,
+            updatedAt: now,
+          })
+          .where(and(eq(book.id, resolvedBook.id), eq(book.organizationId, requestOrgId)));
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message === "ISSUE_LIMIT_REACHED") {
+          return NextResponse.json(
+            { success: false, reason: `You already reached the max allowed books (${maxBooks}).` },
+            { status: 200 },
+          );
+        }
+
+        if (error.message === "DUPLICATE_BOOK") {
+          return NextResponse.json(
+            { success: false, reason: `You already have a copy of "${resolvedBook.title}" issued.` },
+            { status: 200 },
+          );
+        }
+
+        if (error.message === "COPY_NOT_AVAILABLE") {
+          return NextResponse.json(
+            { success: false, reason: "This copy was just issued by another transaction. Please scan again." },
+            { status: 409 },
+          );
+        }
+      }
+
+      throw error;
+    }
 
     let finalizedAppIssueRequestId: string | null = confirmedAppIssueRequestId;
     if (!finalizedAppIssueRequestId) {
@@ -622,3 +698,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+

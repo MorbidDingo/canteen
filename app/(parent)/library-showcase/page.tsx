@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatePresence, motion } from "@/components/ui/motion";
-import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library } from "lucide-react";
+import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   BOOK_CATEGORY_LABELS,
@@ -42,6 +42,8 @@ interface ShelfBook {
   mlReasons?: string[];
   metaLabel?: string | null;
   canRequest: boolean;
+  isFavourited?: boolean;
+  favouriteCount?: number;
 }
 
 interface CategoryRail {
@@ -111,9 +113,13 @@ function formatDateTime(value: string | Date | null | undefined) {
 function TitleCard({
   book,
   onClick,
+  onFavouriteToggle,
+  favouriteLoading,
 }: {
   book: ShelfBook;
   onClick: (book: ShelfBook) => void;
+  onFavouriteToggle?: (book: ShelfBook, e: React.MouseEvent) => void;
+  favouriteLoading?: boolean;
 }) {
   const isPending = Boolean(book.requestId);
   const isUnavailable = !book.canRequest && !isPending;
@@ -169,6 +175,29 @@ function TitleCard({
           )}
         </div>
 
+        {/* Favourite button */}
+        {onFavouriteToggle && (
+          <button
+            type="button"
+            aria-label={book.isFavourited ? "Remove from favourites" : "Add to favourites"}
+            disabled={favouriteLoading}
+            onClick={(e) => onFavouriteToggle(book, e)}
+            className={cn(
+              "absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all",
+              book.isFavourited
+                ? "bg-rose-500/90 text-white shadow-md shadow-rose-500/30"
+                : "bg-black/40 text-white/70 hover:bg-black/60 hover:text-white",
+            )}
+          >
+            <Heart
+              className={cn(
+                "h-3.5 w-3.5 transition-all",
+                book.isFavourited && "fill-current",
+              )}
+            />
+          </button>
+        )}
+
         {/* title */}
         <div className="absolute inset-x-0 bottom-0 p-2.5">
           <p className="line-clamp-2 text-xs font-semibold leading-tight text-white drop-shadow">{book.title}</p>
@@ -184,11 +213,15 @@ function Rail({
   icon,
   books,
   onBookClick,
+  onFavouriteToggle,
+  favouriteLoadingId,
 }: {
   title: string;
   icon?: React.ReactNode;
   books: ShelfBook[];
   onBookClick: (book: ShelfBook) => void;
+  onFavouriteToggle?: (book: ShelfBook, e: React.MouseEvent) => void;
+  favouriteLoadingId?: string | null;
 }) {
   if (books.length === 0) return null;
 
@@ -209,7 +242,13 @@ function Rail({
           style={{ scrollbarWidth: "none" }}
         >
           {books.map((book) => (
-            <TitleCard key={`${title}-${book.id}`} book={book} onClick={onBookClick} />
+            <TitleCard
+              key={`${title}-${book.id}`}
+              book={book}
+              onClick={onBookClick}
+              onFavouriteToggle={onFavouriteToggle}
+              favouriteLoading={favouriteLoadingId === book.id}
+            />
           ))}
         </div>
         {/* Right-edge fade to indicate more content */}
@@ -225,6 +264,10 @@ export default function LibraryShowcasePage() {
   const [issuingBookId, setIssuingBookId] = useState<string | null>(null);
   const [cancellingRequestId, setCancellingRequestId] = useState<string | null>(null);
   const [activeBook, setActiveBook] = useState<ShelfBook | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summaryUsage, setSummaryUsage] = useState<{ used: number; remaining: number; limit: number } | null>(null);
+  const [favouriteLoadingId, setFavouriteLoadingId] = useState<string | null>(null);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
@@ -337,6 +380,128 @@ export default function LibraryShowcasePage() {
       setCancellingRequestId(null);
     }
   }, [fetchShowcase]);
+
+  const toggleFavourite = useCallback(async (target: ShelfBook, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavouriteLoadingId(target.id);
+
+    // Optimistic update across all data
+    const applyOptimistic = (prev: ShowcaseData | null): ShowcaseData | null => {
+      if (!prev) return prev;
+      const patch = (books: ShelfBook[]): ShelfBook[] =>
+        books.map((b) =>
+          b.id === target.id
+            ? {
+                ...b,
+                isFavourited: !b.isFavourited,
+                favouriteCount: Math.max(0, (b.favouriteCount ?? 0) + (b.isFavourited ? -1 : 1)),
+              }
+            : b,
+        );
+      return {
+        ...prev,
+        catalog: patch(prev.catalog),
+        rails: {
+          ...prev.rails,
+          hotThisWeek: patch(prev.rails.hotThisWeek),
+          newcomers: patch(prev.rails.newcomers),
+          goats: patch(prev.rails.goats),
+          mustReads: patch(prev.rails.mustReads),
+          personalized: prev.rails.personalized ? patch(prev.rails.personalized) : undefined,
+          categories: prev.rails.categories.map((rail) => ({
+            ...rail,
+            books: patch(rail.books),
+          })),
+        },
+      };
+    };
+
+    setData(applyOptimistic);
+    if (activeBook?.id === target.id) {
+      setActiveBook((prev) =>
+        prev
+          ? {
+              ...prev,
+              isFavourited: !prev.isFavourited,
+              favouriteCount: Math.max(0, (prev.favouriteCount ?? 0) + (prev.isFavourited ? -1 : 1)),
+            }
+          : prev,
+      );
+    }
+
+    try {
+      const res = await fetch("/api/library/favourite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookId: target.id }),
+      });
+      if (!res.ok) {
+        // Revert optimistic on failure
+        setData(applyOptimistic); // toggle back
+        toast.error("Failed to update favourite");
+      }
+    } catch {
+      setData(applyOptimistic);
+      toast.error("Failed to update favourite");
+    } finally {
+      setFavouriteLoadingId(null);
+    }
+  }, [activeBook?.id]);
+
+  const requestBookSummary = useCallback(async (target: ShelfBook) => {
+    setSummaryLoading(true);
+    setSummaryText(null);
+    try {
+      const res = await fetch("/api/library/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summaryRequest: true,
+          book: {
+            id: target.id,
+            title: target.title,
+            author: target.author,
+            description: target.description ?? null,
+          },
+          messages: [
+            {
+              role: "user",
+              content: `Give me a concise summary for \"${target.title}\" by ${target.author}.`,
+            },
+          ],
+        }),
+      });
+
+      const payload = (await res.json()) as {
+        reply?: string;
+        error?: string;
+        usage?: { used: number; remaining: number; limit: number };
+      };
+
+      if (!res.ok) {
+        toast.error(payload.error || "Failed to generate summary");
+        if (payload.usage) {
+          setSummaryUsage(payload.usage);
+        }
+        return;
+      }
+
+      setSummaryText(payload.reply || "No summary generated.");
+      if (payload.usage) {
+        setSummaryUsage(payload.usage);
+      }
+    } catch {
+      toast.error("Failed to generate summary");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setSummaryText(null);
+    setSummaryLoading(false);
+    setSummaryUsage(null);
+  }, [activeBook?.id]);
 
   const rails = useMemo<Array<{ title: string; icon: React.ReactNode; books: ShelfBook[] }>>(() => {
     if (!data) return [];
@@ -520,6 +685,8 @@ export default function LibraryShowcasePage() {
                       key={`search-${book.id}`}
                       book={book}
                       onClick={(selectedBook) => setActiveBook(selectedBook)}
+                      onFavouriteToggle={(selectedBook, e) => void toggleFavourite(selectedBook, e)}
+                      favouriteLoading={favouriteLoadingId === book.id}
                     />
                   ))}
                 </div>
@@ -538,6 +705,8 @@ export default function LibraryShowcasePage() {
                 icon={rail.icon}
                 books={rail.books}
                 onBookClick={(selectedBook) => setActiveBook(selectedBook)}
+                onFavouriteToggle={(selectedBook, e) => void toggleFavourite(selectedBook, e)}
+                favouriteLoadingId={favouriteLoadingId}
               />
             ))
           )}
@@ -643,6 +812,23 @@ export default function LibraryShowcasePage() {
                         <p className="text-xs leading-relaxed text-primary/80">{activeBook.mlReasons[0]}</p>
                       </div>
                     ) : null}
+
+                    {summaryText ? (
+                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 shadow-[0_0_0_1px_rgba(99,102,241,0.15),0_8px_32px_-8px_rgba(99,102,241,0.25)]">
+                        {/* Header strip */}
+                        <div className="flex items-center gap-2 border-b border-white/[0.07] bg-white/[0.04] px-4 py-2.5">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/20">
+                            <Bot className="h-3.5 w-3.5 text-indigo-400" />
+                          </span>
+                          <span className="text-xs font-semibold tracking-wide text-indigo-300">AI Summary</span>
+                          <span className="ml-auto rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-400">
+                            Powered by Claude
+                          </span>
+                        </div>
+                        {/* Body */}
+                        <p className="px-4 py-3 text-[13px] leading-relaxed text-white/85 whitespace-pre-line">{summaryText}</p>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -652,28 +838,71 @@ export default function LibraryShowcasePage() {
                 <div className="flex flex-col gap-2.5 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
                   <div className="space-y-0.5">
                     <p className="text-xs text-muted-foreground">Confirm at library kiosk after requesting.</p>
+                    {summaryUsage ? (
+                      <p className="text-xs text-muted-foreground">
+                        AI summaries today: {summaryUsage.used}/{summaryUsage.limit} used
+                      </p>
+                    ) : null}
                     {activeBook.requestId ? (
                       <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
                         <Clock3 className="h-3 w-3" />
                         Pending until {formatDateTime(activeBook.requestExpiresAt)}
                       </p>
                     ) : null}
+                    {typeof activeBook.favouriteCount === "number" && activeBook.favouriteCount > 0 ? (
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Heart className="h-3 w-3 fill-current text-rose-400" />
+                        {activeBook.favouriteCount} {activeBook.favouriteCount === 1 ? "person" : "people"} favourited
+                      </p>
+                    ) : null}
                   </div>
 
-                  <Button
-                    className={cn(
-                      "h-11 w-full rounded-xl px-6 text-sm font-semibold sm:w-auto",
-                      !activeBook.requestId && activeBook.canRequest && "shadow-md shadow-primary/20",
-                    )}
-                    variant={!activeBook.requestId && activeBook.canRequest ? "premium" : "outline"}
-                    disabled={!activeBook.canRequest || issuingBookId === activeBook.id || Boolean(activeBook.requestId)}
-                    onClick={() => void requestIssue(activeBook.id)}
-                  >
-                    {issuingBookId === activeBook.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : null}
-                    {activeBook.requestId ? "Already Pending" : activeBook.canRequest ? "Request Issue" : "Unavailable"}
-                  </Button>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    {/* Favourite toggle */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={cn(
+                        "h-11 w-full rounded-xl px-5 text-sm font-semibold sm:w-auto",
+                        activeBook.isFavourited && "border-rose-500/40 bg-rose-500/8 text-rose-600 hover:bg-rose-500/15",
+                      )}
+                      disabled={favouriteLoadingId === activeBook.id}
+                      onClick={(e) => void toggleFavourite(activeBook, e)}
+                    >
+                      {favouriteLoadingId === activeBook.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Heart className={cn("h-4 w-4", activeBook.isFavourited && "fill-current text-rose-500")} />
+                      )}
+                      {activeBook.isFavourited ? "Favourited" : "Favourite"}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 w-full rounded-xl px-6 text-sm font-semibold sm:w-auto"
+                      disabled={summaryLoading}
+                      onClick={() => void requestBookSummary(activeBook)}
+                    >
+                      {summaryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {summaryLoading ? "Summarizing..." : "AI Summary"}
+                    </Button>
+
+                    <Button
+                      className={cn(
+                        "h-11 w-full rounded-xl px-6 text-sm font-semibold sm:w-auto",
+                        !activeBook.requestId && activeBook.canRequest && "shadow-md shadow-primary/20",
+                      )}
+                      variant={!activeBook.requestId && activeBook.canRequest ? "premium" : "outline"}
+                      disabled={!activeBook.canRequest || issuingBookId === activeBook.id || Boolean(activeBook.requestId)}
+                      onClick={() => void requestIssue(activeBook.id)}
+                    >
+                      {issuingBookId === activeBook.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : null}
+                      {activeBook.requestId ? "Already Pending" : activeBook.canRequest ? "Request Issue" : "Unavailable"}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </motion.div>

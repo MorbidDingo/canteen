@@ -5,7 +5,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { runParallelForEach, type RowProgressLog } from "@/lib/bulk-upload-engine";
-import type { BookCategory, BookCopyCondition } from "@/lib/constants";
+import type { BookCopyCondition } from "@/lib/constants";
 import * as XLSX from "xlsx";
 
 type RowData = {
@@ -29,14 +29,6 @@ type UploadResult = {
   bookCreated: boolean;
 };
 
-const VALID_CATEGORIES = new Set([
-  "FICTION",
-  "NON_FICTION",
-  "TEXTBOOK",
-  "REFERENCE",
-  "PERIODICAL",
-  "GENERAL",
-]);
 const VALID_CONDITIONS = new Set(["NEW", "GOOD", "FAIR", "POOR", "DAMAGED"]);
 
 const MAX_ROWS = 5000;
@@ -44,10 +36,8 @@ const BOOK_CREATE_CONCURRENCY = 24;
 const COPY_CREATE_CONCURRENCY = 48;
 
 function normalizeCategory(val: string): string {
-  const upper = val.toUpperCase().replace(/[\s-]+/g, "_");
-  if (VALID_CATEGORIES.has(upper)) return upper;
-  if (upper === "NONFICTION" || upper === "NON_FICTION") return "NON_FICTION";
-  return "GENERAL";
+  const normalized = val.trim().replace(/\s+/g, "_").toUpperCase();
+  return normalized || "GENERAL";
 }
 
 function normalizeCondition(val: string): string {
@@ -266,7 +256,7 @@ async function processUpload(
             isbn: row.isbn,
             publisher: row.publisher,
             edition: row.edition,
-            category: row.category as BookCategory,
+            category: row.category,
             totalCopies: 0,
             availableCopies: 0,
           })

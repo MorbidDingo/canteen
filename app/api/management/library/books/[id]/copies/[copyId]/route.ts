@@ -61,7 +61,7 @@ export async function PATCH(
         .where(
           and(
             eq(bookIssuance.bookCopyId, copyId),
-            inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"]),
+            inArray(bookIssuance.status, ["ISSUED", "OVERDUE", "RETURN_PENDING"]),
           ),
         )
         .limit(1);
@@ -150,7 +150,7 @@ export async function DELETE(
       .where(
         and(
           eq(bookIssuance.bookCopyId, copyId),
-          inArray(bookIssuance.status, ["ISSUED", "RETURN_PENDING"]),
+          inArray(bookIssuance.status, ["ISSUED", "OVERDUE", "RETURN_PENDING"]),
         ),
       )
       .limit(1);
@@ -193,3 +193,4 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to retire copy" }, { status: 500 });
   }
 }
+

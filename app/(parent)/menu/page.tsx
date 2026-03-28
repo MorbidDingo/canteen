@@ -70,13 +70,6 @@ export default function MenuPage() {
 
   return (
     <div className="app-shell">
-      <div className="app-header-card mb-5 animate-fade-in">
-        <h1 className="app-title">Menu</h1>
-        <p className="app-subtitle">
-          Browse our menu and add items to your cart
-        </p>
-      </div>
-
       <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 bg-card/60 p-1 shadow-sm">
         <Link href="/menu">
           <Button type="button" variant="secondary" size="sm">
