@@ -23,6 +23,57 @@ import {
   type BookCategory,
 } from "@/lib/constants";
 
+// ─── Markdown Renderer ──────────────────────────────────────────────────────
+
+function renderSummaryMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split(/\r?\n/);
+  const nodes: React.ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+
+    const h1 = trimmed.match(/^#\s+(.+)/);
+    if (h1) {
+      nodes.push(
+        <p key={index} className="mt-2 text-[13px] font-bold text-white leading-snug">{h1[1]}</p>,
+      );
+      return;
+    }
+
+    const h2 = trimmed.match(/^##\s+(.+)/);
+    if (h2) {
+      nodes.push(
+        <p key={index} className="mt-2 text-[12px] font-semibold text-indigo-300 uppercase tracking-wide">{h2[1]}</p>,
+      );
+      return;
+    }
+
+    const h3 = trimmed.match(/^###\s+(.+)/);
+    if (h3) {
+      nodes.push(
+        <p key={index} className="mt-1.5 text-[12px] font-semibold text-white/80">{h3[1]}</p>,
+      );
+      return;
+    }
+
+    const bold = trimmed.match(/\*\*(.+)\*\*/);
+    if (bold) {
+      nodes.push(
+        <p key={index} className="mt-1.5 text-[12px] font-semibold text-white/90">{bold[1]}</p>,
+      );
+      return;
+    }
+
+    nodes.push(
+      <p key={index} className="mt-1 text-[13px] leading-relaxed text-white/80">{trimmed}</p>,
+    );
+  });
+
+  return nodes;
+}
+
+
 interface ChildOption {
   id: string;
   name: string;
@@ -902,7 +953,7 @@ export default function LibraryShowcasePage() {
                           </span>
                         </div>
                         {/* Body */}
-                        <p className="px-4 py-3 text-[13px] leading-relaxed text-white/85 whitespace-pre-line">{summaryText}</p>
+                        <div className="px-4 py-3">{renderSummaryMarkdown(summaryText)}</div>
                       </div>
                     ) : null}
                   </div>
