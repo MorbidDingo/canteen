@@ -24,7 +24,10 @@ import { CerteLogo } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
 import { ChatAssistant } from "@/components/ai/chat-assistant";
 import { LibraryChatAssistant } from "@/components/ai/library-chat-assistant";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { LibrarySelector } from "@/components/library-selector";
 import { motion, BottomSheet } from "@/components/ui/motion";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import {
   Sheet,
   SheetContent,
@@ -98,11 +101,20 @@ function ParentLayoutContent({
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
+    "certe:selected-canteen-id",
+  );
+  const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
+    "certe:selected-library-id",
+  );
   const prevCartCount = useRef(cartCount);
 
   const requestedMode = searchParams.get("mode");
   const parentMode = getParentMode(pathname, requestedMode);
   const activeTab = getActiveTab(pathname);
+  const pageHasInlineContextSelector =
+    pathname === "/menu" || pathname === "/library-history" || pathname === "/library-showcase";
+  const showHeaderContextSelector = !pageHasInlineContextSelector;
 
   const withParentMode = useCallback(
     (href: string) => {
@@ -326,17 +338,36 @@ function ParentLayoutContent({
               </Link>
             </div>
 
-            {/* Contextual balance chip */}
-            {parentMode === "canteen" && totalWalletBalance > 0 && (
-              <button
-                type="button"
-                onClick={() => setWalletDrawerOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
-              >
-                <IndianRupee className="h-3 w-3 text-primary" />
-                <span>₹{totalWalletBalance.toFixed(0)}</span>
-              </button>
-            )}
+            <div className="flex min-w-0 items-center gap-2">
+              {showHeaderContextSelector && parentMode === "canteen" && (
+                <CanteenSelector
+                  value={selectedCanteen}
+                  onChange={setSelectedCanteen}
+                  compact
+                  className="w-[148px] sm:w-[180px]"
+                />
+              )}
+
+              {showHeaderContextSelector && parentMode === "library" && (
+                <LibrarySelector
+                  value={selectedLibrary}
+                  onChange={setSelectedLibrary}
+                  compact
+                  className="w-[148px] sm:w-[180px]"
+                />
+              )}
+
+              {parentMode === "canteen" && totalWalletBalance > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setWalletDrawerOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
+                >
+                  <IndianRupee className="h-3 w-3 text-primary" />
+                  <span>₹{totalWalletBalance.toFixed(0)}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>

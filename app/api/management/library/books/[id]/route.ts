@@ -7,6 +7,7 @@ import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const MAX_EDITABLE_QUANTITY = 5000;
 const ACTIVE_ISSUANCE_STATUSES = ["ISSUED", "OVERDUE", "RETURN_PENDING"] as const;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function normalizeCategoryInput(input: unknown): string {
   if (typeof input !== "string") return "GENERAL";
@@ -30,7 +31,7 @@ function generateAutoAccessionNumber(bookId: string): string {
 }
 
 async function createAutoCopies(
-  tx: typeof db,
+  tx: DbTransaction,
   organizationId: string,
   bookId: string,
   quantity: number,
@@ -51,7 +52,7 @@ async function createAutoCopies(
   await tx.insert(bookCopy).values(values);
 }
 
-async function recalcCopyCounts(tx: typeof db, bookId: string, organizationId: string, now: Date) {
+async function recalcCopyCounts(tx: DbTransaction, bookId: string, organizationId: string, now: Date) {
   const allCopies = await tx
     .select({ status: bookCopy.status })
     .from(bookCopy)
@@ -66,7 +67,7 @@ async function recalcCopyCounts(tx: typeof db, bookId: string, organizationId: s
     .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)));
 }
 
-async function adjustBookQuantity(tx: typeof db, params: { organizationId: string; bookId: string; targetAvailable: number; now: Date }) {
+async function adjustBookQuantity(tx: DbTransaction, params: { organizationId: string; bookId: string; targetAvailable: number; now: Date }) {
   const { organizationId, bookId, targetAvailable, now } = params;
 
   const [currentBook] = await tx

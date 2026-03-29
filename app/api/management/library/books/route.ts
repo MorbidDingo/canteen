@@ -7,6 +7,7 @@ import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { searchBookImage } from "@/lib/book-search";
 
 const MAX_EDITABLE_QUANTITY = 5000;
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 function normalizeCategoryInput(input: unknown): string {
   if (typeof input !== "string") return "GENERAL";
@@ -30,7 +31,7 @@ function generateAutoAccessionNumber(bookId: string): string {
 }
 
 async function createAutoCopies(
-  tx: typeof db,
+  tx: DbTransaction,
   organizationId: string,
   bookId: string,
   quantity: number,

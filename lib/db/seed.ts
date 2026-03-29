@@ -12,7 +12,7 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
-import { scrypt } from "@noble/hashes/scrypt";
+import { scrypt } from "@noble/hashes/scrypt.js";
 import crypto from "crypto";
 
 const db = drizzle(process.env.DATABASE_URL!, { schema });
