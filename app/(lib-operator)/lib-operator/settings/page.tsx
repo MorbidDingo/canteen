@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -38,11 +38,7 @@ export default function LibOperatorSettingsPage() {
     setValue: setSelectedLibrary,
   } = usePersistedSelection("certe:selected-library-id");
 
-  useEffect(() => {
-    void fetchSettings();
-  }, [selectedLibrary]);
-
-  async function fetchSettings() {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
       const url = selectedLibrary
@@ -57,7 +53,11 @@ export default function LibOperatorSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedLibrary]);
+
+  useEffect(() => {
+    void fetchSettings();
+  }, [fetchSettings]);
 
   async function handleSave() {
     setSaving(true);

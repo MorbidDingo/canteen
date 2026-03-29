@@ -343,6 +343,7 @@ function ParentLayoutContent({
                 <CanteenSelector
                   value={selectedCanteen}
                   onChange={setSelectedCanteen}
+                  showAll
                   compact
                   className="w-[148px] sm:w-[180px]"
                 />
@@ -352,6 +353,7 @@ function ParentLayoutContent({
                 <LibrarySelector
                   value={selectedLibrary}
                   onChange={setSelectedLibrary}
+                  showAll
                   compact
                   className="w-[148px] sm:w-[180px]"
                 />

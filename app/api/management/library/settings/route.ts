@@ -14,8 +14,9 @@ export async function GET(request: NextRequest) {
       allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
-    // Accept libraryId for forward-compatibility (currently unused in query)
-    const _libraryId = request.nextUrl.searchParams.get("libraryId")?.trim() || null;
+    // Accept libraryId for forward-compatibility (reserved for per-library settings)
+    const libraryId = request.nextUrl.searchParams.get("libraryId")?.trim() || null;
+    void libraryId;
 
     const rows = await db
       .select()
@@ -46,8 +47,9 @@ export async function PUT(request: NextRequest) {
     });
 
     const body = await request.json();
-    // Accept libraryId for forward-compatibility (currently unused in upsert)
-    const { settings, libraryId: _libraryId } = body as { settings: Record<string, string>; libraryId?: string | null };
+    // Accept libraryId for forward-compatibility (reserved for per-library settings)
+    const { settings, libraryId } = body as { settings: Record<string, string>; libraryId?: string | null };
+    void libraryId;
 
     if (!settings || typeof settings !== "object") {
       return NextResponse.json({ error: "Invalid settings payload" }, { status: 400 });

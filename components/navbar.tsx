@@ -60,9 +60,6 @@ const adminLibraryLinks = [
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
-// Keep backward compat alias
-const adminLinks = adminCanteenLinks;
-
 type ParentMode = "canteen" | "library";
 type AdminMode = "canteen" | "library";
 
@@ -209,10 +206,10 @@ export function Navbar() {
 
           {/* Show canteen/library name for parents */}
           {session && isParent && parentMode === "canteen" && (
-            <CanteenSelector value={selectedCanteen} onChange={setSelectedCanteen} compact />
+            <CanteenSelector value={selectedCanteen} onChange={setSelectedCanteen} showAll compact />
           )}
           {session && isParent && parentMode === "library" && (
-            <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
+            <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} showAll compact />
           )}
 
           {/* Admin mode toggle — Canteen / Library */}
