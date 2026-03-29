@@ -20,7 +20,6 @@ import {
   LayoutDashboard,
   Menu,
   X,
-  BarChart3,
   CalendarClock,
   BookOpen,
   Settings,

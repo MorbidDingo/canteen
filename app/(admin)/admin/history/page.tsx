@@ -15,7 +15,7 @@ import {
   type OrderStatus,
   type PaymentStatus,
 } from "@/lib/constants";
-import { Search, RefreshCw, Utensils, Filter, Loader2 } from "lucide-react";
+import { Search, RefreshCw, Utensils, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 type OrderItem = {
