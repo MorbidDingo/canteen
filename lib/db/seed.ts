@@ -12,6 +12,7 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
+import { scrypt } from "@noble/hashes/scrypt";
 import crypto from "crypto";
 
 const db = drizzle(process.env.DATABASE_URL!, { schema });
@@ -22,11 +23,18 @@ function id() {
   return crypto.randomUUID();
 }
 
-function hashPassword(_plain: string): string {
-  // Better-auth stores bcrypt hashes; for seeding we use a pre-computed bcrypt
-  // hash of "password123" so all seed accounts share that password.
-  // Generated externally: bcrypt.hashSync("password123", 10)
-  return "$2b$10$YourSeedHashHere.ReplacedAtRuntime.OrUseRandomHash";
+/**
+ * Hash a password using the same algorithm as better-auth (scrypt).
+ * Format: "<salt_hex>:<key_hex>"
+ */
+async function hashPassword(password: string): Promise<string> {
+  const salt = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("hex");
+  const key = scrypt(
+    new TextEncoder().encode(password.normalize("NFKC")),
+    Buffer.from(salt, "utf-8"),
+    { N: 16384, r: 16, p: 1, dkLen: 64 },
+  );
+  return `${salt}:${Buffer.from(key).toString("hex")}`;
 }
 
 const now = new Date();
@@ -40,6 +48,9 @@ function daysAgo(n: number) {
 
 async function seed() {
   console.log("🌱 Starting seed...");
+
+  // Pre-compute password hash once (reused for all accounts)
+  const passwordHash = await hashPassword("password123");
 
   // ── Platform owner ──────────────────────────────────────
 
@@ -60,7 +71,7 @@ async function seed() {
     accountId: platformOwnerId,
     providerId: "credential",
     userId: platformOwnerId,
-    password: hashPassword("password123"),
+    password: passwordHash,
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
@@ -102,7 +113,7 @@ async function seed() {
     accountId: org1AdminId,
     providerId: "credential",
     userId: org1AdminId,
-    password: hashPassword("password123"),
+    password: passwordHash,
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
@@ -327,7 +338,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1ManagementId, providerId: "credential", userId: org1ManagementId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1ManagementId, providerId: "credential", userId: org1ManagementId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1ManagementId, role: "MANAGEMENT", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Lib Operator (Main Library)
@@ -342,7 +353,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1LibOp1Id, providerId: "credential", userId: org1LibOp1Id, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1LibOp1Id, providerId: "credential", userId: org1LibOp1Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1LibOp1Id, role: "LIB_OPERATOR", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Lib Operator (Science Library)
@@ -357,7 +368,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1LibOp2Id, providerId: "credential", userId: org1LibOp2Id, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1LibOp2Id, providerId: "credential", userId: org1LibOp2Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1LibOp2Id, role: "LIB_OPERATOR", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Operator (wallet top-up)
@@ -372,7 +383,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1OperatorId, providerId: "credential", userId: org1OperatorId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1OperatorId, providerId: "credential", userId: org1OperatorId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1OperatorId, role: "OPERATOR", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Attendance
@@ -387,7 +398,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1AttendanceId, providerId: "credential", userId: org1AttendanceId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1AttendanceId, providerId: "credential", userId: org1AttendanceId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1AttendanceId, role: "ATTENDANCE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // ── Org 1 — Device Accounts ───────────────────────────────
@@ -403,7 +414,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1KioskUser1Id, providerId: "credential", userId: org1KioskUser1Id, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1KioskUser1Id, providerId: "credential", userId: org1KioskUser1Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1KioskUser1Id, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   const org1KioskDevice1Id = id();
@@ -432,7 +443,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1KioskUser2Id, providerId: "credential", userId: org1KioskUser2Id, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1KioskUser2Id, providerId: "credential", userId: org1KioskUser2Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1KioskUser2Id, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   const org1KioskDevice2Id = id();
@@ -461,7 +472,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1GateUserId, providerId: "credential", userId: org1GateUserId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1GateUserId, providerId: "credential", userId: org1GateUserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1GateUserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   await db.insert(schema.organizationDevice).values({
@@ -488,7 +499,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org1LibDeviceUserId, providerId: "credential", userId: org1LibDeviceUserId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1LibDeviceUserId, providerId: "credential", userId: org1LibDeviceUserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1LibDeviceUserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   const org1LibDeviceId = id();
@@ -566,7 +577,7 @@ async function seed() {
       accountId: p.parentId,
       providerId: "credential",
       userId: p.parentId,
-      password: hashPassword("password123"),
+      password: passwordHash,
       createdAt: now,
       updatedAt: now,
     }).onConflictDoNothing();
@@ -685,7 +696,7 @@ async function seed() {
       createdAt: now,
       updatedAt: now,
     }).onConflictDoNothing();
-    await db.insert(schema.account).values({ id: id(), accountId: gId, providerId: "credential", userId: gId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+    await db.insert(schema.account).values({ id: id(), accountId: gId, providerId: "credential", userId: gId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
     await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: gId, role: "GENERAL", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
   }
 
@@ -721,7 +732,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2AdminId, providerId: "credential", userId: org2AdminId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2AdminId, providerId: "credential", userId: org2AdminId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2AdminId, role: "ADMIN", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Org 2 Canteens
@@ -914,7 +925,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2ManagementId, providerId: "credential", userId: org2ManagementId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2ManagementId, providerId: "credential", userId: org2ManagementId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2ManagementId, role: "MANAGEMENT", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   const org2LibOpId = id();
@@ -928,7 +939,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2LibOpId, providerId: "credential", userId: org2LibOpId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2LibOpId, providerId: "credential", userId: org2LibOpId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2LibOpId, role: "LIB_OPERATOR", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   const org2OperatorId = id();
@@ -942,7 +953,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2OperatorId, providerId: "credential", userId: org2OperatorId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2OperatorId, providerId: "credential", userId: org2OperatorId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2OperatorId, role: "OPERATOR", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   // Org 2 — Kiosk device (Main Cafeteria)
@@ -956,7 +967,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2KioskUserId, providerId: "credential", userId: org2KioskUserId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2KioskUserId, providerId: "credential", userId: org2KioskUserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2KioskUserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   await db.insert(schema.organizationDevice).values({
@@ -984,7 +995,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2LibDeviceUserId, providerId: "credential", userId: org2LibDeviceUserId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2LibDeviceUserId, providerId: "credential", userId: org2LibDeviceUserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2LibDeviceUserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   await db.insert(schema.organizationDevice).values({
@@ -1035,7 +1046,7 @@ async function seed() {
       createdAt: now,
       updatedAt: now,
     }).onConflictDoNothing();
-    await db.insert(schema.account).values({ id: id(), accountId: p.parentId, providerId: "credential", userId: p.parentId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+    await db.insert(schema.account).values({ id: id(), accountId: p.parentId, providerId: "credential", userId: p.parentId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
     await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: p.parentId, role: "PARENT", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
     for (const c of p.children) {
@@ -1089,7 +1100,7 @@ async function seed() {
     createdAt: now,
     updatedAt: now,
   }).onConflictDoNothing();
-  await db.insert(schema.account).values({ id: id(), accountId: org2GeneralId, providerId: "credential", userId: org2GeneralId, password: hashPassword("password123"), createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2GeneralId, providerId: "credential", userId: org2GeneralId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
   await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2GeneralId, role: "GENERAL", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
 
   console.log("✅ Seed complete!");

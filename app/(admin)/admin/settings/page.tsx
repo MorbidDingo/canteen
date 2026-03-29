@@ -548,17 +548,17 @@ export default function AdminSettingsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <Input
                           value={canteenEdits[c.id]?.name ?? c.name}
-                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { ...p[c.id], name: e.target.value } }))}
+                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { name: e.target.value, description: p[c.id]?.description ?? (c.description ?? ""), location: p[c.id]?.location ?? (c.location ?? "") } }))}
                           placeholder="Name"
                         />
                         <Input
                           value={canteenEdits[c.id]?.description ?? (c.description || "")}
-                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { ...p[c.id], description: e.target.value } }))}
+                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { name: p[c.id]?.name ?? c.name, description: e.target.value, location: p[c.id]?.location ?? (c.location ?? "") } }))}
                           placeholder="Description"
                         />
                         <Input
                           value={canteenEdits[c.id]?.location ?? (c.location || "")}
-                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { ...p[c.id], location: e.target.value } }))}
+                          onChange={(e) => setCanteenEdits((p) => ({ ...p, [c.id]: { name: p[c.id]?.name ?? c.name, description: p[c.id]?.description ?? (c.description ?? ""), location: e.target.value } }))}
                           placeholder="Location"
                         />
                       </div>
@@ -679,17 +679,17 @@ export default function AdminSettingsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <Input
                           value={libraryEdits[l.id]?.name ?? l.name}
-                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { ...p[l.id], name: e.target.value } }))}
+                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { name: e.target.value, description: p[l.id]?.description ?? (l.description ?? ""), location: p[l.id]?.location ?? (l.location ?? "") } }))}
                           placeholder="Name"
                         />
                         <Input
                           value={libraryEdits[l.id]?.description ?? (l.description || "")}
-                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { ...p[l.id], description: e.target.value } }))}
+                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { name: p[l.id]?.name ?? l.name, description: e.target.value, location: p[l.id]?.location ?? (l.location ?? "") } }))}
                           placeholder="Description"
                         />
                         <Input
                           value={libraryEdits[l.id]?.location ?? (l.location || "")}
-                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { ...p[l.id], location: e.target.value } }))}
+                          onChange={(e) => setLibraryEdits((p) => ({ ...p, [l.id]: { name: p[l.id]?.name ?? l.name, description: p[l.id]?.description ?? (l.description ?? ""), location: e.target.value } }))}
                           placeholder="Location"
                         />
                       </div>
