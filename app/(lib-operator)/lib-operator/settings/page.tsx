@@ -24,6 +24,8 @@ import {
   ShieldCheck,
   ArrowLeft,
 } from "lucide-react";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 export default function LibOperatorSettingsPage() {
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -31,14 +33,22 @@ export default function LibOperatorSettingsPage() {
   const [saving, setSaving] = useState(false);
   const fineMode = settings.fine_mode === "WEEK" ? "WEEK" : "DAY";
 
+  const {
+    value: selectedLibrary,
+    setValue: setSelectedLibrary,
+  } = usePersistedSelection("certe:selected-library-id");
+
   useEffect(() => {
     void fetchSettings();
-  }, []);
+  }, [selectedLibrary]);
 
   async function fetchSettings() {
     try {
       setLoading(true);
-      const res = await fetch("/api/management/library/settings");
+      const url = selectedLibrary
+        ? `/api/management/library/settings?libraryId=${encodeURIComponent(selectedLibrary)}`
+        : "/api/management/library/settings";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setSettings(data.settings);
@@ -55,7 +65,7 @@ export default function LibOperatorSettingsPage() {
       const res = await fetch("/api/management/library/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings }),
+        body: JSON.stringify({ settings, libraryId: selectedLibrary }),
       });
       const data = await res.json();
 
@@ -133,6 +143,13 @@ export default function LibOperatorSettingsPage() {
               </Button>
             </div>
           </div>
+        </div>
+
+        <div className="mt-4">
+          <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Settings apply to all libraries in this organisation.
+          </p>
         </div>
       </div>
 

@@ -7,12 +7,15 @@ import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 
 // GET — return all settings (merged with defaults)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
       allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
+
+    // Accept libraryId for forward-compatibility (currently unused in query)
+    const _libraryId = request.nextUrl.searchParams.get("libraryId")?.trim() || null;
 
     const rows = await db
       .select()
@@ -43,7 +46,8 @@ export async function PUT(request: NextRequest) {
     });
 
     const body = await request.json();
-    const { settings } = body as { settings: Record<string, string> };
+    // Accept libraryId for forward-compatibility (currently unused in upsert)
+    const { settings, libraryId: _libraryId } = body as { settings: Record<string, string>; libraryId?: string | null };
 
     if (!settings || typeof settings !== "object") {
       return NextResponse.json({ error: "Invalid settings payload" }, { status: 400 });
