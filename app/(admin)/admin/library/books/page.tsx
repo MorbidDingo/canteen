@@ -219,7 +219,7 @@ export default function AdminBooksPage() {
     const libraryId = editingBook ? editingBook.libraryId : selectedLibrary;
 
     if (!libraryId) {
-      toast.error("Select a specific library first");
+      toast.error("Please select a specific library to assign this book to");
       return;
     }
 

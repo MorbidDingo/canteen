@@ -148,7 +148,7 @@ export default function LibOperatorSettingsPage() {
         <div className="mt-4">
           <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Settings apply to all libraries in this organization.
+            Settings currently apply to all libraries in this organization. Per-library settings coming soon.
           </p>
         </div>
       </div>
