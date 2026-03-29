@@ -46,7 +46,14 @@ export function LibrarySelector({ value, onChange, showAll = false, className, c
     void load();
   }, [load]);
 
-  if (loading || libraries.length === 0) return null;
+  if (loading || libraries.length === 0) {
+    return (
+      <Badge variant="outline" className={`gap-1.5 font-normal text-muted-foreground ${className ?? ""}`}>
+        <Library className="h-3 w-3 text-muted-foreground" />
+        {loading ? "Loading…" : "No library"}
+      </Badge>
+    );
+  }
 
   // Single library without showAll — show as a static badge
   if (libraries.length === 1 && !showAll) {

@@ -99,7 +99,7 @@ export default function LibOperatorDashboardPage() {
   const {
     value: selectedLibrary,
     setValue: setSelectedLibrary,
-  } = usePersistedSelection("certe:lib-operator-library-id");
+  } = usePersistedSelection("certe:selected-library-id");
 
   // Issue state
   const [childInfo, setChildInfo] = useState<ChildInfo | null>(null);

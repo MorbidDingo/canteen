@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
         category: data.category,
         imageUrl: data.imageUrl || null,
         available: data.available,
-        availableUnits: data.availableUnits ?? null,
+        availableUnits: data.availableUnits ?? 0,
         subscribable: data.subscribable,
       })
       .returning();

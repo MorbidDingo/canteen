@@ -81,7 +81,7 @@ const emptyForm: FormData = {
   category: "SNACKS",
   imageUrl: "",
   available: true,
-  availableUnits: "",
+  availableUnits: "0",
   subscribable: true,
 };
 
@@ -97,7 +97,7 @@ export default function AdminMenuPage() {
     value: selectedCanteen,
     setValue: setSelectedCanteen,
     hydrated: canteenScopeHydrated,
-  } = usePersistedSelection("certe:selected-canteen-id");
+  } = usePersistedSelection("certe:admin-selected-canteen-id");
 
   const fetchItems = useCallback(async () => {
     try {
@@ -169,7 +169,7 @@ export default function AdminMenuPage() {
         available: formData.available,
         availableUnits: formData.availableUnits.trim() !== ""
           ? parseInt(formData.availableUnits)
-          : null,
+          : 0,
         subscribable: formData.subscribable,
       };
 
