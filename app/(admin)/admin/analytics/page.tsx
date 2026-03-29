@@ -25,6 +25,8 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 /* ---------- types matching lib/ml/admin-insights.ts ---------- */
 
@@ -733,11 +735,18 @@ function WasteSegmentsTab({
 export default function AdminAnalyticsPage() {
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenHydrated,
+  } = usePersistedSelection("certe:admin-selected-canteen-id");
 
   const fetchInsights = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/insights?days=30");
+      const params = new URLSearchParams({ days: "30" });
+      if (selectedCanteen) params.set("canteenId", selectedCanteen);
+      const res = await fetch(`/api/admin/insights?${params}`);
       if (!res.ok) throw new Error("Failed to fetch insights");
       const json: InsightsData = await res.json();
       setData(json);
@@ -746,11 +755,12 @@ export default function AdminAnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenHydrated) return;
     fetchInsights();
-  }, [fetchInsights]);
+  }, [fetchInsights, canteenHydrated]);
 
   if (loading && !data) {
     return (
@@ -801,6 +811,13 @@ export default function AdminAnalyticsPage() {
           Refresh
         </Button>
       </div>
+
+      <CanteenSelector
+        value={selectedCanteen}
+        onChange={setSelectedCanteen}
+        showAll
+        compact
+      />
 
       {/* Tabs */}
       <Tabs defaultValue="forecast" className="w-full">
