@@ -125,7 +125,10 @@ export default function LibOperatorDashboardPage() {
   const fetchPendingReturns = useCallback(async () => {
     setPendingLoading(true);
     try {
-      const res = await fetch("/api/lib-operator/pending-returns");
+      const url = selectedLibrary
+        ? `/api/lib-operator/pending-returns?libraryId=${encodeURIComponent(selectedLibrary)}`
+        : "/api/lib-operator/pending-returns";
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setPendingReturns(data.pendingReturns);
@@ -135,7 +138,7 @@ export default function LibOperatorDashboardPage() {
     } finally {
       setPendingLoading(false);
     }
-  }, []);
+  }, [selectedLibrary]);
 
   useEffect(() => {
     const fetchOrgContext = async () => {

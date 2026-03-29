@@ -166,7 +166,7 @@ export default function LibraryHistoryPage() {
   return (
     <div className="app-shell space-y-4 pb-24">
       <section className="flex justify-start">
-        <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
+        <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} showAll compact />
       </section>
 
       <section className="rounded-md border bg-background p-3">

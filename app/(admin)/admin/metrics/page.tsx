@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import { useRealtimeData } from "@/lib/events";
 import {
   ShoppingCart,
@@ -83,6 +85,12 @@ function todayLabel() {
 /* ── Page ──────────────────────────────────────────────────────── */
 
 export default function AdminMetricsPage() {
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenHydrated,
+  } = usePersistedSelection("certe:admin-selected-canteen-id");
+
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [preOrders, setPreOrders] = useState<PreOrdersData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,9 +98,10 @@ export default function AdminMetricsPage() {
   const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
+      const params = selectedCanteen ? `?canteenId=${encodeURIComponent(selectedCanteen)}` : "";
       const [summaryRes, preOrdersRes] = await Promise.all([
-        fetch("/api/admin/summary"),
-        fetch("/api/admin/pre-orders"),
+        fetch(`/api/admin/summary${params}`),
+        fetch(`/api/admin/pre-orders${params}`),
       ]);
 
       if (!summaryRes.ok) throw new Error("Failed to fetch summary");
@@ -116,11 +125,12 @@ export default function AdminMetricsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenHydrated) return;
     fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, canteenHydrated]);
 
   useRealtimeData(fetchAll, "orders-updated");
 
@@ -185,6 +195,13 @@ export default function AdminMetricsPage() {
           Refresh
         </Button>
       </div>
+
+      <CanteenSelector
+        value={selectedCanteen}
+        onChange={setSelectedCanteen}
+        showAll
+        compact
+      />
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

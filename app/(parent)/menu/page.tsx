@@ -84,10 +84,11 @@ export default function MenuPage() {
 
   return (
     <div className="app-shell">
-      {/* Canteen selector — only visible when org has multiple canteens */}
+      {/* Canteen selector — switch between canteens or view all */}
       <CanteenSelector
         value={selectedCanteen}
         onChange={setSelectedCanteen}
+        showAll
         compact
         className="mb-4"
       />

@@ -92,7 +92,7 @@ async function processUpload(
   try {
     access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
