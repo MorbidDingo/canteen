@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Store, MapPin } from "lucide-react";
+import { Store, MapPin, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type Canteen = {
@@ -33,14 +33,14 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
       const active = (data.canteens || []).filter((c) => c.status === "ACTIVE");
       setCanteens(active);
 
-      // Auto-select first canteen if none selected
-      if (!value && active.length >= 1) {
+      // Auto-select first canteen if none selected and showAll is off
+      if (!value && active.length >= 1 && !showAll) {
         onChange(active[0].id);
       }
     } finally {
       setLoading(false);
     }
-  }, [onChange, value]);
+  }, [onChange, value, showAll]);
 
   useEffect(() => {
     void load();
@@ -48,8 +48,8 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
 
   if (loading || canteens.length === 0) return null;
 
-  // Single canteen — show as a static badge (always visible)
-  if (canteens.length === 1) {
+  // Single canteen without showAll — show as a static badge
+  if (canteens.length === 1 && !showAll) {
     const c = canteens[0];
     return (
       <Badge variant="outline" className={`gap-1.5 font-normal ${className ?? ""}`}>
@@ -65,26 +65,41 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
     );
   }
 
-  // Multiple canteens — show dropdown
+  // Multiple canteens or showAll — show dropdown
+  const selectedLabel = value
+    ? canteens.find((c) => c.id === value)?.name
+    : showAll ? "All canteens" : undefined;
+
   return (
     <Select
       value={value ?? (showAll ? "__all__" : "")}
       onValueChange={(v) => onChange(v === "__all__" ? null : v)}
     >
-      <SelectTrigger className={compact ? `h-8 w-[180px] text-xs ${className ?? ""}` : `h-9 w-[220px] ${className ?? ""}`}>
-        <div className="flex items-center gap-1.5">
-          <Store className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <SelectValue placeholder="Select canteen" />
+      <SelectTrigger
+        className={
+          compact
+            ? `h-8 w-auto min-w-[140px] max-w-[220px] text-xs gap-1.5 rounded-full border-border/60 bg-background/80 backdrop-blur-sm shadow-sm transition-colors hover:bg-accent/50 ${className ?? ""}`
+            : `h-9 w-auto min-w-[160px] max-w-[260px] gap-1.5 rounded-full border-border/60 bg-background/80 backdrop-blur-sm shadow-sm transition-colors hover:bg-accent/50 ${className ?? ""}`
+        }
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <Store className="h-3.5 w-3.5 shrink-0 text-[#d4891a]" />
+          <span className="truncate">{selectedLabel ?? "Select canteen"}</span>
         </div>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="rounded-xl">
         {showAll && (
-          <SelectItem value="__all__">
-            <span className="font-medium">All canteens</span>
+          <SelectItem value="__all__" className="rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">All canteens</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                {canteens.length}
+              </Badge>
+            </div>
           </SelectItem>
         )}
         {canteens.map((c) => (
-          <SelectItem key={c.id} value={c.id}>
+          <SelectItem key={c.id} value={c.id} className="rounded-lg">
             <div className="flex items-center gap-1.5">
               <span>{c.name}</span>
               {c.location && (

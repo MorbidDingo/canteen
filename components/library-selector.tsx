@@ -33,13 +33,14 @@ export function LibrarySelector({ value, onChange, showAll = false, className, c
       const active = (data.libraries || []).filter((l) => l.status === "ACTIVE");
       setLibraries(active);
 
-      if (!value && active.length >= 1) {
+      // Auto-select first library if none selected and showAll is off
+      if (!value && active.length >= 1 && !showAll) {
         onChange(active[0].id);
       }
     } finally {
       setLoading(false);
     }
-  }, [onChange, value]);
+  }, [onChange, value, showAll]);
 
   useEffect(() => {
     void load();
@@ -47,8 +48,8 @@ export function LibrarySelector({ value, onChange, showAll = false, className, c
 
   if (loading || libraries.length === 0) return null;
 
-  // Single library — show as a static badge (always visible)
-  if (libraries.length === 1) {
+  // Single library without showAll — show as a static badge
+  if (libraries.length === 1 && !showAll) {
     const l = libraries[0];
     return (
       <Badge variant="outline" className={`gap-1.5 font-normal ${className ?? ""}`}>
@@ -64,26 +65,41 @@ export function LibrarySelector({ value, onChange, showAll = false, className, c
     );
   }
 
-  // Multiple libraries — show dropdown
+  // Multiple libraries or showAll — show dropdown
+  const selectedLabel = value
+    ? libraries.find((l) => l.id === value)?.name
+    : showAll ? "All libraries" : undefined;
+
   return (
     <Select
       value={value ?? (showAll ? "__all__" : "")}
       onValueChange={(v) => onChange(v === "__all__" ? null : v)}
     >
-      <SelectTrigger className={compact ? `h-8 w-[180px] text-xs ${className ?? ""}` : `h-9 w-[220px] ${className ?? ""}`}>
-        <div className="flex items-center gap-1.5">
-          <Library className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <SelectValue placeholder="Select library" />
+      <SelectTrigger
+        className={
+          compact
+            ? `h-8 w-auto min-w-[140px] max-w-[220px] text-xs gap-1.5 rounded-full border-border/60 bg-background/80 backdrop-blur-sm shadow-sm transition-colors hover:bg-accent/50 ${className ?? ""}`
+            : `h-9 w-auto min-w-[160px] max-w-[260px] gap-1.5 rounded-full border-border/60 bg-background/80 backdrop-blur-sm shadow-sm transition-colors hover:bg-accent/50 ${className ?? ""}`
+        }
+      >
+        <div className="flex items-center gap-1.5 truncate">
+          <Library className="h-3.5 w-3.5 shrink-0 text-[#d4891a]" />
+          <span className="truncate">{selectedLabel ?? "Select library"}</span>
         </div>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="rounded-xl">
         {showAll && (
-          <SelectItem value="__all__">
-            <span className="font-medium">All libraries</span>
+          <SelectItem value="__all__" className="rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">All libraries</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                {libraries.length}
+              </Badge>
+            </div>
           </SelectItem>
         )}
         {libraries.map((l) => (
-          <SelectItem key={l.id} value={l.id}>
+          <SelectItem key={l.id} value={l.id} className="rounded-lg">
             <div className="flex items-center gap-1.5">
               <span>{l.name}</span>
               {l.location && (
