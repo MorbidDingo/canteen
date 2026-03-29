@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatePresence, motion } from "@/components/ui/motion";
-import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot, MapPin } from "lucide-react";
+import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   BOOK_CATEGORY_LABELS,
@@ -108,6 +108,11 @@ interface CategoryRail {
   books: ShelfBook[];
 }
 
+interface AuthorRail {
+  author: string;
+  books: ShelfBook[];
+}
+
 interface PendingIssueRequest {
   requestId: string;
   status: string;
@@ -143,6 +148,7 @@ interface ShowcaseData {
     mustReads: ShelfBook[];
     personalized?: ShelfBook[];
     categories: CategoryRail[];
+    authors?: AuthorRail[];
   };
 }
 
@@ -507,6 +513,10 @@ export default function LibraryShowcasePage() {
             ...rail,
             books: patch(rail.books),
           })),
+          authors: prev.rails.authors?.map((rail) => ({
+            ...rail,
+            books: patch(rail.books),
+          })),
         },
       };
     };
@@ -615,7 +625,13 @@ export default function LibraryShowcasePage() {
       books: rail.books,
     }));
 
-    return [...base, ...categoryRails].filter((item) => item.books.length > 0);
+    const authorRails = (data.rails.authors ?? []).map((rail) => ({
+      title: `By ${rail.author}`,
+      icon: <User className="h-3.5 w-3.5" />,
+      books: rail.books,
+    }));
+
+    return [...base, ...categoryRails, ...authorRails].filter((item) => item.books.length > 0);
   }, [data]);
 
   const hasActiveFilters = query.length > 0 || category !== "ALL";

@@ -765,6 +765,33 @@ export async function GET(request: NextRequest) {
     }))
     .sort((a, b) => a.category.localeCompare(b.category));
 
+  // ─── Author rails ───────────────────────────────────────
+  const authorMap = new Map<string, typeof booksWithSignals>();
+  for (const item of booksWithSignals) {
+    const authorKey = (item.author || "").trim();
+    if (!authorKey) continue;
+    const list = authorMap.get(authorKey) ?? [];
+    list.push(item);
+    authorMap.set(authorKey, list);
+  }
+
+  const authors = Array.from(authorMap.entries())
+    .filter(([, items]) => items.length >= 2)
+    .map(([authorName, items]) => ({
+      author: authorName,
+      books: [...items]
+        .sort((a, b) => b.hotIssueCount + b.mustReadCount - (a.hotIssueCount + a.mustReadCount))
+        .slice(0, 14)
+        .map((item) => ({
+          ...item,
+          mlScore: aiScoreMap.get(item.id)?.mlScore ?? 0,
+          mlReasons: aiScoreMap.get(item.id)?.mlReasons ?? [],
+          metaLabel: null,
+        })),
+    }))
+    .sort((a, b) => b.books.length - a.books.length)
+    .slice(0, 10);
+
   const personalized = aiModeEnabled ? personalizedRanking.slice(0, 24) : [];
 
   const children: ChildOption[] = finalChildrenRows.map((item) => ({
@@ -813,6 +840,7 @@ export async function GET(request: NextRequest) {
       mustReads: uniqBy(mustReads, (item) => item.id),
       personalized: uniqBy(personalized, (item) => item.id),
       categories,
+      authors,
     },
     catalog,
     issued,
