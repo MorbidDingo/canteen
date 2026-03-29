@@ -90,6 +90,40 @@ export const organization = pgTable("organization", {
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
 
+// ─── Canteen (sub-entity of organization) ────────────────
+
+export const canteen = pgTable("canteen", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  location: text("location"),
+  status: text("status", { enum: ["ACTIVE", "INACTIVE"] })
+    .notNull()
+    .default("ACTIVE"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Library (sub-entity of organization) ────────────────
+
+export const library = pgTable("library", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  location: text("location"),
+  status: text("status", { enum: ["ACTIVE", "INACTIVE"] })
+    .notNull()
+    .default("ACTIVE"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
 export const organizationMembership = pgTable(
   "organization_membership",
   {
@@ -267,6 +301,8 @@ export const organizationDevice = pgTable(
     lastIp: text("last_ip"),
     lastUserAgent: text("last_user_agent"),
     loginUserId: text("login_user_id").references(() => user.id, { onDelete: "set null" }),
+    canteenId: text("canteen_id").references(() => canteen.id, { onDelete: "set null" }),
+    libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
     createdByUserId: text("created_by_user_id").references(() => user.id),
     status: text("status", { enum: ["ACTIVE", "DISABLED"] }).notNull().default("ACTIVE"),
     lastSeenAt: timestamp("last_seen_at"),
@@ -424,6 +460,7 @@ export const preOrder = pgTable("pre_order", {
   parentId: text("parent_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  canteenId: text("canteen_id").references(() => canteen.id, { onDelete: "set null" }),
   mode: text("mode", { enum: ["ONE_DAY", "SUBSCRIPTION"] })
     .notNull()
     .default("ONE_DAY"),
@@ -455,6 +492,7 @@ export const preOrderItem = pgTable("pre_order_item", {
 export const menuItem = pgTable("menu_item", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+  canteenId: text("canteen_id").references(() => canteen.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
   price: doublePrecision("price").notNull(),
@@ -473,6 +511,7 @@ export const order = pgTable("order", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   childId: text("child_id").references(() => child.id),
+  canteenId: text("canteen_id").references(() => canteen.id, { onDelete: "set null" }),
   deviceId: text("device_id").references(() => organizationDevice.id, { onDelete: "set null" }),
   tokenCode: text("token_code"),
   status: text("status", {
@@ -572,6 +611,28 @@ export const organizationRelations = relations(organization, ({ one, many }) => 
   librarySettings: many(librarySetting),
   appSettings: many(appSetting),
   temporaryRfidAccesses: many(temporaryRfidAccess),
+  canteens: many(canteen),
+  libraries: many(library),
+}));
+
+// ─── Canteen & Library Relations ─────────────────────────
+
+export const canteenRelations = relations(canteen, ({ one, many }) => ({
+  organization: one(organization, { fields: [canteen.organizationId], references: [organization.id] }),
+  menuItems: many(menuItem),
+  orders: many(order),
+  preOrders: many(preOrder),
+  devices: many(organizationDevice, { relationName: "device_canteen" }),
+}));
+
+export const libraryRelations = relations(library, ({ one, many }) => ({
+  organization: one(organization, { fields: [library.organizationId], references: [organization.id] }),
+  books: many(book),
+  bookCopies: many(bookCopy),
+  bookIssuances: many(bookIssuance),
+  issueRequests: many(libraryAppIssueRequest),
+  settings: many(librarySetting),
+  devices: many(organizationDevice, { relationName: "device_library" }),
 }));
 
 export const organizationMembershipRelations = relations(organizationMembership, ({ one }) => ({
@@ -671,6 +732,16 @@ export const organizationDeviceRelations = relations(organizationDevice, ({ one,
     fields: [organizationDevice.organizationId],
     references: [organization.id],
   }),
+  canteen: one(canteen, {
+    fields: [organizationDevice.canteenId],
+    references: [canteen.id],
+    relationName: "device_canteen",
+  }),
+  library: one(library, {
+    fields: [organizationDevice.libraryId],
+    references: [library.id],
+    relationName: "device_library",
+  }),
   loginUser: one(user, {
     fields: [organizationDevice.loginUserId],
     references: [user.id],
@@ -749,6 +820,7 @@ export const parentControlRelations = relations(parentControl, ({ one }) => ({
 export const preOrderRelations = relations(preOrder, ({ one, many }) => ({
   child: one(child, { fields: [preOrder.childId], references: [child.id] }),
   parent: one(user, { fields: [preOrder.parentId], references: [user.id] }),
+  canteen: one(canteen, { fields: [preOrder.canteenId], references: [canteen.id] }),
   items: many(preOrderItem),
 }));
 
@@ -760,6 +832,7 @@ export const preOrderItemRelations = relations(preOrderItem, ({ one }) => ({
 export const orderRelations = relations(order, ({ one, many }) => ({
   user: one(user, { fields: [order.userId], references: [user.id] }),
   child: one(child, { fields: [order.childId], references: [child.id] }),
+  canteen: one(canteen, { fields: [order.canteenId], references: [canteen.id] }),
   device: one(organizationDevice, { fields: [order.deviceId], references: [organizationDevice.id] }),
   items: many(orderItem),
 }));
@@ -771,6 +844,7 @@ export const orderItemRelations = relations(orderItem, ({ one }) => ({
 
 export const menuItemRelations = relations(menuItem, ({ one, many }) => ({
   organization: one(organization, { fields: [menuItem.organizationId], references: [organization.id] }),
+  canteen: one(canteen, { fields: [menuItem.canteenId], references: [canteen.id] }),
   orderItems: many(orderItem),
   preOrderItems: many(preOrderItem),
   discounts: many(discount),
@@ -915,6 +989,7 @@ export const gateLogRelations = relations(gateLog, ({ one }) => ({
 export const book = pgTable("book", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+  libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
   isbn: text("isbn"),
   title: text("title").notNull(),
   author: text("author").notNull(),
@@ -936,6 +1011,7 @@ export const bookCopy = pgTable(
   {
     id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+    libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
     bookId: text("book_id")
       .notNull()
       .references(() => book.id, { onDelete: "cascade" }),
@@ -1043,6 +1119,7 @@ export const bookIssuance = pgTable("book_issuance", {
   bookCopyId: text("book_copy_id")
     .notNull()
     .references(() => bookCopy.id),
+  libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
   childId: text("child_id")
     .notNull()
     .references(() => child.id, { onDelete: "cascade" }),
@@ -1070,6 +1147,7 @@ export const libraryAppIssueRequest = pgTable("library_app_issue_request", {
   organizationId: text("organization_id")
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" }),
+  libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
   parentId: text("parent_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
@@ -1102,6 +1180,7 @@ export const libraryAppIssueRequest = pgTable("library_app_issue_request", {
 export const librarySetting = pgTable("library_setting", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+  libraryId: text("library_id").references(() => library.id, { onDelete: "cascade" }),
   key: text("key").unique().notNull(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
@@ -1194,17 +1273,20 @@ export const certeSubscriptionPenaltyUsage = pgTable(
 
 export const bookRelations = relations(book, ({ one, many }) => ({
   organization: one(organization, { fields: [book.organizationId], references: [organization.id] }),
+  library: one(library, { fields: [book.libraryId], references: [library.id] }),
   copies: many(bookCopy),
 }));
 
 export const bookCopyRelations = relations(bookCopy, ({ one, many }) => ({
   organization: one(organization, { fields: [bookCopy.organizationId], references: [organization.id] }),
+  library: one(library, { fields: [bookCopy.libraryId], references: [library.id] }),
   book: one(book, { fields: [bookCopy.bookId], references: [book.id] }),
   issuances: many(bookIssuance),
 }));
 
 export const bookIssuanceRelations = relations(bookIssuance, ({ one }) => ({
   bookCopy: one(bookCopy, { fields: [bookIssuance.bookCopyId], references: [bookCopy.id] }),
+  library: one(library, { fields: [bookIssuance.libraryId], references: [library.id] }),
   child: one(child, { fields: [bookIssuance.childId], references: [child.id] }),
   device: one(organizationDevice, { fields: [bookIssuance.deviceId], references: [organizationDevice.id] }),
   returnConfirmer: one(user, { fields: [bookIssuance.returnConfirmedBy], references: [user.id] }),
@@ -1214,6 +1296,10 @@ export const libraryAppIssueRequestRelations = relations(libraryAppIssueRequest,
   organization: one(organization, {
     fields: [libraryAppIssueRequest.organizationId],
     references: [organization.id],
+  }),
+  library: one(library, {
+    fields: [libraryAppIssueRequest.libraryId],
+    references: [library.id],
   }),
   parent: one(user, {
     fields: [libraryAppIssueRequest.parentId],
@@ -1241,6 +1327,10 @@ export const librarySettingRelations = relations(librarySetting, ({ one }) => ({
   organization: one(organization, {
     fields: [librarySetting.organizationId],
     references: [organization.id],
+  }),
+  library: one(library, {
+    fields: [librarySetting.libraryId],
+    references: [library.id],
   }),
   updater: one(user, { fields: [librarySetting.updatedBy], references: [user.id] }),
 }));

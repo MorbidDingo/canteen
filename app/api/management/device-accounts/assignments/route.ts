@@ -6,10 +6,10 @@ import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 type DeviceType = "GATE" | "KIOSK" | "LIBRARY";
 
-function roleForDeviceType(deviceType: DeviceType): "OPERATOR" | "LIB_OPERATOR" | "ATTENDANCE" {
+function roleForDeviceType(deviceType: DeviceType): "ADMIN" | "LIB_OPERATOR" | "ATTENDANCE" {
   if (deviceType === "LIBRARY") return "LIB_OPERATOR";
   if (deviceType === "GATE") return "ATTENDANCE";
-  return "OPERATOR";
+  return "ADMIN";
 }
 
 export async function POST(request: NextRequest) {

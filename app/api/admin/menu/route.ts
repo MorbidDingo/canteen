@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { menuItem, discount } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { menuItem, discount, canteen } from "@/lib/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sanitizeImageUrl } from "@/lib/image-url";
 
 // GET — list all menu items (including unavailable ones for admin)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
       allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
     });
 
+    const canteenId = request.nextUrl.searchParams.get("canteenId")?.trim() || null;
+
+    const whereConditions = [eq(menuItem.organizationId, access.activeOrganizationId!)];
+    if (canteenId) {
+      whereConditions.push(eq(menuItem.canteenId, canteenId));
+    }
+
     const items = await db
-      .select()
+      .select({
+        item: menuItem,
+        canteenName: canteen.name,
+        canteenLocation: canteen.location,
+      })
       .from(menuItem)
-      .where(eq(menuItem.organizationId, access.activeOrganizationId!))
+      .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
+      .where(and(...whereConditions))
       .orderBy(desc(menuItem.createdAt));
 
     // Join active discounts
@@ -32,7 +44,7 @@ export async function GET() {
     );
 
     const now = new Date();
-    const enriched = items.map((item) => {
+    const enriched = items.map(({ item, canteenName, canteenLocation }) => {
       const d = discountMap.get(item.id);
       let discountedPrice = null;
       let discountInfo = null;
@@ -48,7 +60,14 @@ export async function GET() {
         discountedPrice = applied;
         discountInfo = { id: d.id, type: d.type, value: d.value, mode: d.mode };
       }
-      return { ...item, imageUrl: sanitizeImageUrl(item.imageUrl), discountedPrice, discountInfo };
+      return {
+        ...item,
+        canteenName,
+        canteenLocation,
+        imageUrl: sanitizeImageUrl(item.imageUrl),
+        discountedPrice,
+        discountInfo,
+      };
     });
 
     return NextResponse.json({ items: enriched });
@@ -69,6 +88,7 @@ const createMenuItemSchema = z.object({
   description: z.string().max(500).optional(),
   price: z.number().positive("Price must be positive"),
   category: z.enum(["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"]),
+  canteenId: z.string().min(1).nullable().optional(),
   imageUrl: z.string().optional().or(z.literal("")),
   available: z.boolean().default(true),
   availableUnits: z.number().int().min(0).nullable().optional(),
@@ -95,10 +115,28 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
+    if (data.canteenId) {
+      const [canteenRow] = await db
+        .select({ id: canteen.id })
+        .from(canteen)
+        .where(
+          and(
+            eq(canteen.id, data.canteenId),
+            eq(canteen.organizationId, access.activeOrganizationId!),
+          ),
+        )
+        .limit(1);
+
+      if (!canteenRow) {
+        return NextResponse.json({ error: "Invalid canteen selected" }, { status: 400 });
+      }
+    }
+
     const [created] = await db
       .insert(menuItem)
       .values({
         organizationId: access.activeOrganizationId!,
+        canteenId: data.canteenId ?? null,
         name: data.name,
         description: data.description || null,
         price: data.price,

@@ -8,6 +8,7 @@ import {
   bookIssuance,
   certeSubscription,
   child,
+  library,
   libraryAppIssueRequest,
   parentControl,
 } from "@/lib/db/schema";
@@ -271,11 +272,24 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = request.nextUrl;
   const requestedChildId = searchParams.get("childId")?.trim() || null;
+  const selectedLibraryId = searchParams.get("libraryId")?.trim() || null;
   const query = searchParams.get("q")?.trim() || "";
   const category = (searchParams.get("category")?.trim() || "ALL").toUpperCase();
   const availability = (searchParams.get("availability")?.trim() || "ALL").toUpperCase();
   const sort = (searchParams.get("sort")?.trim() || "HOT").toUpperCase();
   const aiModeRequested = searchParams.get("aiMode") === "true";
+
+  if (selectedLibraryId) {
+    const [libraryRow] = await db
+      .select({ id: library.id })
+      .from(library)
+      .where(and(eq(library.id, selectedLibraryId), eq(library.organizationId, organizationId)))
+      .limit(1);
+
+    if (!libraryRow) {
+      return NextResponse.json({ error: "Invalid library selected" }, { status: 400 });
+    }
+  }
 
   const selectedChildRow =
     finalChildrenRows.find((item) => item.id === requestedChildId) ?? finalChildrenRows[0];
@@ -288,6 +302,9 @@ export async function GET(request: NextRequest) {
   }
 
   const selectedChildId = selectedChildRow.id;
+  const libraryScopeCondition = selectedLibraryId
+    ? eq(book.libraryId, selectedLibraryId)
+    : sql`true`;
   const pendingScopeCondition =
     session.user.role === "GENERAL"
       ? and(
@@ -344,12 +361,16 @@ export async function GET(request: NextRequest) {
         category: book.category,
         description: book.description,
         coverImageUrl: book.coverImageUrl,
+        libraryId: book.libraryId,
+        libraryName: library.name,
+        libraryLocation: library.location,
         totalCopies: book.totalCopies,
         availableCopies: book.availableCopies,
         createdAt: book.createdAt,
       })
       .from(book)
-      .where(eq(book.organizationId, organizationId)),
+      .leftJoin(library, eq(book.libraryId, library.id))
+      .where(and(eq(book.organizationId, organizationId), libraryScopeCondition)),
     db
       .select({
         issuanceId: bookIssuance.id,
@@ -369,6 +390,7 @@ export async function GET(request: NextRequest) {
         and(
           eq(bookIssuance.childId, selectedChildId),
           eq(book.organizationId, organizationId),
+          libraryScopeCondition,
           inArray(bookIssuance.status, [...ACTIVE_ISSUANCE_STATUSES]),
         ),
       )
@@ -395,6 +417,7 @@ export async function GET(request: NextRequest) {
         and(
           eq(bookIssuance.childId, selectedChildId),
           eq(book.organizationId, organizationId),
+          libraryScopeCondition,
           eq(bookIssuance.status, "RETURNED"),
         ),
       )
@@ -407,7 +430,8 @@ export async function GET(request: NextRequest) {
       })
       .from(bookIssuance)
       .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
-      .where(eq(bookCopy.organizationId, organizationId))
+      .innerJoin(book, eq(bookCopy.bookId, book.id))
+      .where(and(eq(bookCopy.organizationId, organizationId), libraryScopeCondition))
       .groupBy(bookCopy.bookId),
     db
       .select({
@@ -416,9 +440,11 @@ export async function GET(request: NextRequest) {
       })
       .from(bookIssuance)
       .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
+      .innerJoin(book, eq(bookCopy.bookId, book.id))
       .where(
         and(
           eq(bookCopy.organizationId, organizationId),
+          libraryScopeCondition,
           gte(bookIssuance.issuedAt, new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)),
         ),
       )
@@ -439,7 +465,13 @@ export async function GET(request: NextRequest) {
       .from(bookIssuance)
       .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
       .innerJoin(book, eq(bookCopy.bookId, book.id))
-      .where(and(eq(bookIssuance.childId, selectedChildId), eq(book.organizationId, organizationId)))
+      .where(
+        and(
+          eq(bookIssuance.childId, selectedChildId),
+          eq(book.organizationId, organizationId),
+          libraryScopeCondition,
+        ),
+      )
       .orderBy(desc(bookIssuance.issuedAt))
       .limit(200),
     db
@@ -475,13 +507,18 @@ export async function GET(request: NextRequest) {
         author: book.author,
         category: book.category,
         coverImageUrl: book.coverImageUrl,
+        libraryId: book.libraryId,
+        libraryName: library.name,
+        libraryLocation: library.location,
       })
       .from(libraryAppIssueRequest)
       .innerJoin(book, eq(libraryAppIssueRequest.bookId, book.id))
+      .leftJoin(library, eq(book.libraryId, library.id))
       .innerJoin(child, eq(libraryAppIssueRequest.childId, child.id))
       .where(
         and(
           pendingScopeCondition,
+          libraryScopeCondition,
           sql`${libraryAppIssueRequest.expiresAt} > ${now}`,
         ),
       )
@@ -751,10 +788,16 @@ export async function GET(request: NextRequest) {
   }));
 
   const feedbackPromptCount = recentReturns.filter((row) => !row.feedbackSubmitted).length;
+  const orgLibraries = await db
+    .select({ id: library.id, name: library.name, location: library.location })
+    .from(library)
+    .where(and(eq(library.organizationId, organizationId), eq(library.status, "ACTIVE")));
 
   return NextResponse.json({
     children,
     selectedChildId,
+    selectedLibraryId,
+    libraries: orgLibraries,
     canUseAi,
     aiModeEnabled,
     filters: {

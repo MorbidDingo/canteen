@@ -39,6 +39,8 @@ import {
   Percent,
   Sparkles,
   Tag,
+  Store,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +113,8 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits?: number | null;
+  canteenName?: string | null;
+  canteenLocation?: string | null;
 }
 
 type SortOption =
@@ -506,6 +510,18 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                   <CardDescription className="text-xs line-clamp-2 leading-relaxed min-h-[2lh]">
                     {item.description}
                   </CardDescription>
+                )}
+                {item.canteenName && (
+                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Store className="h-3 w-3" />
+                    <span className="truncate">{item.canteenName}</span>
+                    {item.canteenLocation ? (
+                      <span className="inline-flex items-center gap-1 truncate">
+                        <MapPin className="h-3 w-3" />
+                        {item.canteenLocation}
+                      </span>
+                    ) : null}
+                  </div>
                 )}
               </CardHeader>
 

@@ -11,7 +11,9 @@ import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { AiQuickBar } from "@/components/ai/ai-quick-bar";
 import { MenuRecommendations } from "@/components/recommendations/menu-recs";
 import { useCartStore } from "@/lib/store/cart-store";
+import { CanteenSelector } from "@/components/canteen-selector";
 import { AnimatePresence, motion } from "framer-motion";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface MenuItem {
   id: string;
@@ -24,11 +26,18 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits?: number | null;
+  canteenName?: string | null;
+  canteenLocation?: string | null;
 }
 
 export default function MenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenScopeHydrated,
+  } = usePersistedSelection("certe:selected-canteen-id");
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const certePlusActive = certePlusStatus?.active === true;
   const certePlusResolved = certePlusStatus !== null;
@@ -39,7 +48,10 @@ export default function MenuPage() {
 
   const fetchMenu = useCallback(async () => {
     try {
-      const res = await fetch("/api/menu");
+      const url = selectedCanteen
+        ? `/api/menu?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "/api/menu";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setItems(data.items);
@@ -48,12 +60,14 @@ export default function MenuPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenScopeHydrated) return;
+    setLoading(true);
     void fetchMenu();
     void ensureCertePlusFresh(45_000);
-  }, [fetchMenu, ensureCertePlusFresh]);
+  }, [fetchMenu, ensureCertePlusFresh, canteenScopeHydrated]);
 
   // Instant refresh via SSE when admin updates menu
   useRealtimeData(fetchMenu, "menu-updated");
@@ -70,6 +84,14 @@ export default function MenuPage() {
 
   return (
     <div className="app-shell">
+      {/* Canteen selector — only visible when org has multiple canteens */}
+      <CanteenSelector
+        value={selectedCanteen}
+        onChange={setSelectedCanteen}
+        compact
+        className="mb-4"
+      />
+
       <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 bg-card/60 p-1 shadow-sm">
         <Link href="/menu">
           <Button type="button" variant="secondary" size="sm">

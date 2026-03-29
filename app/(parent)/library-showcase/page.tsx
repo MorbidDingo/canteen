@@ -16,12 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AnimatePresence, motion } from "@/components/ui/motion";
-import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot } from "lucide-react";
+import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   BOOK_CATEGORY_LABELS,
   type BookCategory,
 } from "@/lib/constants";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 // ─── Markdown Renderer ──────────────────────────────────────────────────────
 
@@ -83,6 +85,9 @@ interface ChildOption {
 
 interface ShelfBook {
   id: string;
+  libraryId?: string | null;
+  libraryName?: string | null;
+  libraryLocation?: string | null;
   title: string;
   author: string;
   category: string;
@@ -115,6 +120,9 @@ interface PendingIssueRequest {
   author: string;
   category: string;
   coverImageUrl: string | null;
+  libraryId?: string | null;
+  libraryName?: string | null;
+  libraryLocation?: string | null;
 }
 
 interface ShowcaseData {
@@ -124,6 +132,8 @@ interface ShowcaseData {
     query: string;
     category: string;
   };
+  selectedLibraryId?: string | null;
+  libraries?: Array<{ id: string; name: string; location: string | null }>;
   catalog: ShelfBook[];
   pendingRequests: PendingIssueRequest[];
   rails: {
@@ -254,6 +264,12 @@ function TitleCard({
         <div className="absolute inset-x-0 bottom-0 p-2.5">
           <p className="line-clamp-2 text-xs font-semibold leading-tight text-white drop-shadow">{book.title}</p>
           <p className="mt-0.5 truncate text-[10px] text-white/65">{book.author}</p>
+          {book.libraryName ? (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-white/75">
+              <MapPin className="h-2.5 w-2.5 shrink-0" />
+              {book.libraryName}
+            </p>
+          ) : null}
         </div>
       </div>
     </button>
@@ -325,6 +341,11 @@ export default function LibraryShowcasePage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("ALL");
+  const {
+    value: selectedLibrary,
+    setValue: setSelectedLibrary,
+    hydrated: libraryScopeHydrated,
+  } = usePersistedSelection("certe:selected-library-id");
 
   const initializedFilters = useRef(false);
 
@@ -338,6 +359,7 @@ export default function LibraryShowcasePage() {
     try {
       const params = new URLSearchParams();
       if (selectedChildId) params.set("childId", selectedChildId);
+      if (selectedLibrary) params.set("libraryId", selectedLibrary);
       if (query) params.set("q", query);
       if (category !== "ALL") params.set("category", category);
 
@@ -346,6 +368,10 @@ export default function LibraryShowcasePage() {
       const json: ShowcaseData = await res.json();
 
       setData(json);
+
+      if (!selectedLibrary && json.selectedLibraryId) {
+        setSelectedLibrary(json.selectedLibraryId);
+      }
 
       if (!selectedChildId && json.selectedChildId) {
         setSelectedChildId(json.selectedChildId);
@@ -362,15 +388,16 @@ export default function LibraryShowcasePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId, query, category]);
+  }, [selectedChildId, selectedLibrary, query, category, setSelectedLibrary]);
 
   useSSE("library-updated", () => {
     void fetchShowcase();
   });
 
   useEffect(() => {
+    if (!libraryScopeHydrated) return;
     void fetchShowcase();
-  }, [fetchShowcase]);
+  }, [fetchShowcase, libraryScopeHydrated]);
 
   // Auto-open book detail when ?bookId= query param is present
   useEffect(() => {
@@ -617,6 +644,14 @@ export default function LibraryShowcasePage() {
     <>
       <div className="app-shell space-y-5 pb-28">
 
+        <section className="flex justify-start">
+          <LibrarySelector
+            value={selectedLibrary}
+            onChange={setSelectedLibrary}
+            compact
+          />
+        </section>
+
         {/* Search & filter bar */}
         <section className="rounded-2xl border border-border/60 bg-card/70 p-3 shadow-sm backdrop-blur-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -762,6 +797,13 @@ export default function LibraryShowcasePage() {
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="line-clamp-1 text-sm font-semibold text-foreground">{requestItem.title}</p>
                     <p className="truncate text-xs text-muted-foreground">{requestItem.author}</p>
+                    {requestItem.libraryName ? (
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {requestItem.libraryName}
+                        {requestItem.libraryLocation ? ` · ${requestItem.libraryLocation}` : ""}
+                      </p>
+                    ) : null}
                     <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
                       <Clock3 className="h-3 w-3 shrink-0" />
                       Expires {formatDateTime(requestItem.expiresAt)}
@@ -909,6 +951,12 @@ export default function LibraryShowcasePage() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline">{getCategoryLabel(activeBook.category)}</Badge>
+                      {activeBook.libraryName ? (
+                        <Badge variant="outline" className="gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {activeBook.libraryName}
+                        </Badge>
+                      ) : null}
                       {activeBook.metaLabel ? <Badge variant="vibrant">{activeBook.metaLabel}</Badge> : null}
                       {typeof activeBook.availableCopies === "number" ? (
                         <Badge

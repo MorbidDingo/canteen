@@ -62,7 +62,8 @@ type CreatedCredential = {
 };
 
 const STAFF_ROLES = [
-  { value: "OPERATOR", label: "Canteen Operator" },
+  { value: "ADMIN", label: "Canteen Admin" },
+  { value: "OPERATOR", label: "Operator" },
   { value: "LIB_OPERATOR", label: "Library Operator" },
   { value: "ATTENDANCE", label: "Attendance" },
   { value: "MANAGEMENT", label: "Management" },

@@ -4,9 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -49,9 +46,14 @@ import {
   type BookCopyStatus,
   type BookCopyCondition,
 } from "@/lib/constants";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface Book {
   id: string;
+  libraryId: string | null;
+  libraryName: string | null;
+  libraryLocation: string | null;
   isbn: string | null;
   title: string;
   author: string;
@@ -114,6 +116,11 @@ export default function LibOperatorBooksPage() {
 
   const [deleting, setDeleting] = useState<string | null>(null);
   const [retiringCopy, setRetiringCopy] = useState<string | null>(null);
+  const {
+    value: selectedLibrary,
+    setValue: setSelectedLibrary,
+    hydrated: libraryScopeHydrated,
+  } = usePersistedSelection("certe:selected-library-id");
 
   const formatCategoryLabel = useCallback((category: string) => {
     if (!category) return "General";
@@ -133,6 +140,7 @@ export default function LibOperatorBooksPage() {
         const params = new URLSearchParams();
         if (q && q.length >= 2) params.set("q", q);
         if (cat && cat !== "ALL") params.set("category", cat);
+        if (selectedLibrary) params.set("libraryId", selectedLibrary);
         params.set("page", String(p || 1));
         params.set("limit", "30");
 
@@ -151,20 +159,22 @@ export default function LibOperatorBooksPage() {
         setLoading(false);
       }
     },
-    [],
+    [selectedLibrary],
   );
 
   useEffect(() => {
+    if (!libraryScopeHydrated) return;
     fetchBooks();
-  }, [fetchBooks]);
+  }, [fetchBooks, libraryScopeHydrated]);
 
   useEffect(() => {
+    if (!libraryScopeHydrated) return;
     const timer = setTimeout(() => {
       setPage(1);
       fetchBooks(searchQuery, categoryFilter, 1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, categoryFilter, fetchBooks]);
+  }, [searchQuery, categoryFilter, fetchBooks, libraryScopeHydrated]);
 
   // ─── Book CRUD ─────────────────────────────────────────
 
@@ -200,6 +210,11 @@ export default function LibOperatorBooksPage() {
       return;
     }
 
+    if (!selectedLibrary) {
+      toast.error("Select a library first");
+      return;
+    }
+
     const parsedQuantity = Number.parseInt(formQuantity, 10);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
       toast.error("Quantity must be 0 or more");
@@ -217,6 +232,7 @@ export default function LibOperatorBooksPage() {
         category: formCategory.trim() || "GENERAL",
         quantity: parsedQuantity,
         description: formDescription || null,
+        libraryId: selectedLibrary,
       };
 
       const url = editingBook
@@ -456,9 +472,17 @@ export default function LibOperatorBooksPage() {
 
         {/* Actions */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            Manage books, copies, and inventory
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <p className="text-sm text-muted-foreground">
+              Manage books, copies, and inventory
+            </p>
+            <LibrarySelector
+              value={selectedLibrary}
+              onChange={setSelectedLibrary}
+              showAll={false}
+              compact
+            />
+          </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -632,6 +656,13 @@ export default function LibOperatorBooksPage() {
                       {b.publisher && ` · ${b.publisher}`}
                       {b.edition && ` · ${b.edition}`}
                     </p>
+                    {b.libraryName ? (
+                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {b.libraryName}
+                        {b.libraryLocation ? ` · ${b.libraryLocation}` : ""}
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       {b.isbn && (
                         <span className="font-mono">ISBN: {b.isbn}</span>

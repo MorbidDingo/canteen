@@ -55,7 +55,7 @@ export async function POST(
 
     // Verify book exists
     const [parentBook] = await db
-      .select({ id: book.id, title: book.title })
+      .select({ id: book.id, title: book.title, libraryId: book.libraryId })
       .from(book)
       .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
       .limit(1);
@@ -83,6 +83,7 @@ export async function POST(
         .insert(bookCopy)
         .values({
           organizationId: access.activeOrganizationId!,
+          libraryId: parentBook.libraryId,
           bookId: id,
           accessionNumber: accessionNumber.trim(),
           condition: condition || "NEW",

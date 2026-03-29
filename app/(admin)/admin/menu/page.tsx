@@ -41,9 +41,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { emitEvent, useRealtimeData } from "@/lib/events";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface MenuItem {
   id: string;
+  canteenId: string | null;
+  canteenName?: string | null;
+  canteenLocation?: string | null;
   name: string;
   description: string | null;
   price: number;
@@ -57,6 +62,7 @@ interface MenuItem {
 }
 
 interface FormData {
+  canteenId: string | null;
   name: string;
   description: string;
   price: string;
@@ -68,6 +74,7 @@ interface FormData {
 }
 
 const emptyForm: FormData = {
+  canteenId: null,
   name: "",
   description: "",
   price: "",
@@ -86,11 +93,19 @@ export default function AdminMenuPage() {
   const [formData, setFormData] = useState<FormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenScopeHydrated,
+  } = usePersistedSelection("certe:selected-canteen-id");
 
   const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/menu");
+      const query = selectedCanteen
+        ? `?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "";
+      const res = await fetch(`/api/admin/menu${query}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setItems(data.items);
@@ -99,24 +114,26 @@ export default function AdminMenuPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenScopeHydrated) return;
     fetchItems();
-  }, [fetchItems]);
+  }, [fetchItems, canteenScopeHydrated]);
 
   // Instant refresh via SSE when any menu event occurs
   useRealtimeData(fetchItems, "menu-updated");
 
   const openCreate = () => {
     setEditingItem(null);
-    setFormData(emptyForm);
+    setFormData({ ...emptyForm, canteenId: selectedCanteen });
     setDialogOpen(true);
   };
 
   const openEdit = (item: MenuItem) => {
     setEditingItem(item);
     setFormData({
+      canteenId: item.canteenId,
       name: item.name,
       description: item.description || "",
       price: item.price.toString(),
@@ -143,6 +160,7 @@ export default function AdminMenuPage() {
     setSaving(true);
     try {
       const payload = {
+        canteenId: formData.canteenId,
         name: formData.name.trim(),
         description: formData.description.trim() || undefined,
         price,
@@ -236,7 +254,13 @@ export default function AdminMenuPage() {
             Add, edit, and manage menu items
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <CanteenSelector
+            value={selectedCanteen}
+            onChange={setSelectedCanteen}
+            showAll
+            compact
+          />
           <Button
             variant="outline"
             size="sm"
@@ -345,6 +369,12 @@ export default function AdminMenuPage() {
                                 ∞
                               </Badge>
                             )}
+                              {item.canteenName && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  {item.canteenName}
+                                  {item.canteenLocation ? ` · ${item.canteenLocation}` : ""}
+                                </Badge>
+                              )}
                             {!item.subscribable && (
                               <Badge variant="outline" className="text-[10px] text-orange-600">
                                 No Sub
@@ -507,6 +537,14 @@ function MenuItemForm({
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="hidden"
           onChange={handleImageUpload}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Canteen</Label>
+        <CanteenSelector
+          value={formData.canteenId}
+          onChange={(canteenId) => setFormData({ ...formData, canteenId })}
         />
       </div>
 

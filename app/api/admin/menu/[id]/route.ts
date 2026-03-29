@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { menuItem } from "@/lib/db/schema";
+import { canteen, menuItem } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -11,6 +11,7 @@ const updateMenuItemSchema = z.object({
   description: z.string().max(500).optional(),
   price: z.number().positive().optional(),
   category: z.enum(["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"]).optional(),
+  canteenId: z.string().min(1).nullable().optional(),
   imageUrl: z.string().optional().or(z.literal("")).optional(),
   available: z.boolean().optional(),
   availableUnits: z.number().int().min(0).nullable().optional(),
@@ -51,6 +52,23 @@ export async function PATCH(
         { error: "Menu item not found" },
         { status: 404 }
       );
+    }
+
+    if (parsed.data.canteenId) {
+      const [canteenRow] = await db
+        .select({ id: canteen.id })
+        .from(canteen)
+        .where(
+          and(
+            eq(canteen.id, parsed.data.canteenId),
+            eq(canteen.organizationId, access.activeOrganizationId!),
+          ),
+        )
+        .limit(1);
+
+      if (!canteenRow) {
+        return NextResponse.json({ error: "Invalid canteen selected" }, { status: 400 });
+      }
     }
 
     const updateData: Record<string, unknown> = {

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,8 @@ import {
   LogOut,
 } from "lucide-react";
 import { OrgSwitcher } from "@/components/org-switcher";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 const links = [
   { href: "/lib-operator/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -50,28 +51,9 @@ function handleSignOut() {
 
 export function LibOperatorNav() {
   const pathname = usePathname();
-  const [deviceLabel, setDeviceLabel] = useState<string>("Library");
-
-  useEffect(() => {
-    const fetchDeviceInfo = async () => {
-      try {
-        const res = await fetch("/api/org/context");
-        if (!res.ok) return;
-        const data = await res.json();
-        // Find first LIBRARY device
-        const device = data.devices?.find(
-          (d: { deviceType: string }) => d.deviceType === "LIBRARY",
-        );
-        if (device) {
-          setDeviceLabel(device.device_name || "Library");
-        }
-      } catch {
-        // non-blocking
-      }
-    };
-
-    void fetchDeviceInfo();
-  }, []);
+  const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
+    "certe:selected-library-id",
+  );
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
@@ -82,8 +64,8 @@ export function LibOperatorNav() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">Librarian Console</p>
-            <p className="truncate text-xs text-muted-foreground">{deviceLabel}</p>
           </div>
+          <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
         </div>
 
         <nav className="hidden items-center gap-1 md:flex">

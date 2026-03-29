@@ -29,7 +29,7 @@ type DeviceAssignment = {
 type DeviceRecord = {
   id: string;
   deviceType: DeviceType;
-  requiredRole: "OPERATOR" | "LIB_OPERATOR" | "ATTENDANCE";
+  requiredRole: "ADMIN" | "LIB_OPERATOR" | "ATTENDANCE";
   deviceName: string;
   deviceCode: string;
   status: "ACTIVE" | "DISABLED";

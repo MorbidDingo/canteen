@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { book, bookCopy, bookIssuance } from "@/lib/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { book, bookCopy, bookIssuance, library } from "@/lib/db/schema";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
@@ -29,12 +29,18 @@ function generateAutoAccessionNumber(bookId: string): string {
   return `AUTO-${bookHint}-${randomPart}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function createAutoCopies(tx: any, organizationId: string, bookId: string, quantity: number) {
+async function createAutoCopies(
+  tx: typeof db,
+  organizationId: string,
+  bookId: string,
+  quantity: number,
+  libraryId: string | null,
+) {
   if (quantity <= 0) return;
 
   const values = Array.from({ length: quantity }, () => ({
     organizationId,
+    libraryId,
     bookId,
     accessionNumber: generateAutoAccessionNumber(bookId),
     condition: "NEW" as const,
@@ -45,8 +51,7 @@ async function createAutoCopies(tx: any, organizationId: string, bookId: string,
   await tx.insert(bookCopy).values(values);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function recalcCopyCounts(tx: any, bookId: string, organizationId: string, now: Date) {
+async function recalcCopyCounts(tx: typeof db, bookId: string, organizationId: string, now: Date) {
   const allCopies = await tx
     .select({ status: bookCopy.status })
     .from(bookCopy)
@@ -61,12 +66,11 @@ async function recalcCopyCounts(tx: any, bookId: string, organizationId: string,
     .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function adjustBookQuantity(tx: any, params: { organizationId: string; bookId: string; targetAvailable: number; now: Date }) {
+async function adjustBookQuantity(tx: typeof db, params: { organizationId: string; bookId: string; targetAvailable: number; now: Date }) {
   const { organizationId, bookId, targetAvailable, now } = params;
 
   const [currentBook] = await tx
-    .select({ availableCopies: book.availableCopies })
+    .select({ availableCopies: book.availableCopies, libraryId: book.libraryId })
     .from(book)
     .where(and(eq(book.id, bookId), eq(book.organizationId, organizationId)))
     .limit(1);
@@ -78,7 +82,13 @@ async function adjustBookQuantity(tx: any, params: { organizationId: string; boo
   const currentAvailable = currentBook.availableCopies;
 
   if (targetAvailable > currentAvailable) {
-    await createAutoCopies(tx, organizationId, bookId, targetAvailable - currentAvailable);
+    await createAutoCopies(
+      tx,
+      organizationId,
+      bookId,
+      targetAvailable - currentAvailable,
+      currentBook.libraryId,
+    );
   } else if (targetAvailable < currentAvailable) {
     const toRetireCount = currentAvailable - targetAvailable;
     const availableCopies = await tx
@@ -165,12 +175,30 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { title, author, isbn, publisher, edition, category, description, quantity } = body;
+    const {
+      title,
+      author,
+      isbn,
+      publisher,
+      edition,
+      category,
+      description,
+      quantity,
+      libraryId,
+    } = body;
+
+    const normalizedLibraryId =
+      typeof libraryId === "string" && libraryId.trim().length > 0
+        ? libraryId.trim()
+        : libraryId === null
+          ? null
+          : undefined;
 
     const [existing] = await db
       .select({
         id: book.id,
         availableCopies: book.availableCopies,
+        libraryId: book.libraryId,
       })
       .from(book)
       .where(and(eq(book.id, id), eq(book.organizationId, access.activeOrganizationId!)))
@@ -180,16 +208,42 @@ export async function PATCH(
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
+    if (normalizedLibraryId !== undefined && normalizedLibraryId !== null) {
+      const [libraryRow] = await db
+        .select({ id: library.id })
+        .from(library)
+        .where(
+          and(
+            eq(library.id, normalizedLibraryId),
+            eq(library.organizationId, access.activeOrganizationId!),
+          ),
+        )
+        .limit(1);
+
+      if (!libraryRow) {
+        return NextResponse.json({ error: "Invalid library selected" }, { status: 400 });
+      }
+    }
+
+    const targetLibraryId =
+      normalizedLibraryId === undefined ? existing.libraryId : normalizedLibraryId;
+
     // Check duplicate ISBN if changed
     if (isbn?.trim()) {
       const [dup] = await db
         .select({ id: book.id })
         .from(book)
-        .where(and(eq(book.isbn, isbn.trim()), eq(book.organizationId, access.activeOrganizationId!)))
+        .where(
+          and(
+            eq(book.isbn, isbn.trim()),
+            eq(book.organizationId, access.activeOrganizationId!),
+            targetLibraryId ? eq(book.libraryId, targetLibraryId) : isNull(book.libraryId),
+          ),
+        )
         .limit(1);
       if (dup && dup.id !== id) {
         return NextResponse.json(
-          { error: `A book with ISBN ${isbn.trim()} already exists` },
+          { error: `A book with ISBN ${isbn.trim()} already exists in this library` },
           { status: 409 },
         );
       }
@@ -224,6 +278,7 @@ export async function PATCH(
     if (edition !== undefined) updates.edition = edition?.trim() || null;
     if (category !== undefined) updates.category = normalizeCategoryInput(category);
     if (description !== undefined) updates.description = description?.trim() || null;
+    if (normalizedLibraryId !== undefined) updates.libraryId = normalizedLibraryId;
 
     let updated: typeof book.$inferSelect | undefined;
 
@@ -243,6 +298,13 @@ export async function PATCH(
             targetAvailable: parsedQuantity!,
             now,
           });
+        }
+
+        if (normalizedLibraryId !== undefined) {
+          await tx
+            .update(bookCopy)
+            .set({ libraryId: normalizedLibraryId, updatedAt: now })
+            .where(and(eq(bookCopy.bookId, id), eq(bookCopy.organizationId, access.activeOrganizationId!)));
         }
 
         const [latest] = await tx

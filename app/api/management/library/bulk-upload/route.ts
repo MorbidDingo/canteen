@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { book, bookCopy } from "@/lib/db/schema";
+import { book, bookCopy, library } from "@/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
@@ -104,6 +104,19 @@ async function processUpload(
   }
 
   const organizationId = access.activeOrganizationId!;
+  const libraryIdParam = request.nextUrl.searchParams.get("libraryId")?.trim() || null;
+
+  if (libraryIdParam) {
+    const [libraryRow] = await db
+      .select({ id: library.id })
+      .from(library)
+      .where(and(eq(library.id, libraryIdParam), eq(library.organizationId, organizationId)))
+      .limit(1);
+
+    if (!libraryRow) {
+      return { response: NextResponse.json({ error: "Invalid library selected" }, { status: 400 }) };
+    }
+  }
 
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
@@ -164,10 +177,14 @@ async function processUpload(
   const isbnToBookId = new Map<string, string>();
 
   if (isbnList.length > 0) {
+    const isbnConditions = [inArray(book.isbn, isbnList), eq(book.organizationId, organizationId)];
+    if (libraryIdParam) {
+      isbnConditions.push(eq(book.libraryId, libraryIdParam));
+    }
     const booksByIsbn = await db
       .select({ id: book.id, isbn: book.isbn })
       .from(book)
-      .where(and(inArray(book.isbn, isbnList), eq(book.organizationId, organizationId)));
+      .where(and(...isbnConditions));
     for (const b of booksByIsbn) {
       if (b.isbn) isbnToBookId.set(b.isbn, b.id);
     }
@@ -182,16 +199,18 @@ async function processUpload(
   emitStage?.("matching-books", "Matching books by ISBN/title/author (0%)", 0);
   await runParallelForEach(titleAuthorKeys, BOOK_CREATE_CONCURRENCY, async (key) => {
     const [title, author] = key.split("|||");
+    const titleMatchConditions = [
+      eq(book.organizationId, organizationId),
+      sql`lower(${book.title}) = ${title}`,
+      sql`lower(${book.author}) = ${author}`,
+    ];
+    if (libraryIdParam) {
+      titleMatchConditions.push(eq(book.libraryId, libraryIdParam));
+    }
     const found = await db
       .select({ id: book.id, title: book.title, author: book.author })
       .from(book)
-      .where(
-        and(
-          eq(book.organizationId, organizationId),
-          sql`lower(${book.title}) = ${title}`,
-          sql`lower(${book.author}) = ${author}`,
-        ),
-      )
+      .where(and(...titleMatchConditions))
       .limit(1);
     if (found[0]) {
       titleAuthorToBookId.set(key, found[0].id);
@@ -251,6 +270,7 @@ async function processUpload(
           .insert(book)
           .values({
             organizationId,
+            libraryId: libraryIdParam,
             title: row.title,
             author: row.author,
             isbn: row.isbn,
@@ -270,6 +290,7 @@ async function processUpload(
 
       await db.insert(bookCopy).values({
         organizationId,
+        libraryId: libraryIdParam,
         bookId,
         accessionNumber: row.accessionNumber,
         condition: row.condition as BookCopyCondition,
@@ -374,6 +395,7 @@ async function processUpload(
     action: AUDIT_ACTIONS.LIBRARY_BULK_UPLOAD,
     details: {
       organizationId,
+      libraryId: libraryIdParam,
       ...summary,
       bookConcurrency: BOOK_CREATE_CONCURRENCY,
       copyConcurrency: COPY_CREATE_CONCURRENCY,

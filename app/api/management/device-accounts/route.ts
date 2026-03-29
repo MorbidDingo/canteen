@@ -16,15 +16,15 @@ type DeviceType = "GATE" | "KIOSK" | "LIBRARY";
 type DeviceRole = "OWNER" | "ADMIN" | "MANAGEMENT" | "OPERATOR" | "LIB_OPERATOR" | "ATTENDANCE";
 
 const ASSIGNABLE_ROLES: DeviceRole[] = [
-  "OPERATOR",
+  "ADMIN",
   "LIB_OPERATOR",
   "ATTENDANCE",
 ];
 
-function roleForDeviceType(deviceType: DeviceType): "OPERATOR" | "LIB_OPERATOR" | "ATTENDANCE" {
+function roleForDeviceType(deviceType: DeviceType): "ADMIN" | "LIB_OPERATOR" | "ATTENDANCE" {
   if (deviceType === "LIBRARY") return "LIB_OPERATOR";
   if (deviceType === "GATE") return "ATTENDANCE";
-  return "OPERATOR";
+  return "ADMIN";
 }
 
 export async function GET() {

@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { BulkUploadLogPanel } from "@/components/bulk-upload-log-panel";
 import { BulkUploadStatusPanel, type UploadStage } from "@/components/bulk-upload-status-panel";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface UploadResult {
   row: number;
@@ -55,6 +57,9 @@ export default function LibOperatorBulkUploadPage() {
   const [liveLogs, setLiveLogs] = useState<
     { row: number; status: "created" | "skipped" | "error"; message: string; processed: number; total: number }[]
   >([]);
+  const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
+    "certe:selected-library-id",
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   const stageOrder = [
@@ -89,6 +94,11 @@ export default function LibOperatorBulkUploadPage() {
   }
 
   async function handleUpload() {
+    if (!selectedLibrary) {
+      toast.error("Select a library first");
+      return;
+    }
+
     const file = fileRef.current?.files?.[0];
     if (!file) {
       toast.error("Please select a file");
@@ -119,7 +129,8 @@ export default function LibOperatorBulkUploadPage() {
         const xhr = new XMLHttpRequest();
         let responseCursor = 0;
         let buffer = "";
-        xhr.open("POST", "/api/management/library/bulk-upload?mode=stream", true);
+        const scopeQuery = new URLSearchParams({ mode: "stream", libraryId: selectedLibrary }).toString();
+        xhr.open("POST", `/api/management/library/bulk-upload?${scopeQuery}`, true);
 
         xhr.upload.onprogress = (event) => {
           if (!event.lengthComputable) return;
@@ -240,14 +251,21 @@ export default function LibOperatorBulkUploadPage() {
     <div className="pb-8">
       <div className="container mx-auto max-w-5xl space-y-6 px-4 py-6">
         <div className="rounded-2xl border border-[#d4891a]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
-              <BookOpen className="h-5 w-5 text-white" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
+                <BookOpen className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Bulk Book Upload</p>
+                <p className="text-xs text-muted-foreground">Import large catalog files from CSV or Excel.</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold">Bulk Book Upload</p>
-              <p className="text-xs text-muted-foreground">Import large catalog files from CSV or Excel.</p>
-            </div>
+            <LibrarySelector
+              value={selectedLibrary}
+              onChange={setSelectedLibrary}
+              compact
+            />
           </div>
         </div>
 

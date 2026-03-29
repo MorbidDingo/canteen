@@ -16,12 +16,15 @@ import {
   BookOpen,
   Loader2,
   Search,
+  MapPin,
 } from "lucide-react";
 import {
   BOOK_CATEGORY_LABELS,
   type BookCategory,
 } from "@/lib/constants";
 import { useSSE } from "@/lib/events";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface ChildOption {
   id: string;
@@ -44,11 +47,16 @@ interface IssuedRecord {
   bookAuthor: string;
   bookCategory: string;
   bookCoverUrl: string | null;
+  libraryId?: string | null;
+  libraryName?: string | null;
+  libraryLocation?: string | null;
 }
 
 interface DiscoverData {
   children: ChildOption[];
   selectedChildId: string | null;
+  selectedLibraryId?: string | null;
+  libraries?: Array<{ id: string; name: string; location: string | null }>;
   filters: {
     query: string;
     category: string;
@@ -74,6 +82,11 @@ export default function LibraryHistoryPage() {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("ALL");
+  const {
+    value: selectedLibrary,
+    setValue: setSelectedLibrary,
+    hydrated: libraryScopeHydrated,
+  } = usePersistedSelection("certe:selected-library-id");
 
   const initializedFilters = useRef(false);
 
@@ -90,6 +103,7 @@ export default function LibraryHistoryPage() {
     try {
       const params = new URLSearchParams();
       if (selectedChildId) params.set("childId", selectedChildId);
+      if (selectedLibrary) params.set("libraryId", selectedLibrary);
       if (query) params.set("q", query);
       if (category !== "ALL") params.set("category", category);
 
@@ -98,6 +112,10 @@ export default function LibraryHistoryPage() {
       const json: DiscoverData = await res.json();
 
       setData(json);
+
+      if (!selectedLibrary && json.selectedLibraryId) {
+        setSelectedLibrary(json.selectedLibraryId);
+      }
 
       if (!selectedChildId && json.selectedChildId) {
         setSelectedChildId(json.selectedChildId);
@@ -114,15 +132,16 @@ export default function LibraryHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId, query, category]);
+  }, [selectedChildId, selectedLibrary, query, category, setSelectedLibrary]);
 
   useSSE("library-updated", () => {
     void fetchDiscover();
   });
 
   useEffect(() => {
+    if (!libraryScopeHydrated) return;
     void fetchDiscover();
-  }, [fetchDiscover]);
+  }, [fetchDiscover, libraryScopeHydrated]);
 
   const visibleHistory = useMemo(() => data?.history ?? [], [data]);
 
@@ -146,6 +165,10 @@ export default function LibraryHistoryPage() {
 
   return (
     <div className="app-shell space-y-4 pb-24">
+      <section className="flex justify-start">
+        <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
+      </section>
+
       <section className="rounded-md border bg-background p-3">
         <div className="grid gap-2 sm:grid-cols-[1fr_200px_200px]">
           <div className="relative">
@@ -216,6 +239,13 @@ export default function LibraryHistoryPage() {
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-sm font-medium">{item.bookTitle}</p>
                       <p className="line-clamp-1 text-xs text-muted-foreground">{item.bookAuthor}</p>
+                      {item.libraryName ? (
+                        <p className="line-clamp-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          {item.libraryName}
+                          {item.libraryLocation ? ` · ${item.libraryLocation}` : ""}
+                        </p>
+                      ) : null}
                       <p className="text-[11px] text-muted-foreground">
                         Issued {new Date(item.issuedAt).toLocaleDateString()} • Due {new Date(item.dueDate).toLocaleDateString()}
                       </p>
@@ -250,6 +280,13 @@ export default function LibraryHistoryPage() {
                     <p className="line-clamp-1 text-xs text-muted-foreground">
                       {item.bookAuthor} • {getCategoryLabel(item.bookCategory)}
                     </p>
+                    {item.libraryName ? (
+                      <p className="line-clamp-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {item.libraryName}
+                        {item.libraryLocation ? ` · ${item.libraryLocation}` : ""}
+                      </p>
+                    ) : null}
                   </div>
                   <Badge variant="outline">{item.status}</Badge>
                 </div>

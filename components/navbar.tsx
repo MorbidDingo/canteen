@@ -33,6 +33,9 @@ import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { Badge } from "@/components/ui/badge";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 const canteenLinks = [
   { href: "/menu", label: "Menu", icon: UtensilsCrossed },
@@ -66,6 +69,12 @@ export function Navbar() {
   const cartCount = useCartStore((s) => s.getItemCount());
   const [overdueCount, setOverdueCount] = useState(0);
   const [cartBounce, setCartBounce] = useState(false);
+  const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
+    "certe:selected-canteen-id",
+  );
+  const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
+    "certe:selected-library-id",
+  );
   const prevCartCount = useRef(cartCount);
 
   // Animate cart icon when items are added
@@ -181,8 +190,25 @@ export function Navbar() {
             </div>
           )}
 
+          {/* Show canteen/library name for parents */}
+          {session && isParent && parentMode === "canteen" && (
+            <CanteenSelector value={selectedCanteen} onChange={setSelectedCanteen} compact />
+          )}
+          {session && isParent && parentMode === "library" && (
+            <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
+          )}
+
           {/* Desktop Nav links */}
           <nav className="hidden md:flex items-center gap-1">
+            {session && isAdmin && (
+              <CanteenSelector
+                value={selectedCanteen}
+                onChange={setSelectedCanteen}
+                showAll
+                compact
+                className="mr-1"
+              />
+            )}
             {session &&
               links.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href}>
