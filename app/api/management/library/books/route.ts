@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const { searchParams } = new URL(request.url);
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const body = await request.json();

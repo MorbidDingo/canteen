@@ -47,7 +47,7 @@ const libraryLinks = [
   { href: "/library-history", label: "History", icon: BookOpen },
 ];
 
-const adminLinks = [
+const adminCanteenLinks = [
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
   { href: "/admin/metrics", label: "Metrics", icon: Gauge },
   { href: "/admin/history", label: "History", icon: History },
@@ -55,10 +55,24 @@ const adminLinks = [
   { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed },
 ];
 
+const adminLibraryLinks = [
+  { href: "/admin/library/books", label: "Books", icon: BookOpen },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
+];
+
+// Keep backward compat alias
+const adminLinks = adminCanteenLinks;
+
 type ParentMode = "canteen" | "library";
+type AdminMode = "canteen" | "library";
 
 function getParentMode(pathname: string): ParentMode {
   if (pathname.startsWith("/library")) return "library";
+  return "canteen";
+}
+
+function getAdminMode(pathname: string): AdminMode {
+  if (pathname.startsWith("/admin/library")) return "library";
   return "canteen";
 }
 
@@ -107,6 +121,7 @@ export function Navbar() {
   ].some((p) => pathname.startsWith(p));
 
   const parentMode = getParentMode(pathname);
+  const adminMode = getAdminMode(pathname);
 
   // Fetch overdue count for parent users
   useEffect(() => {
@@ -128,7 +143,9 @@ export function Navbar() {
   // Kiosk has its own layout — no navbar
   if (pathname.startsWith("/kiosk") || pathname.startsWith("/library/")) return null;
 
-  const links = isAdmin ? adminLinks : parentMode === "library" ? libraryLinks : canteenLinks;
+  const links = isAdmin
+    ? (adminMode === "library" ? adminLibraryLinks : adminCanteenLinks)
+    : parentMode === "library" ? libraryLinks : canteenLinks;
 
   const getInitials = (name?: string | null) => {
     if (!name) return "?";
@@ -198,12 +215,53 @@ export function Navbar() {
             <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} compact />
           )}
 
+          {/* Admin mode toggle — Canteen / Library */}
+          {session && isAdmin && (
+            <div className="flex items-center bg-muted rounded-lg p-1 gap-0.5">
+              <Link href="/admin/orders">
+                <Button
+                  variant={adminMode === "canteen" ? "default" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "gap-1.5 rounded-md h-8 px-2.5 md:px-3",
+                    adminMode === "canteen" && "shadow-sm",
+                  )}
+                >
+                  <UtensilsCrossed className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline text-sm">Canteen</span>
+                </Button>
+              </Link>
+              <Link href="/admin/library/books">
+                <Button
+                  variant={adminMode === "library" ? "default" : "ghost"}
+                  size="sm"
+                  className={cn(
+                    "gap-1.5 rounded-md h-8 px-2.5 md:px-3",
+                    adminMode === "library" && "shadow-sm",
+                  )}
+                >
+                  <BookOpen className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline text-sm">Library</span>
+                </Button>
+              </Link>
+            </div>
+          )}
+
           {/* Desktop Nav links */}
           <nav className="hidden md:flex items-center gap-1">
-            {session && isAdmin && (
+            {session && isAdmin && adminMode === "canteen" && (
               <CanteenSelector
                 value={selectedCanteen}
                 onChange={setSelectedCanteen}
+                showAll
+                compact
+                className="mr-1"
+              />
+            )}
+            {session && isAdmin && adminMode === "library" && (
+              <LibrarySelector
+                value={selectedLibrary}
+                onChange={setSelectedLibrary}
                 showAll
                 compact
                 className="mr-1"
@@ -422,7 +480,41 @@ export function Navbar() {
         {mobileOpen && session && isAdmin && (
           <nav className="border-t md:hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="container mx-auto flex flex-col gap-1 px-4 py-2">
-              {adminLinks.map(({ href, label, icon: Icon }) => (
+              {/* Admin mode selector for mobile */}
+              <div className="flex items-center justify-center bg-muted rounded-lg p-1 gap-0.5 mb-1">
+                <Link href="/admin/orders" onClick={() => setMobileOpen(false)}>
+                  <Button
+                    variant={adminMode === "canteen" ? "default" : "ghost"}
+                    size="sm"
+                    className={cn("gap-1.5 rounded-md h-8 px-3", adminMode === "canteen" && "shadow-sm")}
+                  >
+                    <UtensilsCrossed className="h-4 w-4" />
+                    Canteen
+                  </Button>
+                </Link>
+                <Link href="/admin/library/books" onClick={() => setMobileOpen(false)}>
+                  <Button
+                    variant={adminMode === "library" ? "default" : "ghost"}
+                    size="sm"
+                    className={cn("gap-1.5 rounded-md h-8 px-3", adminMode === "library" && "shadow-sm")}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Library
+                  </Button>
+                </Link>
+              </div>
+              {/* Context selector */}
+              {adminMode === "canteen" && (
+                <div className="py-1">
+                  <CanteenSelector value={selectedCanteen} onChange={setSelectedCanteen} showAll compact />
+                </div>
+              )}
+              {adminMode === "library" && (
+                <div className="py-1">
+                  <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} showAll compact />
+                </div>
+              )}
+              {links.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
                   <Button
                     variant={pathname === href ? "secondary" : "ghost"}

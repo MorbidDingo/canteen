@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const rows = await db
@@ -39,7 +39,7 @@ export async function PUT(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const body = await request.json();

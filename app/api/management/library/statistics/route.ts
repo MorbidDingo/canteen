@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["MANAGEMENT", "OWNER"],
+      allowedOrgRoles: ["MANAGEMENT", "OWNER", "ADMIN"],
     });
 
     const { searchParams } = new URL(request.url);

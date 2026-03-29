@@ -132,7 +132,7 @@ export async function GET(
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const { id } = await params;
@@ -171,7 +171,7 @@ export async function PATCH(
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const { id } = await params;
@@ -369,7 +369,7 @@ export async function DELETE(
   try {
     const access = await requireAccess({
       scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "LIB_OPERATOR"],
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "LIB_OPERATOR"],
     });
 
     const { id } = await params;
