@@ -86,6 +86,12 @@ export function Navbar() {
   const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
     "certe:selected-library-id",
   );
+  const { value: adminSelectedCanteen, setValue: setAdminSelectedCanteen } = usePersistedSelection(
+    "certe:admin-selected-canteen-id",
+  );
+  const { value: adminSelectedLibrary, setValue: setAdminSelectedLibrary } = usePersistedSelection(
+    "certe:admin-selected-library-id",
+  );
   const prevCartCount = useRef(cartCount);
 
   // Animate cart icon when items are added
@@ -248,8 +254,8 @@ export function Navbar() {
           <nav className="hidden md:flex items-center gap-1">
             {session && isAdmin && adminMode === "canteen" && (
               <CanteenSelector
-                value={selectedCanteen}
-                onChange={setSelectedCanteen}
+                value={adminSelectedCanteen}
+                onChange={setAdminSelectedCanteen}
                 showAll
                 compact
                 className="mr-1"
@@ -257,8 +263,8 @@ export function Navbar() {
             )}
             {session && isAdmin && adminMode === "library" && (
               <LibrarySelector
-                value={selectedLibrary}
-                onChange={setSelectedLibrary}
+                value={adminSelectedLibrary}
+                onChange={setAdminSelectedLibrary}
                 showAll
                 compact
                 className="mr-1"
@@ -503,12 +509,12 @@ export function Navbar() {
               {/* Context selector */}
               {adminMode === "canteen" && (
                 <div className="py-1">
-                  <CanteenSelector value={selectedCanteen} onChange={setSelectedCanteen} showAll compact />
+                  <CanteenSelector value={adminSelectedCanteen} onChange={setAdminSelectedCanteen} showAll compact />
                 </div>
               )}
               {adminMode === "library" && (
                 <div className="py-1">
-                  <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} showAll compact />
+                  <LibrarySelector value={adminSelectedLibrary} onChange={setAdminSelectedLibrary} showAll compact />
                 </div>
               )}
               {links.map(({ href, label, icon: Icon }) => (

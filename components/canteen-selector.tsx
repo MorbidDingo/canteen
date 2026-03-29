@@ -46,7 +46,14 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
     void load();
   }, [load]);
 
-  if (loading || canteens.length === 0) return null;
+  if (loading || canteens.length === 0) {
+    return (
+      <Badge variant="outline" className={`gap-1.5 font-normal text-muted-foreground ${className ?? ""}`}>
+        <Store className="h-3 w-3 text-muted-foreground" />
+        {loading ? "Loading…" : "No canteen"}
+      </Badge>
+    );
+  }
 
   // Single canteen without showAll — show as a static badge
   if (canteens.length === 1 && !showAll) {

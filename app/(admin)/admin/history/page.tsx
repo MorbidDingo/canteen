@@ -24,6 +24,7 @@ type OrderItem = {
   id: string;
   quantity: number;
   unitPrice: number;
+  instructions: string | null;
   menuItem: { id: string; name: string };
 };
 
@@ -253,6 +254,16 @@ function HistoryCard({ order }: { order: Order }) {
 
         {/* Items on one line */}
         <p className="truncate text-xs leading-snug text-muted-foreground">{itemsSummary}</p>
+
+        {/* Special requests / instructions */}
+        {order.items.some((item) => item.instructions) && (
+          <p className="truncate text-xs italic text-amber-600 dark:text-amber-400 leading-snug">
+            📝 {order.items
+              .filter((item) => item.instructions)
+              .map((item) => item.instructions)
+              .join("; ")}
+          </p>
+        )}
 
         {/* Amount + badges */}
         <div className="flex flex-wrap items-center gap-1.5">
