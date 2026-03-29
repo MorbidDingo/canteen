@@ -17,6 +17,8 @@ import {
 } from "@/lib/constants";
 import { Search, RefreshCw, Utensils, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 type OrderItem = {
   id: string;
@@ -44,11 +46,19 @@ export default function AdminHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenHydrated,
+  } = usePersistedSelection("certe:admin-selected-canteen-id");
 
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/orders");
+      const url = selectedCanteen
+        ? `/api/admin/orders?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "/api/admin/orders";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
       setOrders(data.orders ?? []);
@@ -57,11 +67,12 @@ export default function AdminHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenHydrated) return;
     fetchOrders();
-  }, [fetchOrders]);
+  }, [fetchOrders, canteenHydrated]);
 
   useRealtimeData(fetchOrders, "orders-updated");
 
@@ -121,6 +132,14 @@ export default function AdminHistoryPage() {
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
+
+      {/* Canteen selector */}
+      <CanteenSelector
+        value={selectedCanteen}
+        onChange={setSelectedCanteen}
+        showAll
+        compact
+      />
 
       {/* Summary stats */}
       <div className="grid grid-cols-3 gap-2">

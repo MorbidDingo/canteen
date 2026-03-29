@@ -28,6 +28,8 @@ import {
   ScanBarcode,
 } from "lucide-react";
 import { useSSE } from "@/lib/events";
+import { LibrarySelector } from "@/components/library-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -92,6 +94,12 @@ type OrgContextDevice = {
 export default function LibOperatorDashboardPage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("issue-return");
   const [mode, setMode] = useState<OperatorMode>("issue");
+
+  // Library switcher
+  const {
+    value: selectedLibrary,
+    setValue: setSelectedLibrary,
+  } = usePersistedSelection("certe:lib-operator-library-id");
 
   // Issue state
   const [childInfo, setChildInfo] = useState<ChildInfo | null>(null);
@@ -343,16 +351,23 @@ export default function LibOperatorDashboardPage() {
     <div className="pb-8">
       <div className="container mx-auto max-w-2xl px-4 pt-5">
         <div className="rounded-2xl border border-[#d4891a]/15 bg-white/70 p-4 shadow-sm backdrop-blur sm:p-5">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
-              <BookOpen className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d4891a] shadow-sm">
+                <BookOpen className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Issue & Return Console</p>
+                <p className="text-xs text-muted-foreground">
+                  Scan cards, issue books, and manage pending returns.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold">Issue & Return Console</p>
-              <p className="text-xs text-muted-foreground">
-                Scan cards, issue books, and manage pending returns.
-              </p>
-            </div>
+            <LibrarySelector
+              value={selectedLibrary}
+              onChange={setSelectedLibrary}
+              compact
+            />
           </div>
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button

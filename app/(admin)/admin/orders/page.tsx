@@ -16,6 +16,8 @@ import {
 import { emitEvent, useRealtimeData } from "@/lib/events";
 import { ChefHat, CheckCircle, Clock, XCircle, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 type OrderItem = {
   id: string;
@@ -64,11 +66,19 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ACTIVE");
+  const {
+    value: selectedCanteen,
+    setValue: setSelectedCanteen,
+    hydrated: canteenHydrated,
+  } = usePersistedSelection("certe:admin-selected-canteen-id");
 
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/orders");
+      const url = selectedCanteen
+        ? `/api/admin/orders?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "/api/admin/orders";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch orders");
       const data = await res.json();
       setOrders(data.orders ?? []);
@@ -77,11 +87,12 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCanteen]);
 
   useEffect(() => {
+    if (!canteenHydrated) return;
     fetchOrders();
-  }, [fetchOrders]);
+  }, [fetchOrders, canteenHydrated]);
 
   useRealtimeData(fetchOrders, "orders-updated");
 
@@ -164,6 +175,14 @@ export default function AdminOrdersPage() {
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
+
+      {/* Canteen selector */}
+      <CanteenSelector
+        value={selectedCanteen}
+        onChange={setSelectedCanteen}
+        showAll
+        compact
+      />
 
       {/* Status pills row */}
       <div className="flex gap-2 overflow-x-auto pb-1">
