@@ -12,10 +12,12 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const deviceId = searchParams.get("deviceId")?.trim() || null;
+    const canteenId = searchParams.get("canteenId")?.trim() || null;
 
     const data = await getSummary({
       organizationId: access.activeOrganizationId!,
       deviceId,
+      canteenId,
     });
     return NextResponse.json(data);
   } catch (error) {

@@ -648,6 +648,7 @@ export default function LibraryShowcasePage() {
           <LibrarySelector
             value={selectedLibrary}
             onChange={setSelectedLibrary}
+            showAll
             compact
           />
         </section>

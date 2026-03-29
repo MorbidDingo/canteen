@@ -268,8 +268,8 @@ export async function getStatistics(options: { days: number; organizationId: str
   return { dailyStats, itemStats, overallSummary, topParents };
 }
 
-export async function getSummary(options: { organizationId: string; deviceId?: string | null }) {
-  const { organizationId, deviceId } = options;
+export async function getSummary(options: { organizationId: string; deviceId?: string | null; canteenId?: string | null }) {
+  const { organizationId, deviceId, canteenId } = options;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const todayEnd = new Date(todayStart);
@@ -287,6 +287,7 @@ export async function getSummary(options: { organizationId: string; deviceId?: s
         lt(order.createdAt, todayEnd),
         eq(child.organizationId, organizationId),
         deviceId ? eq(order.deviceId, deviceId) : undefined,
+        canteenId ? eq(order.canteenId, canteenId) : undefined,
       ),
     )
     .then((rows) => rows.map((row) => row.order));
