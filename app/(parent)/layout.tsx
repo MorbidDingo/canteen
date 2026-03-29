@@ -291,32 +291,33 @@ function ParentLayoutContent({
             </div>
           </div>
 
-          <div className="mt-2 flex justify-center md:justify-start">
-            <div className="flex w-full max-w-xs items-center rounded-xl border border-border/60 bg-muted/55 p-1 shadow-sm">
+          <div className="mt-2 flex items-center justify-between gap-3">
+            {/* Mode switcher — premium pill design */}
+            <div className="flex items-center rounded-xl border border-border/60 bg-muted/55 p-1 shadow-sm">
               <Link
                 href="/menu"
                 className={cn(
-                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
+                  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
                   parentMode === "canteen"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <UtensilsCrossed className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Canteen</span>
+                <UtensilsCrossed className={cn("h-3.5 w-3.5 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
+                <span>Canteen</span>
               </Link>
 
               <Link
                 href="/library-history"
                 className={cn(
-                  "relative inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors",
+                  "relative inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
                   parentMode === "library"
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <BookOpen className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Library</span>
+                <BookOpen className={cn("h-3.5 w-3.5 transition-colors", parentMode === "library" ? "text-primary" : "")} />
+                <span>Library</span>
                 {overdueCount > 0 && (
                   <span className="absolute -right-1 -top-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                     {overdueCount}
@@ -324,6 +325,18 @@ function ParentLayoutContent({
                 )}
               </Link>
             </div>
+
+            {/* Contextual balance chip */}
+            {parentMode === "canteen" && totalWalletBalance > 0 && (
+              <button
+                type="button"
+                onClick={() => setWalletDrawerOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
+              >
+                <IndianRupee className="h-3 w-3 text-primary" />
+                <span>₹{totalWalletBalance.toFixed(0)}</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
