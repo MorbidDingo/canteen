@@ -20,11 +20,13 @@ import {
   LayoutDashboard,
   Menu,
   X,
-  BarChart3,
   CalendarClock,
   BookOpen,
   Settings,
   Wallet,
+  Brain,
+  History,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
@@ -44,8 +46,10 @@ const libraryLinks = [
 
 const adminLinks = [
   { href: "/admin/orders", label: "Orders", icon: ClipboardList },
+  { href: "/admin/metrics", label: "Metrics", icon: Gauge },
+  { href: "/admin/history", label: "History", icon: History },
+  { href: "/admin/analytics", label: "Analytics", icon: Brain },
   { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed },
-  { href: "/admin/statistics", label: "Statistics", icon: BarChart3 },
 ];
 
 type ParentMode = "canteen" | "library";

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { AdminShell } from "@/components/admin/admin-shell";
 
 export default async function AdminLayout({
   children,
@@ -23,5 +24,5 @@ export default async function AdminLayout({
     redirect(access.deviceLoginProfile.terminalPath);
   }
 
-  return <>{children}</>;
+  return <AdminShell>{children}</AdminShell>;
 }
