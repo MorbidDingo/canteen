@@ -541,15 +541,15 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-lg px-3 md:max-w-4xl lg:max-w-6xl">
-          {/* iOS-style tab bar — wider with labels */}
+      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex items-end justify-center gap-2 px-3">
+          {/* iOS-style compact tab bar */}
           <div className={cn(
-            "relative flex items-stretch justify-around rounded-2xl border border-white/20 px-1 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+            "relative flex items-stretch rounded-2xl border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
             "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
-            {tabs.map((tab) => {
+            {tabs.filter(t => !t.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
 
@@ -565,7 +565,7 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5"
+                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5"
                 >
                   {isActive && (
                     <motion.div
@@ -578,16 +578,7 @@ function ParentLayoutContent({
                     whileTap={{ scale: 0.85 }}
                     className="relative z-10 flex flex-col items-center gap-0.5"
                   >
-                    {tab.isProfile ? (
-                      <Avatar className="h-5 w-5 ring-1 ring-primary/20">
-                        <AvatarFallback className={cn(
-                          "text-[8px] font-bold transition-colors duration-200",
-                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
-                        )}>
-                          {getInitials(session?.user?.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ) : Icon ? (
+                    {Icon ? (
                       <Icon
                         className={cn(
                           "h-[20px] w-[20px] transition-colors duration-200",
@@ -627,6 +618,38 @@ function ParentLayoutContent({
               );
             })}
           </div>
+
+          {/* Separated profile circle button */}
+          {(() => {
+            const profileTab = tabs.find(t => t.isProfile);
+            if (!profileTab) return null;
+            const isActive = activeTab === profileTab.key;
+            return (
+              <Link
+                href={profileTab.href}
+                className={cn(
+                  "relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+                  "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
+                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
+                  isActive && "ring-2 ring-primary/40",
+                )}
+              >
+                <motion.div whileTap={{ scale: 0.85 }}>
+                  <Avatar className={cn(
+                    "h-7 w-7 ring-1 transition-all duration-200",
+                    isActive ? "ring-primary/40" : "ring-primary/20",
+                  )}>
+                    <AvatarFallback className={cn(
+                      "text-[10px] font-bold transition-colors duration-200",
+                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                    )}>
+                      {getInitials(session?.user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </motion.div>
+              </Link>
+            );
+          })()}
         </div>
       </nav>
 
