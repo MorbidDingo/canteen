@@ -46,6 +46,7 @@ type Order = {
   totalAmount: number;
   paymentMethod: string;
   paymentStatus: PaymentStatus;
+  tokenCode: string | null;
   createdAt: string;
   updatedAt: string;
   user: OrderUser;
@@ -270,9 +271,16 @@ function OrderCard({
       <CardContent className="space-y-2 p-3">
         {/* Name + time */}
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-bold leading-tight">
-            {order.user.childName || order.user.name}
-          </p>
+          <div>
+            <p className="text-sm font-bold leading-tight">
+              {order.user.childName || order.user.name}
+            </p>
+            {order.tokenCode && (
+              <p className="text-xs font-mono font-bold text-[#d4891a] leading-tight mt-0.5">
+                {order.tokenCode}
+              </p>
+            )}
+          </div>
           <span className="shrink-0 text-xs text-muted-foreground">
             {new Date(order.createdAt).toLocaleTimeString("en-IN", {
               hour: "2-digit",

@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth-server";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { generateTokenCode } from "@/lib/constants";
 
 const orderItemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -181,6 +182,7 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           childId: childId || undefined,
           canteenId: resolvedCanteenId || undefined,
+          tokenCode: generateTokenCode(),
           totalAmount,
           paymentMethod,
           status: "PLACED",

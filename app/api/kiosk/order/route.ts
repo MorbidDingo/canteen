@@ -14,7 +14,7 @@ import {
   certeSubscription,
   appSetting,
 } from "@/lib/db/schema";
-import { eq, and, gte, sql, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, asc, inArray, desc } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
@@ -446,6 +446,27 @@ async function resolvePreOrderItemsForToday(childId: string, currentBreakName: s
   return null;
 }
 
+async function getPendingParentOrders(childId: string) {
+  const orders = await db.query.order.findMany({
+    where: and(eq(order.childId, childId), eq(order.status, "PLACED")),
+    orderBy: [desc(order.createdAt)],
+    columns: { id: true, tokenCode: true, totalAmount: true },
+    with: {
+      items: {
+        columns: { quantity: true },
+        with: { menuItem: { columns: { name: true } } },
+      },
+    },
+  });
+
+  return orders.map((o) => ({
+    id: o.id,
+    tokenCode: o.tokenCode,
+    total: o.totalAmount,
+    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+  }));
+}
+
 // POST /api/kiosk/order — no auth session; RFID card is the auth
 // Supports manual cart order and AUTO_PREORDER on card tap
 export async function POST(request: NextRequest) {
@@ -503,22 +524,26 @@ export async function POST(request: NextRequest) {
       const currentBreak = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
 
       if (!currentBreak) {
+        const pendingOrders = await getPendingParentOrders(studentChild.id);
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: null,
           reason: "No active break right now.",
+          pendingOrders,
         });
       }
 
       const resolved = await resolvePreOrderItemsForToday(studentChild.id, currentBreak.name);
       if (!resolved) {
+        const pendingOrders = await getPendingParentOrders(studentChild.id);
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: currentBreak.name,
+          pendingOrders,
         });
       }
 

@@ -52,7 +52,14 @@ type CartItem = {
   quantity: number;
 };
 
-type KioskPhase = "tap" | "browse" | "result";
+type KioskPhase = "tap" | "browse" | "result" | "pending";
+
+type PendingOrder = {
+  id: string;
+  tokenCode: string | null;
+  total: number;
+  items: { name: string; quantity: number }[];
+};
 
 type OrderResult = {
   success: boolean;
@@ -96,6 +103,7 @@ export default function KioskPage() {
   const [orgName, setOrgName] = useState<string>("Organization");
   const [deviceLabel, setDeviceLabel] = useState<string>("Kiosk");
   const [selectedDeviceCode, setSelectedDeviceCode] = useState<string>("");
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[]>([]);
 
   const rfidInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -251,6 +259,21 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, [phase]);
 
+  useEffect(() => {
+    if (phase !== "pending") return;
+    setCountdown(20);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          resetKiosk();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
   // 20-second browse timer — resets when cart changes, expires to reset kiosk
   useEffect(() => {
     if (phase !== "browse") return;
@@ -309,6 +332,7 @@ export default function KioskPage() {
     setSearchQuery("");
     setActiveRfid("");
     setActiveChildName(null);
+    setPendingOrders([]);
   };
 
   const isInsufficientBalanceReason = (reason?: string | null) => {
@@ -404,6 +428,11 @@ export default function KioskPage() {
       setPhase("browse");
       if (data.reason) {
         toast.message(data.reason);
+      }
+      if (data.pendingOrders && data.pendingOrders.length > 0) {
+        setPendingOrders(data.pendingOrders as PendingOrder[]);
+        setPhase("pending");
+        return;
       }
       toast.success(`Welcome ${data.childName || "Student"}. Select items to order.`);
     } catch {
@@ -512,6 +541,67 @@ export default function KioskPage() {
       label,
     })),
   ];
+
+  if (phase === "pending" && pendingOrders.length > 0) {
+    return (
+      <div className="h-screen overflow-hidden flex flex-col items-center justify-center p-6 bg-gray-50">
+        <div className="max-w-sm w-full">
+          <div className="text-center mb-5">
+            <h2 className="text-2xl font-bold text-[#d4891a]">
+              {activeChildName ? `Hi, ${activeChildName}!` : "Hi!"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              You have pending orders from your parent. Show the token to the canteen admin to collect your food.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {pendingOrders.map((o) => (
+              <Card key={o.id} className="border-[#d4891a]/40">
+                <CardContent className="py-4 px-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Token</span>
+                    <span className="text-3xl font-mono font-bold tracking-widest text-[#d4891a]">
+                      {o.tokenCode ?? o.id.slice(0, 6).toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-snug">
+                    {o.items.map((i) => `${i.quantity}x ${i.name}`).join(", ")}
+                  </p>
+                  <p className="text-sm font-semibold mt-1">₹{o.total.toFixed(0)}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex gap-2 mt-5">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={resetKiosk}
+            >
+              Done
+            </Button>
+            <Button
+              className="flex-1 bg-[#d4891a] hover:bg-[#b87314] text-white"
+              onClick={() => {
+                setPendingOrders([]);
+                setPhase("browse");
+              }}
+            >
+              Order More
+            </Button>
+          </div>
+
+          <div className="text-center mt-4">
+            <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">
+              Resetting in {countdown}s...
+            </Badge>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (phase === "tap") {
     return (
