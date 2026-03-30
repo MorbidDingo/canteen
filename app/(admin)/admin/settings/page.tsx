@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Save, Settings2, Plus, Trash2, Clock3, Sparkles, Store, Library, Pencil, X, Check, MapPin } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Loader2, Save, Settings2, Plus, Trash2, Clock3, Sparkles, Store, Library, Pencil, X, Check, MapPin, Power, PowerOff } from "lucide-react";
 import {
   type BreakSlot,
   parseBreakSlots,
@@ -484,6 +485,72 @@ export default function AdminSettingsPage() {
           <><Save className="h-4 w-4 mr-2" /> Save Subscription Settings</>
         )}
       </Button>
+
+      {/* ── Quick Serve Controls ───────────────────────────── */}
+      {!canteensLoading && canteens.length > 0 && (
+        <Card className="rounded-2xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Power className="h-5 w-5 text-[#d4891a]" />
+              Quick Serve Controls
+            </CardTitle>
+            <CardDescription>Start serving or close any canteen with one tap.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {canteens.map((c) => {
+              const isServing = c.status === "ACTIVE";
+              return (
+                <div
+                  key={`serve-${c.id}`}
+                  className={cn(
+                    "flex items-center justify-between gap-3 rounded-xl border p-3 transition-colors",
+                    isServing
+                      ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/40 dark:bg-emerald-950/20"
+                      : "border-border bg-card",
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{c.name}</span>
+                      <span className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                        isServing
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+                          : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+                      )}>
+                        <span className={cn("h-1.5 w-1.5 rounded-full", isServing ? "bg-emerald-500 animate-pulse" : "bg-zinc-400")} />
+                        {isServing ? "Serving" : "Closed"}
+                      </span>
+                    </div>
+                    {c.location && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-2.5 w-2.5" />
+                        {c.location}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    className={cn(
+                      "gap-1.5 rounded-lg px-4 font-semibold shadow-sm transition-all",
+                      isServing
+                        ? "bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+                        : "bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600",
+                    )}
+                    onClick={() => toggleCanteenStatus(c)}
+                  >
+                    {isServing ? (
+                      <><PowerOff className="h-3.5 w-3.5" /> Close Canteen</>
+                    ) : (
+                      <><Power className="h-3.5 w-3.5" /> Start Serving</>
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Canteen Management ───────────────────────────── */}
       <Card className="rounded-2xl">
