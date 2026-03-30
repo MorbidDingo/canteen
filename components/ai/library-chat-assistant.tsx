@@ -23,8 +23,10 @@ import {
   BookOpen,
   Loader2,
   ExternalLink,
+  Plus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -59,10 +61,41 @@ const SUGGESTED_PROMPTS = [
 
 // ─── Book Recommendation Card ─────────────────────────────
 
-function BookRecommendationCards({ books }: { books: BookRecommendation[] }) {
+function BookRecommendationCards({
+  books,
+  childId,
+}: {
+  books: BookRecommendation[];
+  childId?: string | null;
+}) {
   const router = useRouter();
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   if (books.length === 0) return null;
+
+  const handleRequest = async (bookId: string) => {
+    if (!childId) {
+      router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+      return;
+    }
+    setRequestingId(bookId);
+    try {
+      const res = await fetch("/api/library/app-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId, bookId }),
+      });
+      if (res.ok) {
+        toast.success("Issue request queued. Confirm at library kiosk.");
+      } else {
+        router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+      }
+    } catch {
+      router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+    } finally {
+      setRequestingId(null);
+    }
+  };
 
   return (
     <motion.div
@@ -103,16 +136,36 @@ function BookRecommendationCards({ books }: { books: BookRecommendation[] }) {
             </p>
           </div>
 
-          {/* Action */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="shrink-0 gap-1 rounded-lg px-2.5 text-[11px] border-primary/30 bg-primary/5 hover:bg-primary/10"
-            onClick={() => router.push(`/library-showcase?bookId=${encodeURIComponent(book.bookId)}`)}
-          >
-            <ExternalLink className="h-3 w-3" />
-            View
-          </Button>
+          {/* Actions */}
+          <div className="flex shrink-0 gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 rounded-lg px-2 text-[11px] border-primary/30 bg-primary/5 hover:bg-primary/10"
+              onClick={() => router.push(`/library-showcase?bookId=${encodeURIComponent(book.bookId)}`)}
+            >
+              <ExternalLink className="h-3 w-3" />
+              View
+            </Button>
+            {childId && (
+              <Button
+                size="sm"
+                variant="default"
+                className="gap-1 rounded-lg px-2 text-[11px]"
+                disabled={requestingId === book.bookId}
+                onClick={() => void handleRequest(book.bookId)}
+              >
+                {requestingId === book.bookId ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3" />
+                    Request
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       ))}
     </motion.div>
@@ -450,7 +503,7 @@ export function LibraryChatAssistant({
                     ?.length ? (
                   (msg as ChatMessageData & { libraryActions?: LibraryChatAction[] }).libraryActions!.map(
                     (action, i) => (
-                      <BookRecommendationCards key={i} books={action.books} />
+                      <BookRecommendationCards key={i} books={action.books} childId={selectedChildId} />
                     ),
                   )
                 ) : null}

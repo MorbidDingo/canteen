@@ -24,6 +24,8 @@ import {
 } from "@/lib/constants";
 import { LibrarySelector } from "@/components/library-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { LibraryRecommendations } from "@/components/recommendations/library-recs";
+import { LibraryInsightsWidget } from "@/components/recommendations/library-insights";
 
 // ─── Markdown Renderer ──────────────────────────────────────────────────────
 
@@ -714,6 +716,14 @@ export default function LibraryShowcasePage() {
             </div>
           </div>
         </section>
+
+        {/* ML insights and AI book recommendations */}
+        {!hasActiveFilters && (
+          <>
+            <LibraryInsightsWidget />
+            <LibraryRecommendations childId={selectedChildId || data.selectedChildId || data.children[0]?.id} />
+          </>
+        )}
 
         {/* Suggested for You — personalized recommendation banner */}
         {!hasActiveFilters && (data.rails.personalized ?? []).length > 0 && (
