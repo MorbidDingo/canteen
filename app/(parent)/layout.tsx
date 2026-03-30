@@ -549,7 +549,7 @@ function ParentLayoutContent({
             "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
-            {tabs.filter(t => !t.isProfile).map((tab) => {
+            {tabs.filter(item => !item.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
 
@@ -621,7 +621,7 @@ function ParentLayoutContent({
 
           {/* Separated profile circle button */}
           {(() => {
-            const profileTab = tabs.find(t => t.isProfile);
+            const profileTab = tabs.find(item => item.isProfile);
             if (!profileTab) return null;
             const isActive = activeTab === profileTab.key;
             return (
