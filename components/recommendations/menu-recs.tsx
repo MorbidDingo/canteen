@@ -77,6 +77,11 @@ function RecCard({ rec }: { rec: Recommendation }) {
       <span className="mt-0.5 text-[11px] text-muted-foreground">
         {rec.category} · ₹{rec.price}
       </span>
+      {rec.canteenName && (
+        <span className="text-[10px] text-muted-foreground/80 truncate">
+          {rec.canteenName}
+        </span>
+      )}
       {rec.reasons.length > 0 && (
         <span className="mt-1 text-[10px] text-muted-foreground/80 line-clamp-1">
           {rec.reasons[0]}

@@ -32,6 +32,8 @@ interface PopularItem {
   category: string;
   price: number;
   totalOrdered: number;
+  canteenId: string | null;
+  canteenName: string | null;
 }
 
 interface RecommendedItem {
@@ -41,6 +43,8 @@ interface RecommendedItem {
   price: number;
   score: number;
   reasons: string[];
+  canteenId: string | null;
+  canteenName: string | null;
 }
 
 interface FeedbackSummary {
@@ -151,6 +155,8 @@ export async function buildSystemPromptContext(
         category: p.category,
         price: p.price,
         totalOrdered: p.totalOrdered,
+        canteenId: p.canteenId ?? null,
+        canteenName: p.canteenName ?? null,
       }));
   } catch {
     // Non-critical
@@ -174,6 +180,8 @@ export async function buildSystemPromptContext(
         price: r.price,
         score: r.score,
         reasons: r.reasons,
+        canteenId: r.canteenId ?? null,
+        canteenName: r.canteenName ?? null,
       }));
     } catch {
       // Non-critical
@@ -243,14 +251,14 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
   // Build popular items section
   const popularText = ctx.popularItems.length > 0
     ? ctx.popularItems.map((p) =>
-        `  - ${p.name} (ID: ${p.menuItemId}, ₹${p.price}, ${p.category}, ordered ${p.totalOrdered}× this week)`
+        `  - ${p.name} (ID: ${p.menuItemId}, ₹${p.price}, ${p.category}, canteen: ${p.canteenName ?? "unknown"}, canteenId: ${p.canteenId ?? ""}, ordered ${p.totalOrdered}× this week)`
       ).join("\n")
     : "  No popularity data yet.";
 
   // Build today's picks section
   const picksText = ctx.todaysPicks.length > 0
     ? ctx.todaysPicks.map((r) =>
-        `  - ${r.name} (ID: ${r.menuItemId}, ₹${r.price}, ${r.category}, score: ${r.score.toFixed(2)}, reasons: ${r.reasons.join(", ")})`
+        `  - ${r.name} (ID: ${r.menuItemId}, ₹${r.price}, ${r.category}, canteen: ${r.canteenName ?? "unknown"}, canteenId: ${r.canteenId ?? ""}, score: ${r.score.toFixed(2)}, reasons: ${r.reasons.join(", ")})`
       ).join("\n")
     : "  No personalised picks available.";
 
@@ -271,7 +279,7 @@ export function buildSystemPrompt(ctx: SystemPromptContext): string {
 2. **ONLY use data from this system context or tool results.** NEVER invent, guess, or hallucinate menu items, prices, IDs, or any other data. If the system context or a tool does not provide the information, say you don't have that data and offer to look it up via tools.
 3. **Action-oriented output ONLY.** When suggesting food items, wallet top-ups, or control changes, embed structured action markers that the app will render as buttons.
 4. **Use these action markers in your response:**
-   - For menu items (BROWSE only): \`[[MENU_ITEMS]]\` followed by a JSON array of {menuItemId, name, price, discountedPrice?, category, available, reasons?} on the next line, then \`[[/MENU_ITEMS]]\`
+   - For menu items (BROWSE only): \`[[MENU_ITEMS]]\` followed by a JSON array of {menuItemId, name, price, discountedPrice?, category, available, canteenId, canteenName, reasons?} on the next line, then \`[[/MENU_ITEMS]]\`
    - For wallet top-up: \`[[TOPUP:amount]]\` e.g. \`[[TOPUP:500]]\`
    - For control suggestion: \`[[CONTROL:type:value]]\` e.g. \`[[CONTROL:daily_limit:200]]\` or \`[[CONTROL:block_category:PACKED_FOOD]]\`
 5. **Never output long paragraphs or bullet-point essays.**

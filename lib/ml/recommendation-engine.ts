@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { menuItem } from "@/lib/db/schema";
+import { menuItem, canteen } from "@/lib/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 import type {
   FoodHistoryItem,
@@ -26,6 +26,8 @@ export interface ScoredRecommendation {
   price: number;
   score: number;
   reasons: string[];
+  canteenId: string | null;
+  canteenName: string | null;
 }
 
 interface ItemSimilarity {
@@ -157,6 +159,8 @@ export async function getRecommendations(
       price: item.price,
       score,
       reasons,
+      canteenId: item.canteenId,
+      canteenName: item.canteenName,
     });
   }
 
@@ -377,6 +381,8 @@ interface AvailableItem {
   name: string;
   category: string;
   price: number;
+  canteenId: string | null;
+  canteenName: string | null;
 }
 
 async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
@@ -387,8 +393,11 @@ async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
       category: menuItem.category,
       price: menuItem.price,
       availableUnits: menuItem.availableUnits,
+      canteenId: menuItem.canteenId,
+      canteenName: canteen.name,
     })
     .from(menuItem)
+    .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
     .where(
       and(
         eq(menuItem.organizationId, orgId),
@@ -404,5 +413,7 @@ async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
       name: r.name,
       category: r.category,
       price: r.price,
+      canteenId: r.canteenId ?? null,
+      canteenName: r.canteenName ?? null,
     }));
 }

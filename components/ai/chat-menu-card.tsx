@@ -61,6 +61,11 @@ export function ChatMenuCard({ item }: { item: ChatMenuItem }) {
           <span className="text-[11px] text-muted-foreground">
             · {item.category}
           </span>
+          {item.canteenName && (
+            <span className="text-[11px] text-muted-foreground truncate">
+              · {item.canteenName}
+            </span>
+          )}
         </div>
 
         {item.reasons && item.reasons.length > 0 && (
