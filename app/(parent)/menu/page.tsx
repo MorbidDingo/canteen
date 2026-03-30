@@ -26,6 +26,7 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits?: number | null;
+  canteenId: string | null;
   canteenName?: string | null;
   canteenLocation?: string | null;
 }

@@ -13,6 +13,8 @@ interface Recommendation {
   price: number;
   score: number;
   reasons: string[];
+  canteenId?: string;
+  canteenName?: string;
 }
 
 export function MenuRecommendations() {
@@ -89,6 +91,8 @@ function RecCard({ rec }: { rec: Recommendation }) {
             menuItemId: rec.menuItemId,
             name: rec.name,
             price: rec.price,
+            canteenId: rec.canteenId ?? "",
+            canteenName: rec.canteenName ?? "Unknown",
           });
         }}
       >

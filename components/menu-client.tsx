@@ -113,7 +113,7 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits?: number | null;
-  canteenId: string;
+  canteenId: string | null;
   canteenName?: string | null;
   canteenLocation?: string | null;
 }
@@ -569,7 +569,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                   discountedPrice={item.discountedPrice}
                   availableUnits={item.availableUnits}
                   available={item.available}
-                  canteenId={item.canteenId}
+                  canteenId={item.canteenId ?? ""}
                   canteenName={item.canteenName ?? "Unknown"}
                 />
               </CardFooter>

@@ -15,6 +15,8 @@ export interface ChatMenuItem {
   discountedPrice?: number;
   category: string;
   available: boolean;
+  canteenId?: string;
+  canteenName?: string;
   reasons?: string[];
 }
 
@@ -87,6 +89,8 @@ export function ChatMenuCard({ item }: { item: ChatMenuItem }) {
               name: item.name,
               price: item.price,
               discountedPrice: item.discountedPrice,
+              canteenId: item.canteenId ?? "",
+              canteenName: item.canteenName ?? "Unknown",
             });
           }
         }}
