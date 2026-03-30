@@ -8,8 +8,6 @@ import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { AiQuickBar } from "@/components/ai/ai-quick-bar";
-import { MenuRecommendations } from "@/components/recommendations/menu-recs";
 import { useCartStore } from "@/lib/store/cart-store";
 import { CanteenSelector } from "@/components/canteen-selector";
 import { AnimatePresence, motion } from "framer-motion";

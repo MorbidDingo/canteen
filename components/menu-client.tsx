@@ -37,7 +37,6 @@ import {
   ArrowUpDown,
   Package,
   Percent,
-  Sparkles,
   Tag,
   Store,
   MapPin,
@@ -116,7 +115,7 @@ function VideoPlayerOverlay({
   onClose: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(false);
+  const [muted, setMuted] = useState(true);
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
@@ -149,9 +148,8 @@ function VideoPlayerOverlay({
         autoPlay
         playsInline
         muted={muted}
-        controls={false}
+        controls
         className="max-h-[80vh] max-w-[90vw] rounded-2xl"
-        onClick={onClose}
       />
     </div>
   );

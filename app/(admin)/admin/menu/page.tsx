@@ -141,7 +141,7 @@ export default function AdminMenuPage() {
     setEditingItem(item);
     let parsedImages: string[] = [];
     if (item.additionalImages) {
-      try { parsedImages = JSON.parse(item.additionalImages) as string[]; } catch { /* */ }
+      try { parsedImages = JSON.parse(item.additionalImages) as string[]; } catch { /* invalid JSON — fallback to empty */ }
     }
     setFormData({
       canteenId: item.canteenId,
