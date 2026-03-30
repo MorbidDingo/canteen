@@ -33,6 +33,7 @@ export async function resolveOrganizationDeviceFromRequest(options: {
         deviceType: organizationDevice.deviceType,
         deviceCode: organizationDevice.deviceCode,
         status: organizationDevice.status,
+        canteenId: organizationDevice.canteenId,
       })
       .from(organizationDevice)
       .where(and(eq(organizationDevice.id, headerDeviceId), eq(organizationDevice.organizationId, organizationId)))
@@ -55,6 +56,7 @@ export async function resolveOrganizationDeviceFromRequest(options: {
         deviceType: organizationDevice.deviceType,
         deviceCode: organizationDevice.deviceCode,
         status: organizationDevice.status,
+        canteenId: organizationDevice.canteenId,
       })
       .from(organizationDevice)
       .where(

@@ -63,6 +63,7 @@ type OrderResult = {
   childName?: string;
   reason?: string;
   currentBreakName?: string | null;
+  pendingParentOrders?: { id: string; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number }[] }[];
 };
 
 type OrgContextDevice = {
@@ -396,6 +397,16 @@ export default function KioskPage() {
             data.preOrderMode === "SUBSCRIPTION"
               ? "Subscription pre-order placed automatically."
               : "Today pre-order placed automatically.",
+        });
+        setPhase("result");
+        return;
+      }
+
+      if (data.pendingParentOrders && data.pendingParentOrders.length > 0) {
+        setResult({
+          success: true,
+          childName: data.childName,
+          pendingParentOrders: data.pendingParentOrders,
         });
         setPhase("result");
         return;
@@ -755,6 +766,61 @@ export default function KioskPage() {
 
   if (phase === "result" && result) {
     if (result.success) {
+      // Pending parent-placed orders view
+      if (result.pendingParentOrders && result.pendingParentOrders.length > 0) {
+        return (
+          <div className="h-screen overflow-hidden flex flex-col items-center justify-center p-6 bg-gray-50">
+            <div className="max-w-sm w-full text-center">
+              <div className="bg-[#1a3a8f]/10 rounded-full p-5 mb-4 inline-block">
+                <CheckCircle2 className="h-14 w-14 text-[#1a3a8f]" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-[#1a3a8f] mb-1">
+                Hi, {result.childName || "Student"}!
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Your pending order{result.pendingParentOrders.length > 1 ? "s" : ""}:
+              </p>
+
+              <div className="space-y-3 mb-4 text-left">
+                {result.pendingParentOrders.map((po) => (
+                  <Card key={po.id}>
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-mono font-bold text-[#d4891a] tracking-wider">
+                          #{po.shortId}
+                        </p>
+                        <Badge
+                          className={
+                            po.status === "PREPARING"
+                              ? "bg-[#f58220]/15 text-[#c66a10] border-[#f58220]/30 text-[10px] px-1.5 py-0"
+                              : "bg-[#2eab57]/15 text-[#1e7a3c] border-[#2eab57]/30 text-[10px] px-1.5 py-0"
+                          }
+                        >
+                          {po.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-snug">
+                        {po.items.map((i) => `${i.quantity}x ${i.name}`).join(", ")}
+                      </p>
+                      <p className="text-sm font-semibold">₹{po.totalAmount.toFixed(0)}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground mb-3">
+                Share your order ID{result.pendingParentOrders.length > 1 ? "s" : ""} (shown above) with the canteen admin to collect your food.
+              </p>
+
+              <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">
+                Resetting in {countdown}s...
+              </Badge>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="h-screen overflow-hidden flex flex-col items-center justify-center p-6 bg-gray-50">
           <div className="max-w-sm w-full text-center">

@@ -14,7 +14,7 @@ import {
   certeSubscription,
   appSetting,
 } from "@/lib/db/schema";
-import { eq, and, gte, sql, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, asc, inArray, desc } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
@@ -50,6 +50,43 @@ function todayISODate(): string {
 
 function formatItemSummary(items: { name: string; quantity: number }[]) {
   return items.map((item) => `${item.name} x${item.quantity}`).join(", ");
+}
+
+type PendingParentOrder = {
+  id: string;
+  shortId: string;
+  status: string;
+  totalAmount: number;
+  createdAt: string;
+  items: { name: string; quantity: number }[];
+};
+
+async function getPendingParentOrders(
+  childId: string,
+  canteenId: string | null | undefined,
+): Promise<PendingParentOrder[]> {
+  if (!canteenId) return [];
+  const rows = await db.query.order.findMany({
+    where: and(
+      eq(order.childId, childId),
+      eq(order.canteenId, canteenId),
+      inArray(order.status, ["PLACED", "PREPARING"]),
+    ),
+    orderBy: [desc(order.createdAt)],
+    with: {
+      items: {
+        with: { menuItem: { columns: { name: true } } },
+      },
+    },
+  });
+  return rows.map((o) => ({
+    id: o.id,
+    shortId: o.id.slice(-8).toUpperCase(),
+    status: o.status,
+    totalAmount: o.totalAmount,
+    createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : String(o.createdAt),
+    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+  }));
 }
 
 async function getAppSettings(organizationId: string): Promise<Record<string, string>> {
@@ -503,22 +540,32 @@ export async function POST(request: NextRequest) {
       const currentBreak = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
 
       if (!currentBreak) {
+        const pendingParentOrders = await getPendingParentOrders(
+          studentChild.id,
+          resolvedDevice?.canteenId,
+        );
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: null,
+          pendingParentOrders,
           reason: "No active break right now.",
         });
       }
 
       const resolved = await resolvePreOrderItemsForToday(studentChild.id, currentBreak.name);
       if (!resolved) {
+        const pendingParentOrders = await getPendingParentOrders(
+          studentChild.id,
+          resolvedDevice?.canteenId,
+        );
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: currentBreak.name,
+          pendingParentOrders,
         });
       }
 

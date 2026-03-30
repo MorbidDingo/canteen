@@ -46,6 +46,7 @@ type Order = {
   totalAmount: number;
   paymentMethod: string;
   paymentStatus: PaymentStatus;
+  tokenCode: string | null;
   createdAt: string;
   updatedAt: string;
   user: OrderUser;
@@ -280,6 +281,13 @@ function OrderCard({
             })}
           </span>
         </div>
+
+        {/* Token / Order ID */}
+        {order.tokenCode ? (
+          <p className="text-xs font-mono font-semibold text-[#d4891a]">Token: {order.tokenCode}</p>
+        ) : (
+          <p className="text-xs font-mono text-muted-foreground/70">#{order.id.slice(-8).toUpperCase()}</p>
+        )}
 
         {/* Items on one line */}
         <p className="text-xs text-muted-foreground leading-snug">{itemsSummary}</p>
