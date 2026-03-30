@@ -182,6 +182,14 @@ function ParentLayoutContent({
     }
   }, []);
 
+  const blurFocusedElement = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  }, []);
+
   const fetchNotifications = useCallback(async () => {
     setNotifLoading(true);
     try {
@@ -193,6 +201,22 @@ function ParentLayoutContent({
       setNotifLoading(false);
     }
   }, []);
+
+  /** Fetch notifications first, then open the drawer once loaded */
+  const openNotificationDrawer = useCallback(async () => {
+    blurFocusedElement();
+    setNotifLoading(true);
+    try {
+      const res = await fetch("/api/parent/notifications?limit=30", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { notifications: NotificationItem[] };
+        setNotifItems(data.notifications ?? []);
+      }
+    } finally {
+      setNotifLoading(false);
+      setNotificationDrawerOpen(true);
+    }
+  }, [blurFocusedElement]);
 
   const markNotifAsRead = useCallback(async (notificationId: string) => {
     setNotifItems((prev) =>
@@ -221,14 +245,6 @@ function ParentLayoutContent({
     [notifItems],
   );
 
-  const blurFocusedElement = useCallback(() => {
-    if (typeof document === "undefined") return;
-    const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLElement) {
-      activeElement.blur();
-    }
-  }, []);
-
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -256,15 +272,15 @@ function ParentLayoutContent({
     void ensureCertePlusFresh(45_000);
   }, [ensureCertePlusFresh]);
 
+  // Fetch initial notification count so bell badge is accurate on mount
+  useEffect(() => {
+    void fetchNotifications();
+  }, [fetchNotifications]);
+
   useEffect(() => {
     if (!walletDrawerOpen) return;
     void fetchWallets();
   }, [fetchWallets, walletDrawerOpen]);
-
-  useEffect(() => {
-    if (!notificationDrawerOpen) return;
-    void fetchNotifications();
-  }, [fetchNotifications, notificationDrawerOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -405,10 +421,8 @@ function ParentLayoutContent({
                 )}
                 <ParentNotificationBell
                   parentId={session?.user?.id}
-                  onClick={() => {
-                    blurFocusedElement();
-                    setNotificationDrawerOpen(true);
-                  }}
+                  externalUnreadCount={notifUnreadCount}
+                  onClick={() => void openNotificationDrawer()}
                   className="h-10 w-10 rounded-lg"
                 />
               </div>
@@ -527,15 +541,15 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex max-w-lg items-end justify-center gap-2 px-3 md:max-w-4xl lg:max-w-6xl">
-          {/* Main nav pills - icon only, compact */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-lg px-3 md:max-w-4xl lg:max-w-6xl">
+          {/* iOS-style tab bar — wider with labels */}
           <div className={cn(
-            "relative bottom-0 flex items-center gap-0.5 rounded-2xl border border-white/20 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-            "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
+            "relative flex items-stretch justify-around rounded-2xl border border-white/20 px-1 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+            "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
-            {tabs.filter(t => !t.isProfile).map((tab) => {
+            {tabs.map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
 
@@ -551,45 +565,61 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex h-10 w-10 items-center justify-center rounded-xl"
+                  className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-1.5"
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute inset-0 rounded-xl bg-primary/12 dark:bg-primary/20"
+                      className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
                   <motion.div
                     whileTap={{ scale: 0.85 }}
-                    className="relative z-10 flex items-center justify-center"
+                    className="relative z-10 flex flex-col items-center gap-0.5"
                   >
-                    {Icon ? (
+                    {tab.isProfile ? (
+                      <Avatar className="h-5 w-5 ring-1 ring-primary/20">
+                        <AvatarFallback className={cn(
+                          "text-[8px] font-bold transition-colors duration-200",
+                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                        )}>
+                          {getInitials(session?.user?.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : Icon ? (
                       <Icon
                         className={cn(
-                          "h-[18px] w-[18px] transition-colors duration-200",
-                          isActive ? "text-primary" : "text-muted-foreground/80",
+                          "h-[20px] w-[20px] transition-colors duration-200",
+                          isActive ? "text-primary" : "text-muted-foreground/70",
                           tab.key === "cart" && cartBounce && "animate-bounce",
                         )}
                         strokeWidth={isActive ? 2.5 : 1.8}
+                        fill={isActive ? "currentColor" : "none"}
                       />
                     ) : null}
+                    <span className={cn(
+                      "text-[10px] font-medium leading-none transition-colors duration-200",
+                      isActive ? "text-primary" : "text-muted-foreground/70",
+                    )}>
+                      {tab.label}
+                    </span>
                   </motion.div>
 
                   {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
+                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
                       {overdueCount}
                     </span>
                   )}
 
                   {tab.key === "cart" && mounted && cartCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
                       {cartCount}
                     </span>
                   )}
 
                   {tab.key === "controls" && tab.locked && (
-                    <span className="absolute -right-1 -top-1 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
+                    <span className="absolute right-1 top-0 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
                       +
                     </span>
                   )}
@@ -597,35 +627,6 @@ function ParentLayoutContent({
               );
             })}
           </div>
-
-          {/* Floating profile/settings button */}
-          {(() => {
-            const profileTab = tabs.find(t => t.isProfile);
-            if (!profileTab) return null;
-            const isActive = activeTab === profileTab.key;
-            return (
-              <Link
-                href={profileTab.href}
-                className={cn(
-                  "relative bottom-1 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-                  "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
-                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
-                  "transition-all",
-                )}
-              >
-                <motion.div whileTap={{ scale: 0.85 }}>
-                  <Avatar className="h-6 w-6 ring-1 ring-primary/20">
-                    <AvatarFallback className={cn(
-                      "text-[9px] font-bold transition-colors duration-200",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
-                    )}>
-                      {getInitials(session?.user?.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                </motion.div>
-              </Link>
-            );
-          })()}
         </div>
       </nav>
 

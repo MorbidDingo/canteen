@@ -503,6 +503,8 @@ export const menuItem = pgTable("menu_item", {
   price: doublePrecision("price").notNull(),
   category: text("category", { enum: ["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"] }).notNull(),
   imageUrl: text("image_url"),
+  videoUrl: text("video_url"),
+  additionalImages: text("additional_images"), // JSON array of image URLs
   available: boolean("available").notNull().default(true),
   availableUnits: integer("available_units"), // null = unlimited, 0 = sold out
   subscribable: boolean("subscribable").notNull().default(true), // whether item can be selected for subscriptions

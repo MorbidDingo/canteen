@@ -44,6 +44,8 @@ const updateMenuItemSchema = z.object({
   category: z.enum(["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"]).optional(),
   canteenId: z.string().min(1).nullable().optional(),
   imageUrl: z.string().optional().or(z.literal("")).optional(),
+  videoUrl: z.string().optional().or(z.literal("")).optional(),
+  additionalImages: z.string().optional().or(z.literal("")).optional(),
   available: z.boolean().optional(),
   availableUnits: z.number().int().min(0).nullable().optional(),
   resetUnits: z.boolean().optional(),
@@ -121,6 +123,14 @@ export async function PATCH(
     // Handle empty imageUrl → null
     if (updateData.imageUrl === "") {
       updateData.imageUrl = null;
+    }
+    // Handle empty videoUrl → null
+    if (updateData.videoUrl === "") {
+      updateData.videoUrl = null;
+    }
+    // Handle empty additionalImages → null
+    if (updateData.additionalImages === "") {
+      updateData.additionalImages = null;
     }
 
     // Handle resetUnits flag

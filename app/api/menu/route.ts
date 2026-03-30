@@ -82,6 +82,12 @@ export async function GET(request: NextRequest) {
         canteenName: canteenName ?? filterCanteen?.name ?? null,
         canteenLocation: canteenLocation ?? filterCanteen?.location ?? null,
         imageUrl: sanitizeImageUrl(item.imageUrl),
+        videoUrl: item.videoUrl ?? null,
+        additionalImages: (() => {
+          if (!item.additionalImages) return [];
+          try { return (JSON.parse(item.additionalImages) as string[]).map(sanitizeImageUrl); }
+          catch { return []; }
+        })(),
         discountedPrice,
         discountInfo,
       };
