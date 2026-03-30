@@ -37,11 +37,13 @@ type IncomingPayload = {
 export function ParentNotificationBell({
   parentId,
   className,
-  href = "/notifications",
+  href,
+  onClick,
 }: {
   parentId?: string;
   className?: string;
   href?: string;
+  onClick?: () => void;
 }) {
   const [notifications, setNotifications] = useState<ParentNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,21 +91,41 @@ export function ParentNotificationBell({
     }
   });
 
+  const badge = !loading && unreadCount > 0 && (
+    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-background animate-in zoom-in-75 duration-300">
+      {unreadCount > 9 ? "9+" : unreadCount}
+    </span>
+  );
+
+  const sharedClassName = cn(
+    "group relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent",
+    className,
+  );
+
+  // If onClick is provided, render as a button (drawer mode)
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={sharedClassName}
+        aria-label="Notifications"
+      >
+        <Bell className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+        {badge}
+      </button>
+    );
+  }
+
+  // Otherwise render as a link (default fallback)
   return (
     <Link
-      href={href}
-      className={cn(
-        "group relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent",
-        className,
-      )}
+      href={href ?? "/notifications"}
+      className={sharedClassName}
       aria-label="Notifications"
     >
       <Bell className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
-      {!loading && unreadCount > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-background animate-in zoom-in-75 duration-300">
-          {unreadCount > 9 ? "9+" : unreadCount}
-        </span>
-      )}
+      {badge}
     </Link>
   );
 }

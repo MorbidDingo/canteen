@@ -16,6 +16,7 @@ import {
   Sparkles,
   MessageSquareText,
   Store,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -44,6 +45,17 @@ type WalletSnapshot = {
   childName: string;
   parentName?: string | null;
   balance: number;
+};
+
+type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  readAt: string | Date | null;
+  createdAt: string | Date;
+  childName: string;
+  childGrNumber: string | null;
 };
 
 function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
@@ -97,12 +109,15 @@ function ParentLayoutContent({
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
+  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [libraryChatOpen, setLibraryChatOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
   const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
     "certe:selected-canteen-id",
   );
@@ -167,6 +182,45 @@ function ParentLayoutContent({
     }
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    try {
+      const res = await fetch("/api/parent/notifications?limit=30", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { notifications: NotificationItem[] };
+      setNotifItems(data.notifications ?? []);
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  const markNotifAsRead = useCallback(async (notificationId: string) => {
+    setNotifItems((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n)),
+    );
+    await fetch("/api/parent/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationId }),
+    });
+  }, []);
+
+  const markAllNotifsRead = useCallback(async () => {
+    setNotifItems((prev) =>
+      prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })),
+    );
+    await fetch("/api/parent/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markAll: true }),
+    });
+  }, []);
+
+  const notifUnreadCount = useMemo(
+    () => notifItems.filter((n) => !n.readAt).length,
+    [notifItems],
+  );
+
   const blurFocusedElement = useCallback(() => {
     if (typeof document === "undefined") return;
     const activeElement = document.activeElement;
@@ -208,6 +262,11 @@ function ParentLayoutContent({
   }, [fetchWallets, walletDrawerOpen]);
 
   useEffect(() => {
+    if (!notificationDrawerOpen) return;
+    void fetchNotifications();
+  }, [fetchNotifications, notificationDrawerOpen]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(max-width: 767px)");
     const sync = () => setIsMobile(mediaQuery.matches);
@@ -225,6 +284,7 @@ function ParentLayoutContent({
   useEffect(() => {
     setCartDrawerOpen(false);
     setWalletDrawerOpen(false);
+    setNotificationDrawerOpen(false);
     setChatOpen(false);
     setLibraryChatOpen(false);
   }, [pathname]);
@@ -239,7 +299,60 @@ function ParentLayoutContent({
       .slice(0, 2);
   };
 
-  const tabs = useMemo(() => {
+  type TabItem = {
+    key: string;
+    href: string;
+    icon: React.ElementType | null;
+    label: string;
+    locked: boolean;
+    isProfile?: boolean;
+  };
+
+  const renderNotificationList = () => (
+    <>
+      {notifLoading ? (
+        <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+          Loading notifications...
+        </div>
+      ) : notifItems.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+          <Bell className="mx-auto h-6 w-6 text-muted-foreground/30" />
+          <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {notifItems.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => void markNotifAsRead(n.id)}
+              className={cn(
+                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                n.readAt
+                  ? "hover:bg-card/70"
+                  : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                    {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                {!n.readAt && (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const tabs: TabItem[] = useMemo(() => {
     if (parentMode === "canteen") {
       return [
         { key: "home" as const, href: "/menu", icon: UtensilsCrossed, label: "Menu", locked: false },
@@ -292,7 +405,10 @@ function ParentLayoutContent({
                 )}
                 <ParentNotificationBell
                   parentId={session?.user?.id}
-                  href={withParentMode("/notifications")}
+                  onClick={() => {
+                    blurFocusedElement();
+                    setNotificationDrawerOpen(true);
+                  }}
                   className="h-10 w-10 rounded-lg"
                 />
               </div>
@@ -411,15 +527,15 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto max-w-lg px-3 md:max-w-4xl lg:max-w-6xl">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-lg items-end justify-center gap-2 px-3 md:max-w-4xl lg:max-w-6xl">
+          {/* Main nav pills - icon only, compact */}
           <div className={cn(
-            "relative grid gap-1 rounded-2xl border border-border/55 bg-background/92 p-1.5 shadow-[0_14px_30px_rgba(15,23,42,0.16)] backdrop-blur-2xl",
-            tabs.length === 5 ? "grid-cols-5" : tabs.length === 4 ? "grid-cols-4" : "grid-cols-3",
+            "relative flex items-center gap-0.5 rounded-2xl border border-white/20 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+            "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
+            "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
-            <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-white/70 dark:bg-white/20" />
-            <div className="pointer-events-none absolute -left-4 bottom-1 h-10 w-20 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
-            {tabs.map((tab) => {
+            {tabs.filter(t => !t.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
 
@@ -435,7 +551,7 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex h-11 items-center justify-center rounded-xl px-2"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-xl"
                 >
                   {isActive && (
                     <motion.div
@@ -446,53 +562,34 @@ function ParentLayoutContent({
                   )}
                   <motion.div
                     whileTap={{ scale: 0.85 }}
-                    className="relative z-10 flex items-center gap-1.5"
+                    className="relative z-10 flex items-center justify-center"
                   >
-                    {(tab as { isProfile?: boolean }).isProfile ? (
-                      <Avatar className="h-5 w-5 ring-1 ring-primary/20">
-                        <AvatarFallback className={cn(
-                          "text-[8px] font-bold transition-colors duration-200",
-                          isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
-                        )}>
-                          {getInitials(session?.user?.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ) : Icon ? (
+                    {Icon ? (
                       <Icon
                         className={cn(
-                          "h-[17px] w-[17px] transition-colors duration-200",
-                          isActive ? "text-primary" : "text-muted-foreground/90",
+                          "h-[18px] w-[18px] transition-colors duration-200",
+                          isActive ? "text-primary" : "text-muted-foreground/80",
                           tab.key === "cart" && cartBounce && "animate-bounce",
                         )}
                         strokeWidth={isActive ? 2.5 : 1.8}
                       />
                     ) : null}
-                    <span
-                      className={cn(
-                        "text-[11px] leading-tight transition-colors duration-200",
-                        isActive
-                          ? "font-semibold text-primary"
-                          : "font-medium text-muted-foreground/90",
-                      )}
-                    >
-                      {tab.label}
-                    </span>
                   </motion.div>
 
                   {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
-                    <span className="absolute right-2 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                    <span className="absolute -right-0.5 -top-0.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
                       {overdueCount}
                     </span>
                   )}
 
                   {tab.key === "cart" && mounted && cartCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                    <span className="absolute -right-0.5 -top-0.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
                       {cartCount}
                     </span>
                   )}
 
                   {tab.key === "controls" && tab.locked && (
-                    <span className="absolute -top-1 right-2 z-20 rounded-full bg-primary px-1.5 py-0.5 text-[8px] font-bold leading-none text-primary-foreground">
+                    <span className="absolute -right-1 -top-1 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
                       +
                     </span>
                   )}
@@ -500,6 +597,35 @@ function ParentLayoutContent({
               );
             })}
           </div>
+
+          {/* Floating profile/settings button */}
+          {(() => {
+            const profileTab = tabs.find(t => t.isProfile);
+            if (!profileTab) return null;
+            const isActive = activeTab === profileTab.key;
+            return (
+              <Link
+                href={profileTab.href}
+                className={cn(
+                  "relative flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+                  "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
+                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
+                  "transition-all",
+                )}
+              >
+                <motion.div whileTap={{ scale: 0.85 }}>
+                  <Avatar className="h-6 w-6 ring-1 ring-primary/20">
+                    <AvatarFallback className={cn(
+                      "text-[9px] font-bold transition-colors duration-200",
+                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                    )}>
+                      {getInitials(session?.user?.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                </motion.div>
+              </Link>
+            );
+          })()}
         </div>
       </nav>
 
@@ -662,6 +788,53 @@ function ParentLayoutContent({
                 >
                   <Sparkles className="h-4 w-4" />
                   Open Wallet
+                </Button>
+              </div>
+            </div>
+          </BottomSheet>
+
+          {/* Notification Drawer (mobile) */}
+          <BottomSheet
+            open={notificationDrawerOpen}
+            onClose={() => setNotificationDrawerOpen(false)}
+            snapPoints={[84]}
+            bare
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+                <div className="space-y-0.5">
+                  <h3 className="flex items-center gap-2 text-base font-semibold">
+                    <Bell className="h-4 w-4 text-orange-500" />
+                    Notifications
+                  </h3>
+                  <p className="text-xs text-muted-foreground">{notifUnreadCount} unread</p>
+                </div>
+                {notifUnreadCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    onClick={() => void markAllNotifsRead()}
+                  >
+                    Mark all read
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {renderNotificationList()}
+              </div>
+
+              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <Button
+                  className="w-full gap-2"
+                  variant="outline"
+                  onClick={() => {
+                    setNotificationDrawerOpen(false);
+                    void router.push(withParentMode("/notifications"));
+                  }}
+                >
+                  View All Notifications
                 </Button>
               </div>
             </div>
@@ -840,6 +1013,60 @@ function ParentLayoutContent({
                     <Sparkles className="h-4 w-4" />
                     Open Wallet
                   </Button>
+                </SheetFooter>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          {/* Notification Drawer (desktop) */}
+          <Sheet
+            open={notificationDrawerOpen}
+            onOpenChange={(open) => {
+              if (open) blurFocusedElement();
+              setNotificationDrawerOpen(open);
+            }}
+          >
+            <SheetContent
+              side="right"
+              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+            >
+              <div className="flex h-full flex-col">
+                <SheetHeader className="space-y-1 border-b border-border/60">
+                  <SheetTitle className="flex items-center gap-2 text-base">
+                    <Bell className="h-4 w-4 text-orange-500" />
+                    Notifications
+                  </SheetTitle>
+                  <SheetDescription>
+                    {notifUnreadCount} unread notification{notifUnreadCount !== 1 ? "s" : ""}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto p-3">
+                  {renderNotificationList()}
+                </div>
+
+                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                  <div className="space-y-2 w-full">
+                    {notifUnreadCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        className="w-full text-xs text-orange-600"
+                        onClick={() => void markAllNotifsRead()}
+                      >
+                        Mark all as read
+                      </Button>
+                    )}
+                    <Button
+                      className="w-full gap-2"
+                      variant="outline"
+                      onClick={() => {
+                        setNotificationDrawerOpen(false);
+                        void router.push(withParentMode("/notifications"));
+                      }}
+                    >
+                      View All Notifications
+                    </Button>
+                  </div>
                 </SheetFooter>
               </div>
             </SheetContent>

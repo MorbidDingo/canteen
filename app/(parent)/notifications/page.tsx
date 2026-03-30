@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bell, Search } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Bell, Search, CheckCheck } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useSSE } from "@/lib/events";
+import { cn } from "@/lib/utils";
 
 type ParentNotification = {
   id: string;
@@ -50,7 +50,6 @@ function dateBucketLabel(value: string | Date) {
     weekday: "short",
     month: "short",
     day: "numeric",
-    year: "numeric",
   });
 }
 
@@ -135,97 +134,114 @@ export default function ParentNotificationsPage() {
     });
   }, []);
 
+  const FILTER_LABELS: Record<PageFilter, string> = {
+    ALL: "All",
+    UNREAD: "Unread",
+    KIOSK: "Kiosk",
+    GATE: "Gate",
+    LIBRARY: "Library",
+    BLOCKED: "Blocked",
+  };
+
   return (
-    <div className="app-shell-compact space-y-4">
-      <Card className="border-orange-100">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-xl flex items-center gap-2 text-orange-900">
-                <Bell className="h-5 w-5 text-orange-700" />
-                Notifications
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {unreadCount} unread updates about kiosk, gate, library, and blocked attempts.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={markAllRead}
-              disabled={unreadCount === 0}
-              className="w-full border-orange-200 text-orange-800 hover:bg-orange-50 sm:w-auto"
-            >
-              Mark all read
-            </Button>
+    <div className="app-shell space-y-4 pb-24">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-950/40">
+            <Bell className="h-4.5 w-4.5 text-orange-600 dark:text-orange-400" />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              placeholder="Search notifications, child name, or GR number"
-            />
+          <div>
+            <h1 className="text-lg font-bold tracking-tight">Notifications</h1>
+            <p className="text-xs text-muted-foreground">{unreadCount} unread</p>
           </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={markAllRead}
+          disabled={unreadCount === 0}
+          className="gap-1 text-xs text-orange-700 hover:bg-orange-50 hover:text-orange-800 dark:text-orange-400 dark:hover:bg-orange-950/20"
+        >
+          <CheckCheck className="h-3.5 w-3.5" />
+          Mark all read
+        </Button>
+      </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            {(["ALL", "UNREAD", "KIOSK", "GATE", "LIBRARY", "BLOCKED"] as PageFilter[]).map((key) => (
-              <Button
-                key={key}
-                variant={filter === key ? "default" : "outline"}
-                size="sm"
-                className={filter === key ? "bg-orange-600 hover:bg-orange-700" : ""}
-                onClick={() => setFilter(key)}
-              >
-                {key}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Search */}
+      <div className="relative">
+        <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-9 rounded-xl border-border/50 bg-card/80 pl-8 text-sm shadow-sm"
+          placeholder="Search notifications..."
+        />
+      </div>
 
-      {loading && <p className="text-sm text-muted-foreground">Loading notifications...</p>}
+      {/* Filters */}
+      <div className="flex gap-1 overflow-x-auto pb-0.5">
+        {(Object.keys(FILTER_LABELS) as PageFilter[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            className={cn(
+              "shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors",
+              filter === key
+                ? "bg-orange-600 text-white shadow-sm"
+                : "bg-card/80 text-muted-foreground hover:bg-card hover:text-foreground",
+            )}
+            onClick={() => setFilter(key)}
+          >
+            {FILTER_LABELS[key]}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
       {!loading && grouped.length === 0 && (
-        <Card>
-          <CardContent className="py-8 text-sm text-muted-foreground">
-            No notifications found for your current filters.
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-8 text-center">
+          <Bell className="mx-auto h-7 w-7 text-muted-foreground/30" />
+          <p className="mt-2 text-xs text-muted-foreground">No notifications match your filters</p>
+        </div>
       )}
 
       {!loading &&
         grouped.map(([label, entries]) => (
-          <div key={label} className="space-y-2">
-            <h2 className="text-xs uppercase tracking-wide text-orange-700 font-semibold">{label}</h2>
-            <Card className="overflow-hidden">
-              <CardContent className="p-0">
-                {entries.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() => markAsRead(n.id)}
-                    className="w-full text-left px-4 py-3 border-b last:border-b-0 hover:bg-orange-50/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900">{n.title}</p>
-                        <p className="text-sm text-zinc-600 mt-0.5">{n.message}</p>
-                        <p className="text-xs text-zinc-500 mt-1">
-                          {n.childName}
-                          {n.childGrNumber ? ` (GR ${n.childGrNumber})` : ""}
-                          {" · "}
-                          {new Date(n.createdAt).toLocaleTimeString()}
-                        </p>
-                      </div>
-                      {!n.readAt && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-orange-600" />}
+          <div key={label} className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-orange-600/80 dark:text-orange-400/60 pl-1">{label}</p>
+            <div className="space-y-1">
+              {entries.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => markAsRead(n.id)}
+                  className={cn(
+                    "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                    n.readAt
+                      ? "bg-card/40 hover:bg-card/70"
+                      : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
+                  )}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground/70">
+                        {n.childName}
+                        {n.childGrNumber ? ` · GR ${n.childGrNumber}` : ""}
+                        {" · "}
+                        {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </p>
                     </div>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
+                    {!n.readAt && (
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         ))}
     </div>
