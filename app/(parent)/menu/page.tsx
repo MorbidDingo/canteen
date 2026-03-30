@@ -24,6 +24,8 @@ interface MenuItem {
   discountInfo?: { type: string; value: number; mode: string } | null;
   category: string;
   imageUrl: string | null;
+  videoUrl?: string | null;
+  additionalImages?: string[];
   available: boolean;
   availableUnits?: number | null;
   canteenId: string | null;
@@ -85,51 +87,53 @@ export default function MenuPage() {
 
   return (
     <div className="app-shell">
-      {/* Canteen selector — switch between canteens or view all */}
-      <CanteenSelector
-        value={selectedCanteen}
-        onChange={setSelectedCanteen}
-        showAll
-        compact
-        className="mb-4"
-      />
-
-      <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 p-1 shadow-sm">
-        <Link href="/menu">
-          <Button type="button" variant="secondary" size="sm">
-            Menu
-          </Button>
-        </Link>
-        <Link href="/pre-orders">
-          {!certePlusResolved ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-muted-foreground"
-              disabled
-            >
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Pre-Order
+      {/* Top row: Menu/Pre-order tabs + Canteen selector */}
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div className="inline-flex w-fit gap-1 rounded-xl border border-border/60 p-1 shadow-sm">
+          <Link href="/menu">
+            <Button type="button" variant="secondary" size="sm">
+              Menu
             </Button>
-          ) : certePlusActive ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-            >
-              <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
-                <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
+          </Link>
+          <Link href="/pre-orders">
+            {!certePlusResolved ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-muted-foreground"
+                disabled
+              >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Pre-Order
-              </span>
-            </Button>
-          ) : (
-            <Button type="button" variant="ghost" size="sm" className="gap-1">
-              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-              Pre-Order
-            </Button>
-          )}
-        </Link>
+              </Button>
+            ) : certePlusActive ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+              >
+                <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
+                  Pre-Order
+                </span>
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" size="sm" className="gap-1">
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                Pre-Order
+              </Button>
+            )}
+          </Link>
+        </div>
+
+        {/* Canteen selector — to the right of tabs */}
+        <CanteenSelector
+          value={selectedCanteen}
+          onChange={setSelectedCanteen}
+          showAll
+          compact
+        />
       </div>
 
       {items.length === 0 ? (

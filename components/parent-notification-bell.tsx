@@ -39,19 +39,24 @@ export function ParentNotificationBell({
   className,
   href,
   onClick,
+  externalUnreadCount,
 }: {
   parentId?: string;
   className?: string;
   href?: string;
   onClick?: () => void;
+  /** When provided, uses this count instead of internally tracked count */
+  externalUnreadCount?: number;
 }) {
   const [notifications, setNotifications] = useState<ParentNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const unreadCount = useMemo(
+  const internalUnreadCount = useMemo(
     () => notifications.filter((n) => !n.readAt).length,
     [notifications],
   );
+
+  const unreadCount = externalUnreadCount ?? internalUnreadCount;
 
   useEffect(() => {
     if (!parentId) return;

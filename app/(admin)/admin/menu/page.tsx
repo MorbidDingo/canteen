@@ -38,6 +38,7 @@ import {
   ImagePlus,
   X,
   Loader2,
+  Video,
 } from "lucide-react";
 import { toast } from "sonner";
 import { emitEvent, useRealtimeData } from "@/lib/events";
@@ -54,6 +55,8 @@ interface MenuItem {
   price: number;
   category: string;
   imageUrl: string | null;
+  videoUrl: string | null;
+  additionalImages: string | null;
   available: boolean;
   availableUnits: number | null;
   subscribable: boolean;
@@ -68,6 +71,8 @@ interface FormData {
   price: string;
   category: MenuCategory;
   imageUrl: string;
+  videoUrl: string;
+  additionalImages: string[];
   available: boolean;
   availableUnits: string;
   subscribable: boolean;
@@ -80,6 +85,8 @@ const emptyForm: FormData = {
   price: "",
   category: "SNACKS",
   imageUrl: "",
+  videoUrl: "",
+  additionalImages: [],
   available: true,
   availableUnits: "0",
   subscribable: true,
@@ -132,6 +139,10 @@ export default function AdminMenuPage() {
 
   const openEdit = (item: MenuItem) => {
     setEditingItem(item);
+    let parsedImages: string[] = [];
+    if (item.additionalImages) {
+      try { parsedImages = JSON.parse(item.additionalImages) as string[]; } catch { /* */ }
+    }
     setFormData({
       canteenId: item.canteenId,
       name: item.name,
@@ -139,6 +150,8 @@ export default function AdminMenuPage() {
       price: item.price.toString(),
       category: item.category as MenuCategory,
       imageUrl: item.imageUrl || "",
+      videoUrl: item.videoUrl || "",
+      additionalImages: parsedImages,
       available: item.available,
       availableUnits: item.availableUnits !== null ? item.availableUnits.toString() : "",
       subscribable: item.subscribable,
@@ -166,6 +179,10 @@ export default function AdminMenuPage() {
         price,
         category: formData.category,
         imageUrl: formData.imageUrl.trim() || "",
+        videoUrl: formData.videoUrl.trim() || "",
+        additionalImages: formData.additionalImages.length > 0
+          ? JSON.stringify(formData.additionalImages)
+          : "",
         available: formData.available,
         availableUnits: formData.availableUnits.trim() !== ""
           ? parseInt(formData.availableUnits)
@@ -457,7 +474,11 @@ function MenuItemForm({
   isEdit: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const additionalImageInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [additionalImageUploading, setAdditionalImageUploading] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -492,6 +513,78 @@ function MenuItemForm({
 
   const removeImage = () => {
     setFormData({ ...formData, imageUrl: "" });
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setVideoUploading(true);
+    try {
+      const form = new globalThis.FormData();
+      form.append("file", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Upload failed");
+      }
+
+      const { imageUrl } = await res.json();
+      setFormData({ ...formData, videoUrl: imageUrl });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to upload video",
+      );
+    } finally {
+      setVideoUploading(false);
+      if (videoInputRef.current) videoInputRef.current.value = "";
+    }
+  };
+
+  const handleAdditionalImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAdditionalImageUploading(true);
+    try {
+      const form = new globalThis.FormData();
+      form.append("file", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Upload failed");
+      }
+
+      const { imageUrl } = await res.json();
+      setFormData({
+        ...formData,
+        additionalImages: [...formData.additionalImages, imageUrl],
+      });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to upload image",
+      );
+    } finally {
+      setAdditionalImageUploading(false);
+      if (additionalImageInputRef.current) additionalImageInputRef.current.value = "";
+    }
+  };
+
+  const removeAdditionalImage = (index: number) => {
+    setFormData({
+      ...formData,
+      additionalImages: formData.additionalImages.filter((_, i) => i !== index),
+    });
   };
 
   return (
@@ -542,6 +635,96 @@ function MenuItemForm({
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="hidden"
           onChange={handleImageUpload}
+        />
+      </div>
+
+      {/* Video Upload */}
+      <div className="space-y-2">
+        <Label>Video (optional)</Label>
+        {formData.videoUrl ? (
+          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+            <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm truncate flex-1">{formData.videoUrl.split("/").pop()}</span>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, videoUrl: "" })}
+              className="shrink-0 rounded-full p-1 hover:bg-muted transition"
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => videoInputRef.current?.click()}
+            disabled={videoUploading}
+            className="w-full h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {videoUploading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span className="text-xs">Uploading video...</span>
+              </>
+            ) : (
+              <>
+                <Video className="h-5 w-5" />
+                <span className="text-xs">Upload a video for this item</span>
+              </>
+            )}
+          </button>
+        )}
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/mp4,video/webm,video/ogg"
+          className="hidden"
+          onChange={handleVideoUpload}
+        />
+      </div>
+
+      {/* Additional Images */}
+      <div className="space-y-2">
+        <Label>Additional Images (optional)</Label>
+        {formData.additionalImages.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {formData.additionalImages.map((url, idx) => (
+              <div key={url} className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+                <Image src={url} alt={`Additional ${idx + 1}`} fill className="object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeAdditionalImage(idx)}
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80 transition"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => additionalImageInputRef.current?.click()}
+          disabled={additionalImageUploading}
+          className="w-full h-16 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center gap-2 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors cursor-pointer disabled:opacity-50"
+        >
+          {additionalImageUploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-xs">Uploading...</span>
+            </>
+          ) : (
+            <>
+              <ImagePlus className="h-4 w-4" />
+              <span className="text-xs">Add image</span>
+            </>
+          )}
+        </button>
+        <input
+          ref={additionalImageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={handleAdditionalImageUpload}
         />
       </div>
 

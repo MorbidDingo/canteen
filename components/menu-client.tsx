@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import {
   Card,
@@ -41,6 +41,7 @@ import {
   Tag,
   Store,
   MapPin,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
@@ -106,6 +107,56 @@ function MenuItemImage({
   );
 }
 
+/* ── Video player overlay — fullscreen with mute toggle ── */
+function VideoPlayerOverlay({
+  videoUrl,
+  onClose,
+}: {
+  videoUrl: string;
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(false);
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      if (videoRef.current) videoRef.current.muted = !m;
+      return !m;
+    });
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
+        aria-label="Close video"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <button
+        type="button"
+        onClick={toggleMute}
+        className="absolute bottom-6 right-6 z-10 flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 transition-colors"
+        aria-label={muted ? "Unmute" : "Mute"}
+      >
+        {muted ? "🔇 Muted" : "🔊 Sound On"}
+      </button>
+      <video
+        ref={videoRef}
+        src={videoUrl}
+        autoPlay
+        playsInline
+        muted={muted}
+        controls={false}
+        className="max-h-[80vh] max-w-[90vw] rounded-2xl"
+        onClick={onClose}
+      />
+    </div>
+  );
+}
+
 interface MenuItem {
   id: string;
   name: string;
@@ -115,6 +166,8 @@ interface MenuItem {
   discountInfo?: { type: string; value: number; mode: string } | null;
   category: string;
   imageUrl: string | null;
+  videoUrl?: string | null;
+  additionalImages?: string[];
   available: boolean;
   availableUnits?: number | null;
   canteenId: string | null;
@@ -149,6 +202,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [discountsOnly, setDiscountsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
   const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
+  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const certePlusActive = certePlusStatus?.active === true;
 
@@ -282,47 +336,127 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
 
   return (
     <>
+      {/* ── Search — clean, prominent, always visible ── */}
+      <div className="mb-4 animate-fade-in">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={
+                searchQuery.trim()
+                  ? "Search menu..."
+                  : `Try "${activeSuggestion}"`
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              className="rounded-xl border-border/60 bg-muted/40 pl-9 pr-9 h-10 focus:bg-background transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            size="icon"
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative shrink-0 h-10 w-10 rounded-xl border-border/60"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            {hasActiveFilters && (
+              <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* ── AI Quick Bar — compact horizontal chip strip for certe+ ── */}
+      {certePlusActive && (
+        <div className="mb-4 animate-fade-in">
+          <AiQuickBar />
+          <MenuRecommendations />
+        </div>
+      )}
+
+      {/* ── Category filter chips — horizontal scroll ── */}
+      <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none animate-fade-in">
+        <button
+          type="button"
+          onClick={() => setCategoryFilter("ALL")}
+          className={cn(
+            "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+            categoryFilter === "ALL"
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted",
+          )}
+        >
+          All ({items.length})
+        </button>
+        {Object.values(MENU_CATEGORIES).map((value) => {
+          const count = categoryCounts[value] ?? 0;
+          if (count === 0) return null;
+          const CatIcon = categoryIcons[value];
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setCategoryFilter(value)}
+              className={cn(
+                "shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
+                categoryFilter === value
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted",
+              )}
+            >
+              <CatIcon className="h-3 w-3" />
+              {MENU_CATEGORY_LABELS[value]} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Discount banner — slim, elegant ── */}
       {discountedItems.length > 0 && !discountsOnly && !dismissDiscountBanner && (
-        <div className="relative mb-6 overflow-hidden rounded-2xl border border-amber-200/70 bg-linear-to-r from-amber-400 via-yellow-300 to-amber-500 p-px shadow-[0_10px_24px_rgba(180,115,0,0.25)] animate-fade-in">
-          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_15%_30%,rgba(255,255,255,0.35),transparent_40%),radial-gradient(circle_at_85%_70%,rgba(255,255,255,0.25),transparent_45%)]" />
-          <div className="pointer-events-none absolute -left-1/3 top-0 h-full w-1/2 rotate-12 bg-linear-to-r from-transparent via-white/80 to-transparent animate-banner-glitter" />
+        <div className="relative mb-4 overflow-hidden rounded-xl border border-amber-200/50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 dark:border-amber-300/15 animate-fade-in">
           <button
             onClick={() => setDiscountsOnly(true)}
-            className="relative z-10 w-full rounded-[15px] bg-linear-to-r from-[#c9911c] via-[#e0ae2a] to-[#b97f14] px-4 py-3 pr-12 sm:px-6 sm:py-4 sm:pr-14 flex items-center justify-between gap-3 text-white text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="shrink-0 rounded-full bg-white/20 p-2 ring-1 ring-white/35">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 text-left">
-                <p className="font-bold text-sm sm:text-base truncate">
-                  {discountedItems.length} item{discountedItems.length > 1 ? "s" : ""} on discount!
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+              <Tag className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {discountedItems.length} item{discountedItems.length > 1 ? "s" : ""} on discount
+              </p>
+              {bestDiscount && (
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/70 truncate">
+                  Save up to ₹{(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
                 </p>
-                {bestDiscount && (
-                  <p className="text-xs sm:text-sm text-white/80 truncate">
-                    Save up to ₹
-                    {(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
-                  </p>
-                )}
-              </div>
+              )}
             </div>
-            <div className="shrink-0 flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5 text-xs sm:text-sm font-semibold ring-1 ring-white/30">
-              <Tag className="h-3.5 w-3.5" />
-              View Deals
-            </div>
+            <Badge variant="secondary" className="shrink-0 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0">
+              View
+            </Badge>
           </button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 z-20 h-8 w-8 rounded-full text-white hover:text-white hover:bg-black/20"
+            className="absolute top-1 right-1 z-20 h-6 w-6 rounded-full text-amber-600 hover:text-amber-800 hover:bg-amber-100/60"
             onClick={(e) => {
               e.stopPropagation();
               setDismissDiscountBanner(true);
             }}
             aria-label="Dismiss discount banner"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3" />
           </Button>
         </div>
       )}
@@ -339,147 +473,76 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
         </div>
       )}
 
-      <div className="mb-6 space-y-3 rounded-2xl p-3 animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* ── Expanded filters panel ── */}
+      {showFilters && (
+        <div className="mb-4 flex flex-col sm:flex-row gap-3 rounded-xl border border-border/50 bg-muted/30 p-3 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Max Price (₹)</Label>
             <Input
-              placeholder={
-                searchQuery.trim()
-                  ? "Search menu..."
-                  : `Try "${activeSuggestion}"`
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              className="border-amber-200/70 bg-background/85 pl-9 pr-9 dark:border-amber-200/20"
+              type="number"
+              placeholder={`Up to ₹${priceRange.max}`}
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              min={0}
+              className="h-9 rounded-lg border-border/60"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          </div>
+          <div className="flex-1 space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Sort By</Label>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as SortOption)}
+            >
+              <SelectTrigger className="h-9 rounded-lg border-border/60">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {hasActiveFilters && (
+            <div className="flex items-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="text-xs gap-1 h-9"
               >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          <Button
-            variant={showFilters ? "secondary" : "outline"}
-            size="icon"
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative shrink-0 border-amber-200/70 bg-background/85 dark:border-amber-200/20"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary" />
-            )}
-          </Button>
-        </div>
-        <div className="flex items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <h1 className="text-lg font-semibold text-orange-500">AI Quick Bar</h1>
-          </div>
-                            
-        
-              {/* AI Quick Bar + ML Recommendations — Certe+ only */}
-      {certePlusActive && (
-          <div className="mb-6 space-y-4">
-          <AiQuickBar />
-          <MenuRecommendations />
+                <X className="h-3 w-3" />
+                Clear
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Category</Label>
-          <Select
-            value={categoryFilter}
-            onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}
-          >
-            <SelectTrigger className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20">
-              <SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Items ({items.length})</SelectItem>
-              {Object.values(MENU_CATEGORIES).map((value) => (
-                <SelectItem key={value} value={value}>
-                  {MENU_CATEGORY_LABELS[value]} ({categoryCounts[value] ?? 0})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {showFilters && (
-          <div className="flex flex-col sm:flex-row gap-3 rounded-xl border border-amber-200/60 bg-amber-50/40 p-3 animate-in fade-in slide-in-from-top-1 duration-200 dark:border-amber-200/20 dark:bg-amber-950/12">
-            <div className="flex-1 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Max Price (₹)</Label>
-              <Input
-                type="number"
-                placeholder={`Up to ₹${priceRange.max}`}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                min={0}
-                className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20"
-              />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Sort By</Label>
-              <Select
-                value={sortBy}
-                onValueChange={(v) => setSortBy(v as SortOption)}
-              >
-                <SelectTrigger className="h-9 border-amber-200/70 bg-background/85 dark:border-amber-200/20">
-                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SORT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {hasActiveFilters && (
-              <div className="flex items-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="text-xs gap-1 h-9"
-                >
-                  <X className="h-3 w-3" />
-                  Clear
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {hasActiveFilters && (
-          <p className="text-xs text-muted-foreground animate-fade-in">
-            Showing {filteredItems.length} of {items.length} items
-            {searchQuery.trim() && (
-              <>
-                {" "}
-                matching &quot;
-                <span className="font-medium text-foreground">
-                  {searchQuery.trim()}
-                </span>
-                &quot;
-              </>
-            )}
-            {categoryFilter !== "ALL" && (
-              <> in {MENU_CATEGORY_LABELS[categoryFilter]}</>
-            )}
-            {maxPrice && !isNaN(parseFloat(maxPrice)) && (
-              <> under ₹{parseFloat(maxPrice)}</>
-            )}
-          </p>
-        )}
-      </div>
+      {hasActiveFilters && (
+        <p className="text-xs text-muted-foreground mb-3 animate-fade-in">
+          Showing {filteredItems.length} of {items.length} items
+          {searchQuery.trim() && (
+            <>
+              {" "}
+              matching &quot;
+              <span className="font-medium text-foreground">
+                {searchQuery.trim()}
+              </span>
+              &quot;
+            </>
+          )}
+          {categoryFilter !== "ALL" && (
+            <> in {MENU_CATEGORY_LABELS[categoryFilter]}</>
+          )}
+          {maxPrice && !isNaN(parseFloat(maxPrice)) && (
+            <> under ₹{parseFloat(maxPrice)}</>
+          )}
+        </p>
+      )}
 
       {filteredItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
@@ -510,18 +573,42 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                   alt={item.name}
                   category={item.category as MenuCategory}
                 />
+                {/* Video play button — top right */}
+                {item.videoUrl && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setPlayingVideoUrl(item.videoUrl!);
+                    }}
+                    className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-lg transition-transform hover:scale-110 hover:bg-black/75"
+                    aria-label="Play video"
+                  >
+                    <Play className="h-3.5 w-3.5 fill-white" />
+                  </button>
+                )}
                 {/* Category badge on image */}
                 <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80 shadow-sm">
                   {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
                 </Badge>
-                {/* Discount badge on image */}
+                {/* Discount badge on image — shifts if video button present */}
                 {item.discountedPrice != null && (
-                  <Badge className="absolute top-2 right-2 bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5 shadow-sm">
+                  <Badge className={cn(
+                    "absolute bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5 shadow-sm",
+                    item.videoUrl ? "top-10 right-2" : "top-2 right-2",
+                  )}>
                     <Percent className="h-2.5 w-2.5" />
                     {item.discountInfo?.type === "PERCENTAGE"
                       ? `${item.discountInfo.value}%`
                       : `₹${item.discountInfo?.value}`}
                   </Badge>
+                )}
+                {/* Multi-image indicator */}
+                {item.additionalImages && item.additionalImages.length > 0 && (
+                  <span className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
+                    +{item.additionalImages.length}
+                  </span>
                 )}
                 {/* Sold out overlay */}
                 {item.availableUnits === 0 && item.available && (
@@ -596,6 +683,14 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Video player overlay */}
+      {playingVideoUrl && (
+        <VideoPlayerOverlay
+          videoUrl={playingVideoUrl}
+          onClose={() => setPlayingVideoUrl(null)}
+        />
       )}
     </>
   );
