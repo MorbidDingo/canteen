@@ -517,6 +517,34 @@ async function seed() {
     updatedAt: now,
   }).onConflictDoNothing();
 
+  // Library device (Science & Tech Library)
+  const org1LibDevice2UserId = id();
+  await db.insert(schema.user).values({
+    id: org1LibDevice2UserId,
+    name: "Library Terminal - Science",
+    email: "lib-science@westfield.edu",
+    emailVerified: true,
+    role: "DEVICE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org1LibDevice2UserId, providerId: "credential", userId: org1LibDevice2UserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org1Id, userId: org1LibDevice2UserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
+
+  await db.insert(schema.organizationDevice).values({
+    id: id(),
+    organizationId: org1Id,
+    deviceType: "LIBRARY",
+    deviceName: "Science Library Terminal",
+    deviceCode: "WF-LIB-02",
+    authTokenHash: crypto.createHash("sha256").update("wf-lib-02-token").digest("hex"),
+    libraryId: org1Library2Id,
+    loginUserId: org1LibDevice2UserId,
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
   // ── Org 1 — Parent Accounts & Children ────────────────────
 
   const parents = [
@@ -760,6 +788,18 @@ async function seed() {
     updatedAt: now,
   }).onConflictDoNothing();
 
+  const org2Canteen3Id = id();
+  await db.insert(schema.canteen).values({
+    id: org2Canteen3Id,
+    organizationId: org2Id,
+    name: "Staff Lounge Café",
+    description: "Exclusive café for staff and faculty",
+    location: "Admin Block, 1st Floor",
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
   // Org 2 Libraries
   const org2Library1Id = id();
   await db.insert(schema.library).values({
@@ -824,6 +864,29 @@ async function seed() {
       id: id(),
       organizationId: org2Id,
       canteenId: org2Canteen2Id,
+      name: item.name,
+      price: item.price,
+      category: item.category,
+      subscribable: item.category === "MEALS",
+      available: true,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing();
+  }
+
+  // Org 2 — Staff Lounge Café Menu
+  const menuItemsOrg2Canteen3 = [
+    { name: "Espresso", price: 50, category: "DRINKS" as const },
+    { name: "Grilled Paneer Sandwich", price: 65, category: "SNACKS" as const },
+    { name: "Caesar Salad", price: 80, category: "MEALS" as const },
+    { name: "Iced Latte", price: 70, category: "DRINKS" as const },
+  ];
+
+  for (const item of menuItemsOrg2Canteen3) {
+    await db.insert(schema.menuItem).values({
+      id: id(),
+      organizationId: org2Id,
+      canteenId: org2Canteen3Id,
       name: item.name,
       price: item.price,
       category: item.category,
@@ -1012,6 +1075,117 @@ async function seed() {
     updatedAt: now,
   }).onConflictDoNothing();
 
+  // Org 2 — Kiosk device (Hostel Canteen)
+  const org2KioskUser2Id = id();
+  await db.insert(schema.user).values({
+    id: org2KioskUser2Id,
+    name: "Kiosk - Hostel Canteen",
+    email: "kiosk-hostel@greenfield.edu",
+    emailVerified: true,
+    role: "DEVICE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2KioskUser2Id, providerId: "credential", userId: org2KioskUser2Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2KioskUser2Id, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
+
+  await db.insert(schema.organizationDevice).values({
+    id: id(),
+    organizationId: org2Id,
+    deviceType: "KIOSK",
+    deviceName: "Hostel Canteen Kiosk",
+    deviceCode: "GF-KSK-02",
+    authTokenHash: crypto.createHash("sha256").update("gf-kiosk-02-token").digest("hex"),
+    canteenId: org2Canteen2Id,
+    loginUserId: org2KioskUser2Id,
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
+  // Org 2 — Library device (Department Library)
+  const org2LibDevice2UserId = id();
+  await db.insert(schema.user).values({
+    id: org2LibDevice2UserId,
+    name: "Library Terminal - Department",
+    email: "lib-dept@greenfield.edu",
+    emailVerified: true,
+    role: "DEVICE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2LibDevice2UserId, providerId: "credential", userId: org2LibDevice2UserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2LibDevice2UserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
+
+  await db.insert(schema.organizationDevice).values({
+    id: id(),
+    organizationId: org2Id,
+    deviceType: "LIBRARY",
+    deviceName: "Department Library Terminal",
+    deviceCode: "GF-LIB-02",
+    authTokenHash: crypto.createHash("sha256").update("gf-lib-02-token").digest("hex"),
+    libraryId: org2Library2Id,
+    loginUserId: org2LibDevice2UserId,
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
+  // Org 2 — Gate device
+  const org2GateUserId = id();
+  await db.insert(schema.user).values({
+    id: org2GateUserId,
+    name: "Gate - Main",
+    email: "gate@greenfield.edu",
+    emailVerified: true,
+    role: "DEVICE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2GateUserId, providerId: "credential", userId: org2GateUserId, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2GateUserId, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
+
+  await db.insert(schema.organizationDevice).values({
+    id: id(),
+    organizationId: org2Id,
+    deviceType: "GATE",
+    deviceName: "Main Gate",
+    deviceCode: "GF-GATE-01",
+    authTokenHash: crypto.createHash("sha256").update("gf-gate-01-token").digest("hex"),
+    loginUserId: org2GateUserId,
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
+  // Org 2 — Kiosk device (Staff Lounge Café)
+  const org2KioskUser3Id = id();
+  await db.insert(schema.user).values({
+    id: org2KioskUser3Id,
+    name: "Kiosk - Staff Lounge",
+    email: "kiosk-staff@greenfield.edu",
+    emailVerified: true,
+    role: "DEVICE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+  await db.insert(schema.account).values({ id: id(), accountId: org2KioskUser3Id, providerId: "credential", userId: org2KioskUser3Id, password: passwordHash, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  await db.insert(schema.organizationMembership).values({ id: id(), organizationId: org2Id, userId: org2KioskUser3Id, role: "DEVICE", status: "ACTIVE", createdAt: now, updatedAt: now }).onConflictDoNothing();
+
+  await db.insert(schema.organizationDevice).values({
+    id: id(),
+    organizationId: org2Id,
+    deviceType: "KIOSK",
+    deviceName: "Staff Lounge Kiosk",
+    deviceCode: "GF-KSK-03",
+    authTokenHash: crypto.createHash("sha256").update("gf-kiosk-03-token").digest("hex"),
+    canteenId: org2Canteen3Id,
+    loginUserId: org2KioskUser3Id,
+    status: "ACTIVE",
+    createdAt: now,
+    updatedAt: now,
+  }).onConflictDoNothing();
+
   // Org 2 — Parent Accounts
   const org2Parents = [
     {
@@ -1112,10 +1286,18 @@ async function seed() {
   console.log("   Lib Op 1:   ritu.lib@westfield.edu (Main Library)");
   console.log("   Lib Op 2:   vikram.lib@westfield.edu (Science Library)");
   console.log("   Operator:   suresh.op@westfield.edu");
+  console.log("   Attendance: meena.att@westfield.edu");
   console.log("   Parents:    ramesh@example.com, sunita@example.com,");
   console.log("               deepak@example.com, kavitha@example.com");
+  console.log("   General:    aarav@westfield.edu, pooja@westfield.edu");
   console.log("   Canteens:   North Block Canteen, Sports Canteen");
   console.log("   Libraries:  Main Library, Science & Tech Library");
+  console.log("   📱 Devices:");
+  console.log("      kiosk-north@westfield.edu    → North Block Kiosk (canteen)");
+  console.log("      kiosk-sports@westfield.edu   → Sports Canteen Kiosk (canteen)");
+  console.log("      gate@westfield.edu           → Main Gate");
+  console.log("      lib-terminal@westfield.edu   → Main Library Terminal");
+  console.log("      lib-science@westfield.edu    → Science Library Terminal");
   console.log("");
   console.log("🎓 Greenfield College (org 2)");
   console.log("   Admin:      neha@greenfield.edu");
@@ -1123,8 +1305,16 @@ async function seed() {
   console.log("   Lib Op:     anjali.lib@greenfield.edu");
   console.log("   Operator:   ganesh.op@greenfield.edu");
   console.log("   Parents:    sanjay@example.com, lalitha@example.com");
-  console.log("   Canteens:   Main Cafeteria, Hostel Canteen");
+  console.log("   General:    karan@greenfield.edu");
+  console.log("   Canteens:   Main Cafeteria, Hostel Canteen, Staff Lounge Café");
   console.log("   Libraries:  Central Library, Department Library");
+  console.log("   📱 Devices:");
+  console.log("      kiosk-main@greenfield.edu    → Main Cafeteria Kiosk (canteen)");
+  console.log("      kiosk-hostel@greenfield.edu  → Hostel Canteen Kiosk (canteen)");
+  console.log("      kiosk-staff@greenfield.edu   → Staff Lounge Kiosk (canteen)");
+  console.log("      gate@greenfield.edu          → Main Gate");
+  console.log("      lib-terminal@greenfield.edu  → Central Library Terminal");
+  console.log("      lib-dept@greenfield.edu      → Department Library Terminal");
   console.log("");
   console.log("   All passwords: password123");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

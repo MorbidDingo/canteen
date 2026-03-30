@@ -7,7 +7,7 @@ import { ensureGeneralSelfProfile, generateReadablePassword } from "@/lib/genera
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const GENERAL_ROLES = ["GENERAL"] as const;
-const STAFF_ROLES = ["OWNER", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR", "ATTENDANCE"] as const;
+const STAFF_ROLES = ["OWNER", "ADMIN", "OPERATOR", "MANAGEMENT", "LIB_OPERATOR", "ATTENDANCE"] as const;
 type AccountKind = "general" | "staff";
 type StaffRole = (typeof STAFF_ROLES)[number];
 

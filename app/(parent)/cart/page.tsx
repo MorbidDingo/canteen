@@ -36,6 +36,7 @@ import {
   Check,
   ArrowRight,
   IndianRupee,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
@@ -86,6 +87,11 @@ type ChildInfo = {
   name: string;
 };
 
+type CanteenInfo = {
+  id: string;
+  name: string;
+};
+
 type ItemChildAllocations = Record<string, Record<string, number>>;
 
 type SlideState = "idle" | "sliding" | "paying" | "paid";
@@ -98,6 +104,7 @@ export default function CartPage() {
     updateInstructions,
     clearCart,
     getTotal,
+    getCanteenId,
   } = useCartStore();
   const { data: session } = useSession();
   const router = useRouter();
@@ -109,7 +116,9 @@ export default function CartPage() {
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [children, setChildren] = useState<ChildInfo[]>([]);
+  const [canteensById, setCanteensById] = useState<Record<string, string>>({});
   const [itemChildAllocations, setItemChildAllocations] = useState<ItemChildAllocations>({});
+  const fetchedCanteenIdRef = useRef<string | null>(null);
 
   // Slide-to-pay state
   const [slideState, setSlideState] = useState<SlideState>("idle");
@@ -172,6 +181,33 @@ export default function CartPage() {
   }, []);
 
   useEffect(() => {
+    if (items.length === 0) return;
+    const firstItem = items[0];
+    if (!firstItem?.canteenId) return;
+    const hasValidName = firstItem.canteenName && firstItem.canteenName !== "Unknown";
+    if (hasValidName) return;
+    if (canteensById[firstItem.canteenId]) return;
+    if (fetchedCanteenIdRef.current === firstItem.canteenId) return;
+
+    fetchedCanteenIdRef.current = firstItem.canteenId;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/org/canteens", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { canteens?: CanteenInfo[] };
+        const nextMap: Record<string, string> = {};
+        for (const c of data.canteens || []) {
+          nextMap[c.id] = c.name;
+        }
+        setCanteensById(nextMap);
+      } catch {
+        // No-op fallback: UI will use static label.
+      }
+    })();
+  }, [items, canteensById]);
+
+  useEffect(() => {
     if (children.length === 0) return;
     setItemChildAllocations((prev) => {
       const next = { ...prev };
@@ -216,6 +252,11 @@ export default function CartPage() {
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
   const total = getTotal();
+  const rawCanteenName = items[0]?.canteenName;
+  const orderingCanteenName =
+    (rawCanteenName && rawCanteenName !== "Unknown" ? rawCanteenName : null) ||
+    (items[0]?.canteenId ? canteensById[items[0].canteenId] : null) ||
+    "selected canteen";
   const childNameById = useMemo(
     () => new Map(children.map((c) => [c.id, c.name])),
     [children]
@@ -439,6 +480,7 @@ export default function CartPage() {
             })),
             paymentMethod: "WALLET",
             childId,
+            canteenId: getCanteenId(),
           }),
         });
 
@@ -502,6 +544,7 @@ export default function CartPage() {
           })),
           paymentMethod: "ONLINE",
           childId: [...groups.keys()][0],
+          canteenId: getCanteenId(),
         }),
       });
 
@@ -615,6 +658,12 @@ export default function CartPage() {
         <p className="app-subtitle">
           Review your items and place your order
         </p>
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
+          <Store className="h-3.5 w-3.5 text-[#d4891a]" />
+          <span>
+            Ordering from {orderingCanteenName}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

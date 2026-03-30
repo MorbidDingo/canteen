@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child, gateLog } from "@/lib/db/schema";
-import { eq, desc, gte, lte, and } from "drizzle-orm";
+import { eq, desc, gte, lte, and, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
+import { isMissingRelationError } from "@/lib/db-errors";
 
 /**
  * GET /api/attendance
@@ -33,6 +35,58 @@ export async function GET(request: Request) {
     }
 
     const organizationId = access.activeOrganizationId!;
+    const scopedGateDeviceIds =
+      access.membershipRole === "ATTENDANCE"
+        ? await getUserAccessibleDeviceIds({
+            organizationId,
+            userId: access.actorUserId,
+            allowedDeviceTypes: ["GATE"],
+          })
+        : null;
+
+    if (scopedGateDeviceIds && scopedGateDeviceIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        data: [],
+        records: [],
+        stats: {
+          totalStudents: 0,
+          insideCount: 0,
+          outsideCount: 0,
+          totalTapEvents: 0,
+          tapsLast24h: 0,
+          anomalyCount: 0,
+          overstayCount: 0,
+        },
+        filters: {
+          childId: null,
+          grNumber: null,
+          date: null,
+          startDate: null,
+          endDate: null,
+          presenceStatus: null,
+          q: null,
+        },
+      });
+    }
+
+    let scopedChildIds: string[] | null = null;
+    if (scopedGateDeviceIds) {
+      try {
+        const scopedRows = await db
+          .select({ childId: gateLog.childId })
+          .from(gateLog)
+          .where(inArray(gateLog.gateId, scopedGateDeviceIds));
+        scopedChildIds = Array.from(new Set(scopedRows.map((row) => row.childId)));
+      } catch (err) {
+        if (isMissingRelationError(err, "gate_log")) {
+          scopedChildIds = [];
+        } else {
+          throw err;
+        }
+      }
+    }
 
     const { searchParams } = new URL(request.url);
     const childId = searchParams.get("childId");
@@ -58,6 +112,36 @@ export async function GET(request: Request) {
 
     if (presenceStatus === "INSIDE" || presenceStatus === "OUTSIDE") {
       conditions.push(eq(child.presenceStatus, presenceStatus));
+    }
+
+    if (scopedChildIds) {
+      if (scopedChildIds.length === 0) {
+        return NextResponse.json({
+          success: true,
+          count: 0,
+          data: [],
+          records: [],
+          stats: {
+            totalStudents: 0,
+            insideCount: 0,
+            outsideCount: 0,
+            totalTapEvents: 0,
+            tapsLast24h: 0,
+            anomalyCount: 0,
+            overstayCount: 0,
+          },
+          filters: {
+            childId,
+            grNumber,
+            date,
+            startDate,
+            endDate,
+            presenceStatus,
+            q,
+          },
+        });
+      }
+      conditions.push(inArray(child.id, scopedChildIds));
     }
 
     // Get children
@@ -102,7 +186,12 @@ export async function GET(request: Request) {
         const logs = await db
           .select()
           .from(gateLog)
-          .where(and(...gateLogConditions))
+          .where(
+            and(
+              ...gateLogConditions,
+              scopedGateDeviceIds ? inArray(gateLog.gateId, scopedGateDeviceIds) : undefined,
+            ),
+          )
           .orderBy(desc(gateLog.tappedAt));
 
         // Calculate duration if currently INSIDE

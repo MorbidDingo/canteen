@@ -1,5 +1,5 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 
 // ─── Better Auth Core Tables ─────────────────────────────
 
@@ -314,6 +314,11 @@ export const organizationDevice = pgTable(
       table.organizationId,
       table.deviceType,
       table.deviceCode,
+    ),
+    // Each device maps to exactly one resource: canteen OR library, never both
+    singleResourceCheck: check(
+      "device_single_resource",
+      sql`NOT (${table.canteenId} IS NOT NULL AND ${table.libraryId} IS NOT NULL)`,
     ),
   }),
 );

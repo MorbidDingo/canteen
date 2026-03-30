@@ -113,6 +113,7 @@ interface MenuItem {
   imageUrl: string | null;
   available: boolean;
   availableUnits?: number | null;
+  canteenId: string;
   canteenName?: string | null;
   canteenLocation?: string | null;
 }
@@ -242,6 +243,12 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
       default:
         break;
     }
+
+    // Sort unavailable items to the end
+    result.sort((a, b) => {
+      if (a.available === b.available) return 0;
+      return a.available ? -1 : 1;
+    });
 
     return result;
   }, [items, discountsOnly, searchQuery, maxPrice, categoryFilter, sortBy]);
@@ -470,7 +477,10 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
-              className="flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group"
+              className={cn(
+                "flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group",
+                !item.available && "opacity-60",
+              )}
               style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
             >
               {/* Image area with consistent aspect ratio */}
@@ -494,10 +504,18 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                   </Badge>
                 )}
                 {/* Sold out overlay */}
-                {item.availableUnits === 0 && (
+                {item.availableUnits === 0 && item.available && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
                     <Badge variant="destructive" className="text-xs font-semibold px-3 py-1">
                       Sold Out
+                    </Badge>
+                  </div>
+                )}
+                {/* Unavailable overlay */}
+                {!item.available && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+                    <Badge variant="outline" className="text-xs font-semibold px-3 py-1 border-muted-foreground/40 text-muted-foreground">
+                      Unavailable
                     </Badge>
                   </div>
                 )}
@@ -550,6 +568,9 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                   price={item.price}
                   discountedPrice={item.discountedPrice}
                   availableUnits={item.availableUnits}
+                  available={item.available}
+                  canteenId={item.canteenId}
+                  canteenName={item.canteenName ?? "Unknown"}
                 />
               </CardFooter>
             </Card>

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import {
   menuItem,
+  canteen,
   wallet,
   walletTransaction,
   order,
@@ -14,7 +15,7 @@ import {
   parentNotification,
   appSetting,
 } from "@/lib/db/schema";
-import { eq, and, gte, desc, ne, inArray, asc } from "drizzle-orm";
+import { eq, and, gte, desc, ne, inArray, asc, ilike } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS, MAX_ACTIVE_PREORDERS_PER_CHILD } from "@/lib/constants";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
@@ -40,7 +41,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: "get_menu",
     description:
-      "Get the current menu for the school canteen. Returns available items with prices, categories, and active discounts. Use this when the user asks about what's available, prices, or food options.",
+      "Get the current menu for the school canteen. Returns available items with prices, categories, active discounts, and canteen location metadata. Use this when the user asks about what's available, prices, food options, or canteen-specific availability.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -48,6 +49,14 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
           type: "string",
           enum: ["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"],
           description: "Optional: filter by category",
+        },
+        canteenId: {
+          type: "string",
+          description: "Optional: filter by canteen ID",
+        },
+        canteenName: {
+          type: "string",
+          description: "Optional: filter by canteen name/location keyword (e.g., hostel, main cafeteria)",
         },
       },
       required: [],
@@ -290,6 +299,8 @@ async function handleGetMenu(
   input: Record<string, unknown>,
 ): Promise<string> {
   const category = input.category as "SNACKS" | "MEALS" | "DRINKS" | "PACKED_FOOD" | undefined;
+  const canteenId = (input.canteenId as string | undefined)?.trim();
+  const canteenName = (input.canteenName as string | undefined)?.trim();
 
   const conditions = [
     eq(menuItem.organizationId, ctx.orgId),
@@ -297,6 +308,12 @@ async function handleGetMenu(
   ];
   if (category) {
     conditions.push(eq(menuItem.category, category));
+  }
+  if (canteenId) {
+    conditions.push(eq(menuItem.canteenId, canteenId));
+  }
+  if (canteenName) {
+    conditions.push(ilike(canteen.name, `%${canteenName}%`));
   }
 
   const items = await db
@@ -307,8 +324,12 @@ async function handleGetMenu(
       category: menuItem.category,
       description: menuItem.description,
       availableUnits: menuItem.availableUnits,
+      canteenId: menuItem.canteenId,
+      canteenName: canteen.name,
+      canteenLocation: canteen.location,
     })
     .from(menuItem)
+    .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
     .where(and(...conditions));
 
   // Fetch active discounts
@@ -347,10 +368,28 @@ async function handleGetMenu(
         description: i.description,
         inStock: i.availableUnits === null ? true : i.availableUnits > 0,
         unitsLeft: i.availableUnits,
+        canteenId: i.canteenId,
+        canteenName: i.canteenName,
+        canteenLocation: i.canteenLocation,
       };
     });
 
-  return JSON.stringify({ items: enriched, count: enriched.length });
+  const canteens = Array.from(
+    new Map(
+      enriched
+        .filter((i) => Boolean(i.canteenId))
+        .map((i) => [
+          i.canteenId,
+          {
+            id: i.canteenId,
+            name: i.canteenName,
+            location: i.canteenLocation,
+          },
+        ]),
+    ).values(),
+  );
+
+  return JSON.stringify({ items: enriched, canteens, count: enriched.length });
 }
 
 async function handleGetWalletBalance(ctx: ToolContext): Promise<string> {

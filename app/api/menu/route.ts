@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
 
     // Build filter: org-scoped + optional canteen filter
     const conditions = [
-      eq(menuItem.available, true),
       eq(menuItem.organizationId, organizationId),
     ];
     if (canteenId) {
@@ -64,6 +63,7 @@ export async function GET(request: NextRequest) {
     );
 
     const now = new Date();
+    const filterCanteen = canteenId ? orgCanteens.find((c) => c.id === canteenId) ?? null : null;
     const enriched = items.map(({ item, canteenName, canteenLocation }) => {
       const d = discountMap.get(item.id);
       let discountedPrice = null;
@@ -78,8 +78,9 @@ export async function GET(request: NextRequest) {
       }
       return {
         ...item,
-        canteenName,
-        canteenLocation,
+        canteenId: item.canteenId ?? filterCanteen?.id ?? null,
+        canteenName: canteenName ?? filterCanteen?.name ?? null,
+        canteenLocation: canteenLocation ?? filterCanteen?.location ?? null,
         imageUrl: sanitizeImageUrl(item.imageUrl),
         discountedPrice,
         discountInfo,

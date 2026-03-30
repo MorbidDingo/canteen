@@ -18,6 +18,7 @@ const createOrderSchema = z.object({
   items: z.array(orderItemSchema).min(1, "Order must have at least one item"),
   paymentMethod: z.enum(["ONLINE", "WALLET"]).default("ONLINE"),
   childId: z.string().optional(), // required for WALLET payments
+  canteenId: z.string().optional(),
 });
 
 // POST — create a new order
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { items: orderItems, paymentMethod, childId } = parsed.data;
+    const { items: orderItems, paymentMethod, childId, canteenId } = parsed.data;
 
     // For WALLET payment, childId is required
     if (paymentMethod === "WALLET" && !childId) {
@@ -72,6 +73,16 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+
+    // Validate all items belong to the same canteen
+    const canteenIds = new Set(menuItems.map((m) => m.canteenId).filter(Boolean));
+    if (canteenIds.size > 1) {
+      return NextResponse.json(
+        { error: "All items in an order must be from the same canteen" },
+        { status: 400 }
+      );
+    }
+    const resolvedCanteenId = canteenId || (canteenIds.size === 1 ? [...canteenIds][0] : undefined);
 
     // Calculate total from server-side prices (with discounts)
     const activeDiscounts = await db
@@ -169,6 +180,7 @@ export async function POST(request: NextRequest) {
         .values({
           userId: session.user.id,
           childId: childId || undefined,
+          canteenId: resolvedCanteenId || undefined,
           totalAmount,
           paymentMethod,
           status: "PLACED",
@@ -259,6 +271,9 @@ export async function GET() {
       where: eq(order.userId, session.user.id),
       orderBy: [desc(order.createdAt)],
       with: {
+        canteen: {
+          columns: { id: true, name: true, location: true },
+        },
         items: {
           with: {
             menuItem: true,

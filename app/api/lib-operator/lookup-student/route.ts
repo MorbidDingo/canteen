@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { child } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 // POST /api/lib-operator/lookup-student — look up student by RFID
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const organizationId = access.activeOrganizationId!;
     const { rfidCardId } = (await request.json()) as { rfidCardId: string };
 
     if (!rfidCardId) {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     const children = await db
       .select()
       .from(child)
-      .where(eq(child.rfidCardId, rfidCardId))
+      .where(and(eq(child.rfidCardId, rfidCardId), eq(child.organizationId, organizationId)))
       .limit(1);
 
     if (children.length === 0) {

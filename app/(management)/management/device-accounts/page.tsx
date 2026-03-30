@@ -26,6 +26,9 @@ type DeviceAssignment = {
   role: string;
 };
 
+type CanteenOption = { id: string; name: string; location: string | null };
+type LibraryOption = { id: string; name: string; location: string | null };
+
 type DeviceRecord = {
   id: string;
   deviceType: DeviceType;
@@ -34,6 +37,8 @@ type DeviceRecord = {
   deviceCode: string;
   status: "ACTIVE" | "DISABLED";
   loginUserId: string | null;
+  canteenId: string | null;
+  libraryId: string | null;
   currentIp: string | null;
   lastIp: string | null;
   lastSeenAt: string | null;
@@ -53,6 +58,8 @@ export default function ManagementDeviceAccountsPage() {
   const [saving, setSaving] = useState(false);
   const [devices, setDevices] = useState<DeviceRecord[]>([]);
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([]);
+  const [canteens, setCanteens] = useState<CanteenOption[]>([]);
+  const [libraries, setLibraries] = useState<LibraryOption[]>([]);
   const [passwordReveal, setPasswordReveal] = useState<{ email: string; password: string } | null>(null);
 
   const [deviceType, setDeviceType] = useState<DeviceType>("GATE");
@@ -61,6 +68,12 @@ export default function ManagementDeviceAccountsPage() {
   const [accountName, setAccountName] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
+  const [canteenName, setCanteenName] = useState("");
+  const [canteenLocation, setCanteenLocation] = useState("");
+  const [canteenDescription, setCanteenDescription] = useState("");
+  const [libraryName, setLibraryName] = useState("");
+  const [libraryLocation, setLibraryLocation] = useState("");
+  const [libraryDescription, setLibraryDescription] = useState("");
 
   const [assigningFor, setAssigningFor] = useState<string | null>(null);
   const [assignUserForDevice, setAssignUserForDevice] = useState<Record<string, string>>({});
@@ -77,10 +90,14 @@ export default function ManagementDeviceAccountsPage() {
       const data = (await res.json()) as {
         devices: DeviceRecord[];
         staffUsers: StaffUser[];
+        canteens: CanteenOption[];
+        libraries: LibraryOption[];
       };
 
       setDevices(data.devices || []);
       setStaffUsers(data.staffUsers || []);
+      setCanteens(data.canteens || []);
+      setLibraries(data.libraries || []);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to fetch data");
     } finally {
@@ -95,6 +112,15 @@ export default function ManagementDeviceAccountsPage() {
   async function createDeviceAccount() {
     if (!deviceName.trim() || !deviceCode.trim() || !accountName.trim() || !accountEmail.trim() || !accountPassword.trim()) {
       toast.error("All fields are required");
+      return;
+    }
+
+    if (deviceType === "KIOSK" && !canteenName.trim()) {
+      toast.error("Please provide a canteen name for this kiosk");
+      return;
+    }
+    if (deviceType === "LIBRARY" && !libraryName.trim()) {
+      toast.error("Please provide a library name for this terminal");
       return;
     }
 
@@ -115,6 +141,20 @@ export default function ManagementDeviceAccountsPage() {
           accountName: accountName.trim(),
           accountEmail: accountEmail.trim().toLowerCase(),
           accountPassword: accountPassword.trim(),
+          ...(deviceType === "KIOSK"
+            ? {
+                canteenName: canteenName.trim(),
+                canteenLocation: canteenLocation.trim() || null,
+                canteenDescription: canteenDescription.trim() || null,
+              }
+            : {}),
+          ...(deviceType === "LIBRARY"
+            ? {
+                libraryName: libraryName.trim(),
+                libraryLocation: libraryLocation.trim() || null,
+                libraryDescription: libraryDescription.trim() || null,
+              }
+            : {}),
         }),
       });
 
@@ -130,6 +170,12 @@ export default function ManagementDeviceAccountsPage() {
       setAccountName("");
       setAccountEmail("");
       setAccountPassword("");
+      setCanteenName("");
+      setCanteenLocation("");
+      setCanteenDescription("");
+      setLibraryName("");
+      setLibraryLocation("");
+      setLibraryDescription("");
       toast.success("Device account created");
       await fetchData();
     } catch (error) {
@@ -221,7 +267,7 @@ export default function ManagementDeviceAccountsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Terminal Device Accounts</h1>
           <p className="text-sm text-muted-foreground">
-            Create logins for gate, kiosk, and library terminals. Then assign compatible staff to operate each terminal.
+            Each kiosk device creates a new canteen, and each library device creates a new library terminal in this organization.
           </p>
         </div>
         <Button variant="outline" onClick={() => void fetchData()} disabled={loading}>
@@ -233,12 +279,23 @@ export default function ManagementDeviceAccountsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Create Device Account</CardTitle>
-          <CardDescription>Management can create multiple terminals under a single organization.</CardDescription>
+          <CardDescription>Create terminal login credentials and register the linked kiosk/library unit in one step.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Device Type</Label>
-            <Select value={deviceType} onValueChange={(value) => setDeviceType(value as DeviceType)}>
+            <Select
+              value={deviceType}
+              onValueChange={(value) => {
+                setDeviceType(value as DeviceType);
+                setCanteenName("");
+                setCanteenLocation("");
+                setCanteenDescription("");
+                setLibraryName("");
+                setLibraryLocation("");
+                setLibraryDescription("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select type" />
               </SelectTrigger>
@@ -251,6 +308,40 @@ export default function ManagementDeviceAccountsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {deviceType === "KIOSK" && (
+            <>
+              <div className="space-y-2">
+                <Label>Canteen Name *</Label>
+                <Input value={canteenName} onChange={(e) => setCanteenName(e.target.value)} placeholder="2nd Floor Coffee Shop" />
+              </div>
+              <div className="space-y-2">
+                <Label>Canteen Location</Label>
+                <Input value={canteenLocation} onChange={(e) => setCanteenLocation(e.target.value)} placeholder="2nd Floor" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Canteen Description</Label>
+                <Input value={canteenDescription} onChange={(e) => setCanteenDescription(e.target.value)} placeholder="Optional notes for this canteen" />
+              </div>
+            </>
+          )}
+
+          {deviceType === "LIBRARY" && (
+            <>
+              <div className="space-y-2">
+                <Label>Library Name *</Label>
+                <Input value={libraryName} onChange={(e) => setLibraryName(e.target.value)} placeholder="Science Block Library" />
+              </div>
+              <div className="space-y-2">
+                <Label>Library Location</Label>
+                <Input value={libraryLocation} onChange={(e) => setLibraryLocation(e.target.value)} placeholder="Block C - 1st Floor" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Library Description</Label>
+                <Input value={libraryDescription} onChange={(e) => setLibraryDescription(e.target.value)} placeholder="Optional notes for this library" />
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label>Device Name</Label>
@@ -322,6 +413,8 @@ export default function ManagementDeviceAccountsPage() {
                         <p className="font-medium">{device.deviceName}</p>
                         <p className="text-xs text-muted-foreground">
                           {device.deviceType} • {device.deviceCode}
+                          {device.canteenId && (() => { const c = canteens.find(x => x.id === device.canteenId); return c ? ` • ${c.name}` : ""; })()}
+                          {device.libraryId && (() => { const l = libraries.find(x => x.id === device.libraryId); return l ? ` • ${l.name}` : ""; })()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

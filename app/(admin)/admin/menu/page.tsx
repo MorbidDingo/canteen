@@ -246,52 +246,55 @@ export default function AdminMenuPage() {
   }));
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
-      <div className="flex items-center justify-between mb-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-bold">Menu Management</h1>
-          <p className="text-muted-foreground text-sm">
-            Add, edit, and manage menu items
-          </p>
+    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
+      <div className="mb-6 animate-fade-in space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold">Menu Management</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm">
+              Add, edit, and manage menu items
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={fetchItems}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1 h-9" onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden xs:inline">Add Item</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingItem ? "Edit Menu Item" : "Add Menu Item"}
+                  </DialogTitle>
+                </DialogHeader>
+                <MenuItemForm
+                  formData={formData}
+                  setFormData={setFormData}
+                  onSave={handleSave}
+                  saving={saving}
+                  isEdit={!!editingItem}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <CanteenSelector
-            value={selectedCanteen}
-            onChange={setSelectedCanteen}
-            showAll
-            compact
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchItems}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-1" onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                Add Item
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? "Edit Menu Item" : "Add Menu Item"}
-                </DialogTitle>
-              </DialogHeader>
-              <MenuItemForm
-                formData={formData}
-                setFormData={setFormData}
-                onSave={handleSave}
-                saving={saving}
-                isEdit={!!editingItem}
-              />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <CanteenSelector
+          value={selectedCanteen}
+          onChange={setSelectedCanteen}
+          showAll
+          compact
+        />
       </div>
 
       {loading ? (
@@ -326,104 +329,106 @@ export default function AdminMenuPage() {
                       className={`animate-fade-in-up ${!item.available ? "opacity-60" : ""}`}
                       style={{ animationDelay: `${index * 40}ms` }}
                     >
-                      <CardContent className="flex items-center gap-3 py-3">
-                        {/* Thumbnail */}
-                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-                          {item.imageUrl ? (
-                            <Image
-                              src={item.imageUrl}
-                              alt={item.name}
-                              width={48}
-                              height={48}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <UtensilsCrossed className="h-5 w-5 text-muted-foreground/40" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium truncate">
-                              {item.name}
-                            </span>
-                            {!item.available && (
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px]"
-                              >
-                                Unavailable
-                              </Badge>
+                      <CardContent className="p-3 space-y-2">
+                        {/* Top row: thumbnail + name + price */}
+                        <div className="flex items-start gap-3">
+                          <div className="h-14 w-14 sm:h-12 sm:w-12 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
+                            {item.imageUrl ? (
+                              <Image
+                                src={item.imageUrl}
+                                alt={item.name}
+                                width={56}
+                                height={56}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <UtensilsCrossed className="h-5 w-5 text-muted-foreground/40" />
                             )}
-                            {item.availableUnits !== null && (
-                              <Badge
-                                variant={item.availableUnits === 0 ? "destructive" : "outline"}
-                                className="text-[10px]"
-                              >
-                                {item.availableUnits === 0
-                                  ? "Sold Out"
-                                  : `${item.availableUnits} left`}
-                              </Badge>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="font-medium truncate text-sm sm:text-base">
+                                {item.name}
+                              </span>
+                              <span className="font-bold whitespace-nowrap text-sm">
+                                ₹{item.price.toFixed(2)}
+                              </span>
+                            </div>
+                            {item.description && (
+                              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                {item.description}
+                              </p>
                             )}
-                            {item.availableUnits === null && (
-                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                ∞
-                              </Badge>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {!item.available && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  Unavailable
+                                </Badge>
+                              )}
+                              {item.availableUnits !== null && (
+                                <Badge
+                                  variant={item.availableUnits === 0 ? "destructive" : "outline"}
+                                  className="text-[10px]"
+                                >
+                                  {item.availableUnits === 0
+                                    ? "Sold Out"
+                                    : `${item.availableUnits} left`}
+                                </Badge>
+                              )}
+                              {item.availableUnits === null && (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                  ∞
+                                </Badge>
+                              )}
                               {item.canteenName && (
                                 <Badge variant="outline" className="text-[10px]">
                                   {item.canteenName}
                                   {item.canteenLocation ? ` · ${item.canteenLocation}` : ""}
                                 </Badge>
                               )}
-                            {!item.subscribable && (
-                              <Badge variant="outline" className="text-[10px] text-orange-600">
-                                No Sub
-                              </Badge>
-                            )}
+                              {!item.subscribable && (
+                                <Badge variant="outline" className="text-[10px] text-orange-600">
+                                  No Sub
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          {item.description && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {item.description}
-                            </p>
-                          )}
                         </div>
-                        <span className="font-bold whitespace-nowrap">
-                          ₹{item.price.toFixed(2)}
-                        </span>
-                        <div className="flex gap-1 shrink-0">
+                        {/* Bottom row: action buttons */}
+                        <div className="flex items-center justify-end gap-1 border-t pt-2 -mb-1">
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
                             onClick={() => toggleAvailability(item)}
-                            title={
-                              item.available
-                                ? "Mark unavailable"
-                                : "Mark available"
-                            }
                           >
                             {item.available ? (
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-3.5 w-3.5" />
                             ) : (
-                              <EyeOff className="h-4 w-4" />
+                              <EyeOff className="h-3.5 w-3.5" />
                             )}
+                            <span className="hidden sm:inline">
+                              {item.available ? "Hide" : "Show"}
+                            </span>
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
                             onClick={() => openEdit(item)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Edit</span>
                           </Button>
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            size="sm"
+                            className="h-8 gap-1 text-xs text-destructive hover:text-destructive"
                             disabled={deleting === item.id}
                             onClick={() => handleDelete(item.id)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Delete</span>
                           </Button>
                         </div>
                       </CardContent>

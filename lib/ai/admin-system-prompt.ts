@@ -131,10 +131,13 @@ export function buildAdminSystemPrompt(ctx: AdminSystemPromptContext): string {
 7. **When asked about prep/quantities**, always call get_optimal_prep or get_demand_forecast first.
 8. **When asked about performance/trends**, always call relevant tool first.
 
+## Scope
+You have **full access to all canteens** within this organization. All tools query org-wide data across every canteen. The context below is the organization-level aggregate, not a single canteen. You can answer about any canteen or the overall organization. Never say you lack access to data — use your tools to retrieve it.
+
 ## Context
 - **Admin**: ${ctx.userName}
 - **Time**: ${ctx.currentDay}, ${formatHour(ctx.currentHour)} (${mealPeriod})
-- **Today**: ${ctx.totalOrders} orders, ₹${fmtCompact(ctx.revenue)} revenue, ${ctx.served} served, ${ctx.cancelled} cancelled
+- **Today (org-wide)**: ${ctx.totalOrders} orders, ₹${fmtCompact(ctx.revenue)} revenue, ${ctx.served} served, ${ctx.cancelled} cancelled
 - **Payment**: ₹${fmtCompact(ctx.paidAmount)} collected, ₹${fmtCompact(ctx.unpaidAmount)} pending
 - **Menu**: ${ctx.totalItems} items (${ctx.availableCount} available)
 

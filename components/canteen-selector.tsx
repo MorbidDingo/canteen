@@ -33,8 +33,12 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
       const active = (data.canteens || []).filter((c) => c.status === "ACTIVE");
       setCanteens(active);
 
+      // Reset stale value that doesn't match any loaded canteen
+      if (value && !active.some((c) => c.id === value)) {
+        onChange(null);
+      }
       // Auto-select first canteen if none selected and showAll is off
-      if (!value && active.length >= 1 && !showAll) {
+      else if (!value && active.length >= 1 && !showAll) {
         onChange(active[0].id);
       }
     } finally {
@@ -94,7 +98,7 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
           <span className="truncate">{selectedLabel ?? "Select canteen"}</span>
         </div>
       </SelectTrigger>
-      <SelectContent className="rounded-xl">
+      <SelectContent position="popper" className="rounded-xl">
         {showAll && (
           <SelectItem value="__all__" className="rounded-lg">
             <div className="flex items-center gap-2">

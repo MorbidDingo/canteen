@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { library } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { library, organizationDevice } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -20,11 +21,47 @@ const updateSchema = createSchema.partial().extend({
 export async function GET() {
   try {
     const access = await requireAccess({ scope: "organization" });
+    const organizationId = access.activeOrganizationId!;
+
+    if (access.membershipRole === "LIB_OPERATOR") {
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["LIBRARY"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ libraries: [] });
+      }
+
+      const rows = await db
+        .select({
+          id: library.id,
+          organizationId: library.organizationId,
+          name: library.name,
+          description: library.description,
+          location: library.location,
+          status: library.status,
+          createdAt: library.createdAt,
+          updatedAt: library.updatedAt,
+        })
+        .from(organizationDevice)
+        .innerJoin(library, eq(organizationDevice.libraryId, library.id))
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      const libraries = Array.from(new Map(rows.map((row) => [row.id, row])).values());
+      return NextResponse.json({ libraries });
+    }
 
     const libraries = await db
       .select()
       .from(library)
-      .where(eq(library.organizationId, access.activeOrganizationId!));
+      .where(eq(library.organizationId, organizationId));
 
     return NextResponse.json({ libraries });
   } catch (error) {

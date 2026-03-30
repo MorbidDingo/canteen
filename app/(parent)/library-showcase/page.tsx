@@ -193,10 +193,12 @@ function TitleCard({
   const isUnavailable = !book.canRequest && !isPending;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onClick(book)}
-      className="group w-[42vw] min-w-[130px] max-w-[160px] shrink-0 text-left sm:w-[148px]"
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(book); } }}
+      className="group w-[42vw] min-w-[130px] max-w-[160px] shrink-0 cursor-pointer text-left sm:w-[148px]"
       title={`${book.title} by ${book.author}`}
     >
       <div className={cn(
@@ -249,7 +251,7 @@ function TitleCard({
             type="button"
             aria-label={book.isFavourited ? "Remove from favourites" : "Add to favourites"}
             disabled={favouriteLoading}
-            onClick={(e) => onFavouriteToggle(book, e)}
+            onClick={(e) => { e.stopPropagation(); onFavouriteToggle(book, e); }}
             className={cn(
               "absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all",
               book.isFavourited
@@ -278,7 +280,7 @@ function TitleCard({
           ) : null}
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 

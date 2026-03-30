@@ -12,6 +12,9 @@ interface AddToCartButtonProps {
   price: number;
   discountedPrice?: number | null;
   availableUnits?: number | null;
+  available?: boolean;
+  canteenId: string;
+  canteenName: string;
 }
 
 export function AddToCartButton({
@@ -20,6 +23,9 @@ export function AddToCartButton({
   price,
   discountedPrice,
   availableUnits,
+  available = true,
+  canteenId,
+  canteenName,
 }: AddToCartButtonProps) {
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -47,7 +53,7 @@ export function AddToCartButton({
 
   const handleAdd = () => {
     if (isSoldOut || atMax) return;
-    addItem({ menuItemId, name, price, ...(discountedPrice != null ? { discountedPrice } : {}) });
+    addItem({ menuItemId, name, price, canteenId, canteenName, ...(discountedPrice != null ? { discountedPrice } : {}) });
     showFeedback("added", "Added to cart");
   };
 
@@ -60,7 +66,7 @@ export function AddToCartButton({
     }
   };
 
-  if (isSoldOut) {
+  if (isSoldOut || !available) {
     return (
       <Button
         size="sm"
@@ -68,7 +74,7 @@ export function AddToCartButton({
         variant="outline"
         disabled
       >
-        Sold Out
+        {!available ? "Unavailable" : "Sold Out"}
       </Button>
     );
   }

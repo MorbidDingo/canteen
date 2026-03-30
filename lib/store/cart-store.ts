@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { toast } from "sonner";
 
 export interface CartItemInstruction {
   text: string;
@@ -11,6 +12,8 @@ export interface CartItem {
   name: string;
   price: number;
   discountedPrice?: number;
+  canteenId: string;
+  canteenName: string;
   quantity: number;
   instructions: CartItemInstruction;
 }
@@ -27,6 +30,7 @@ interface CartStore {
   clearCart: () => void;
   getTotal: () => number;
   getItemCount: () => number;
+  getCanteenId: () => string | null;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -36,13 +40,23 @@ export const useCartStore = create<CartStore>()(
 
       addItem: (item) => {
         const MAX_QTY = 5;
-        const existing = get().items.find(
+        const currentItems = get().items;
+
+        // Enforce single-canteen per order
+        if (currentItems.length > 0 && currentItems[0].canteenId !== item.canteenId) {
+          toast.error(
+            `Your cart has items from ${currentItems[0].canteenName}. Clear your cart first to order from ${item.canteenName}.`
+          );
+          return;
+        }
+
+        const existing = currentItems.find(
           (i) => i.menuItemId === item.menuItemId
         );
         if (existing) {
           if (existing.quantity >= MAX_QTY) return;
           set({
-            items: get().items.map((i) =>
+            items: currentItems.map((i) =>
               i.menuItemId === item.menuItemId
                 ? { ...i, quantity: Math.min(i.quantity + 1, MAX_QTY) }
                 : i
@@ -51,7 +65,7 @@ export const useCartStore = create<CartStore>()(
         } else {
           set({
             items: [
-              ...get().items,
+              ...currentItems,
               {
                 ...item,
                 quantity: 1,
@@ -98,6 +112,11 @@ export const useCartStore = create<CartStore>()(
 
       getItemCount: () =>
         get().items.reduce((count, item) => count + item.quantity, 0),
+
+      getCanteenId: () => {
+        const items = get().items;
+        return items.length > 0 ? items[0].canteenId : null;
+      },
     }),
     {
       name: "school-cafe-cart",

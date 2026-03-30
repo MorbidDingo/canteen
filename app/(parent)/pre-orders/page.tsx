@@ -52,6 +52,8 @@ import {
 } from "@/lib/constants";
 import { type BreakSlot, parseBreakSlots } from "@/lib/break-slots";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import { CanteenSelector } from "@/components/canteen-selector";
+import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 type ChildOption = { id: string; name: string };
 type MenuOption = {
@@ -101,6 +103,12 @@ type EditRow = {
   breakName: string;
 };
 
+type CanteenInfo = {
+  id: string;
+  name: string;
+  location: string | null;
+};
+
 const DEFAULT_BREAKS = ["Short Break", "Lunch Break", "High Tea"];
 const DEFAULT_BREAK_SLOTS: BreakSlot[] = [
   { name: "Short Break", startTime: "10:30", endTime: "10:50" },
@@ -147,9 +155,19 @@ function countSchoolDaysInclusive(startIso: string, endIso: string): number {
   return count;
 }
 
+function createClientId() {
+  if (typeof globalThis !== "undefined" && globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `po-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export default function PreOrdersPage() {
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
+  const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
+    "certe:selected-canteen-id",
+  );
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -158,6 +176,7 @@ export default function PreOrdersPage() {
   const [children, setChildren] = useState<ChildOption[]>([]);
   const [controls, setControls] = useState<ChildControl[]>([]);
   const [menuItems, setMenuItems] = useState<MenuOption[]>([]);
+  const [canteens, setCanteens] = useState<CanteenInfo[]>([]);
   const [preOrders, setPreOrders] = useState<PreOrderWithItems[]>([]);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
@@ -190,10 +209,13 @@ export default function PreOrdersPage() {
 
   const fetchAll = useCallback(async () => {
     try {
+      const menuUrl = selectedCanteen
+        ? `/api/menu?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "/api/menu";
       const [preOrdersRes, childrenRes, menuRes, controlsRes, settingsRes, walletRes] = await Promise.all([
         fetch("/api/pre-orders"),
         fetch("/api/children"),
-        fetch("/api/menu"),
+        fetch(menuUrl),
         fetch("/api/controls"),
         fetch("/api/menu/subscription-settings"),
         fetch("/api/wallet"),
@@ -209,6 +231,9 @@ export default function PreOrdersPage() {
       const menuData = ((menuRaw.items || menuRaw) as MenuOption[]).filter(
         (m) => m.available && m.subscribable !== false,
       );
+      const canteenData = Array.isArray(menuRaw.canteens)
+        ? (menuRaw.canteens as CanteenInfo[])
+        : [];
       const controlsData = (await controlsRes.json()) as ChildControl[];
       const settingsData = settingsRes.ok ? await settingsRes.json() : {};
 
@@ -226,6 +251,7 @@ export default function PreOrdersPage() {
       setPreOrders(preOrdersData);
       setChildren(childrenData);
       setMenuItems(menuData);
+      setCanteens(canteenData);
       setControls(controlsData);
       setSettings({
         minOrderValue: Number(settingsData.subscription_min_order_value) || DEFAULT_MIN_ORDER,
@@ -242,7 +268,7 @@ export default function PreOrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [assignBreak, assignChildId]);
+  }, [assignBreak, assignChildId, selectedCanteen]);
 
   useEffect(() => {
     if (!certePlusStatus) return;
@@ -329,6 +355,9 @@ export default function PreOrdersPage() {
 
   const hasBelowMin = Array.from(summaryByChild.values()).some((v) => v.belowMin);
   const hasBlocks = Array.from(summaryByChild.values()).some((v) => v.hasBlocks);
+  const selectedCanteenLabel = selectedCanteen
+    ? canteens.find((c) => c.id === selectedCanteen)?.name ?? "Selected canteen"
+    : "All canteens";
 
   const getDisplayStatusLabel = (po: PreOrderWithItems) => {
     if (po.mode === "SUBSCRIPTION" && po.status === "PENDING") {
@@ -355,7 +384,7 @@ export default function PreOrdersPage() {
       return [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: createClientId(),
           childId: assignChildId,
           menuItemId,
           quantity: 1,
@@ -617,6 +646,20 @@ export default function PreOrdersPage() {
             Assign food to children with break windows. Kiosk will auto-place only during matching break time.
           </CardDescription>
         </CardHeader>
+        <CardContent className="pb-0">
+          <div className="mb-4">
+            <LabelText>Canteen</LabelText>
+            <CanteenSelector
+              value={selectedCanteen}
+              onChange={setSelectedCanteen}
+              showAll
+              compact
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ordering from: <span className="font-medium text-foreground">{selectedCanteenLabel}</span>
+            </p>
+          </div>
+        </CardContent>
         <CardContent className="space-y-4">
 
           <div className="grid gap-3 sm:grid-cols-2">

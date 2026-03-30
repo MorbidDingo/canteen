@@ -63,6 +63,46 @@ export async function GET(request: Request) {
       });
     }
 
+    let scopedChildIds: string[] | null = null;
+    if (scopedGateDeviceIds) {
+      try {
+        const scopedRows = await db
+          .select({ childId: gateLog.childId })
+          .from(gateLog)
+          .where(inArray(gateLog.gateId, scopedGateDeviceIds));
+        scopedChildIds = Array.from(new Set(scopedRows.map((row) => row.childId)));
+      } catch (err) {
+        if (isMissingRelationError(err, "gate_log")) {
+          scopedChildIds = [];
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (scopedChildIds && scopedChildIds.length === 0) {
+      return NextResponse.json({
+        success: true,
+        stats: {
+          totalStudents: 0,
+          insideCount: 0,
+          outsideCount: 0,
+          totalTapEvents: 0,
+          tapsLast24h: 0,
+          anomalyCount: 0,
+          overstayCount: 0,
+          withPhotoCount: 0,
+          withoutPhotoCount: 0,
+          entriesLast24h: 0,
+          exitsLast24h: 0,
+          gateBreakdown: [],
+        },
+        students: [],
+        totalMatched: 0,
+        query: "",
+      });
+    }
+
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim().toLowerCase() || "";
     const limitRaw = Number(searchParams.get("limit") || "50");
@@ -80,7 +120,12 @@ export async function GET(request: Request) {
         lastGateTapAt: child.lastGateTapAt,
       })
       .from(child)
-      .where(eq(child.organizationId, organizationId))
+      .where(
+        and(
+          eq(child.organizationId, organizationId),
+          scopedChildIds ? inArray(child.id, scopedChildIds) : undefined,
+        ),
+      )
       .orderBy(child.name);
 
     const scopedStudents = allStudents;

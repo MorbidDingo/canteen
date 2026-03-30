@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 import {
   Loader2,
   ClipboardList,
@@ -20,6 +21,10 @@ import {
   RefreshCw,
   CreditCard,
   Star,
+  Search,
+  Store,
+  TrendingUp,
+  IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -84,7 +89,27 @@ interface OrderData {
   paymentMethod: string;
   paymentStatus: string;
   createdAt: string;
+  canteenId: string | null;
+  canteen: { id: string; name: string; location: string | null } | null;
   items: OrderItemData[];
+}
+
+// Returns the Monday of the week containing the given date (local time)
+function getWeekStart(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatWeekLabel(weekStartStr: string): string {
+  const start = new Date(weekStartStr + "T00:00:00");
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  return `${start.toLocaleDateString("en-IN", opts)} – ${end.toLocaleDateString("en-IN", opts)}`;
 }
 
 export default function OrdersPage() {
@@ -97,6 +122,32 @@ export default function OrdersPage() {
   const [feedbackOrderId, setFeedbackOrderId] = useState<string | null>(null);
   const [cancelReasonOrderId, setCancelReasonOrderId] = useState<string | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filtered orders based on search
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) => {
+      const inId = o.id.toLowerCase().includes(q);
+      const inItems = o.items.some((i) => i.menuItem.name.toLowerCase().includes(q));
+      const inCanteen = o.canteen?.name.toLowerCase().includes(q) ?? false;
+      return inId || inItems || inCanteen;
+    });
+  }, [orders, searchQuery]);
+
+  // Week-wise spend (from filtered orders, only PAID and non-cancelled)
+  const weeklySpend = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const o of filteredOrders) {
+      if (o.status === "CANCELLED" || o.paymentStatus !== "PAID") continue;
+      const week = getWeekStart(new Date(o.createdAt));
+      map.set(week, (map.get(week) ?? 0) + o.totalAmount);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a)) // newest week first
+      .slice(0, 6); // show last 6 weeks
+  }, [filteredOrders]);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -266,9 +317,7 @@ export default function OrdersPage() {
     <div className="app-shell">
       <div className="app-header-card mb-5 flex items-center justify-between gap-3 animate-fade-in">
         <div>
-          <h1 className="app-title">
-            My Orders
-          </h1>
+          <h1 className="app-title">My Orders</h1>
           <p className="app-subtitle">Track and manage your orders</p>
         </div>
         <Button
@@ -297,133 +346,163 @@ export default function OrdersPage() {
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
-          {orders.map((order, index) => (
-            <Card
-              key={order.id}
-              className="animate-fade-in-up"
-              style={{ animationDelay: `${index * 60}ms` }}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base">
-                      Order #{order.id.slice(0, 8)}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(order.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={
-                        ORDER_STATUS_COLORS[order.status as OrderStatus]
-                      }
-                    >
-                      {ORDER_STATUS_LABELS[order.status as OrderStatus]}
-                    </Badge>
-                    <Badge
-                      className={
-                        PAYMENT_STATUS_COLORS[
-                          order.paymentStatus as PaymentStatus
-                        ]
-                      }
-                    >
-                      {order.paymentStatus}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {order.items.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <div>
-                        <span className="font-medium">
-                          {item.menuItem.name}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          × {item.quantity}
-                        </span>
-                        {item.instructions && (
-                          <p className="text-xs text-muted-foreground italic mt-0.5">
-                            &quot;{item.instructions}&quot;
-                          </p>
-                        )}
-                      </div>
-                      <span>
-                        ₹{(item.unitPrice * item.quantity).toFixed(2)}
-                      </span>
+        <div className="space-y-5">
+          {/* ── Search bar ── */}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search orders, items…"
+              className="pl-9"
+            />
+          </div>
+
+          {/* ── Week-wise spend ── */}
+          {weeklySpend.length > 0 && (
+            <div className="rounded-xl border bg-card p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-[#d4891a]" />
+                <span className="text-sm font-semibold">Weekly Spend</span>
+                <span className="text-xs text-muted-foreground">(paid orders only)</span>
+              </div>
+              <div className="space-y-2">
+                {weeklySpend.map(([week, total]) => (
+                  <div key={week} className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{formatWeekLabel(week)}</span>
+                    <div className="flex items-center gap-1 font-semibold text-sm">
+                      <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
+                      {total.toFixed(2)}
                     </div>
-                  ))}
-                  <Separator />
-                  <div className="flex justify-between font-semibold">
-                    <span>Total</span>
-                    <span>₹{order.totalAmount.toFixed(2)}</span>
                   </div>
-                </div>
-              </CardContent>
-              {(order.status === "PLACED" ||
-                order.status === "SERVED" ||
-                (order.paymentStatus === "UNPAID" &&
-                  order.status !== "CANCELLED")) && (
-                <CardFooter className="flex flex-wrap gap-2">
-                  {order.paymentStatus === "UNPAID" &&
-                    order.status !== "CANCELLED" && (
-                      <Button
-                        size="sm"
-                        className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                        onClick={() => handlePayNow(order.id)}
-                        disabled={payingId === order.id}
-                      >
-                        {payingId === order.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <CreditCard className="h-4 w-4" />
-                        )}
-                        Pay Now
-                      </Button>
-                    )}
-                  {order.status === "PLACED" && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                      onClick={() => setCancelReasonOrderId(order.id)}
-                      disabled={cancellingId === order.id}
-                    >
-                      {cancellingId === order.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <XCircle className="h-4 w-4" />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Order list ── */}
+          {filteredOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No orders match your filters</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredOrders.map((order, index) => (
+                <Card
+                  key={order.id}
+                  className="animate-fade-in-up"
+                  style={{ animationDelay: `${index * 60}ms` }}
+                >
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-base">
+                          Order #{order.id.slice(0, 8)}
+                        </CardTitle>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(order.createdAt)}
+                          </p>
+                          {order.canteen && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+                              <Store className="h-3 w-3 text-[#d4891a]" />
+                              {order.canteen.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={ORDER_STATUS_COLORS[order.status as OrderStatus]}>
+                          {ORDER_STATUS_LABELS[order.status as OrderStatus]}
+                        </Badge>
+                        <Badge className={PAYMENT_STATUS_COLORS[order.paymentStatus as PaymentStatus]}>
+                          {order.paymentStatus}
+                        </Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="flex justify-between text-sm">
+                          <div>
+                            <span className="font-medium">{item.menuItem.name}</span>
+                            <span className="text-muted-foreground"> × {item.quantity}</span>
+                            {item.instructions && (
+                              <p className="text-xs text-muted-foreground italic mt-0.5">
+                                &quot;{item.instructions}&quot;
+                              </p>
+                            )}
+                          </div>
+                          <span>₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
+                        </div>
+                      ))}
+                      <Separator />
+                      <div className="flex justify-between font-semibold">
+                        <span>Total</span>
+                        <span>₹{order.totalAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                  {(order.status === "PLACED" ||
+                    order.status === "SERVED" ||
+                    (order.paymentStatus === "UNPAID" && order.status !== "CANCELLED")) && (
+                    <CardFooter className="flex flex-wrap gap-2">
+                      {order.paymentStatus === "UNPAID" && order.status !== "CANCELLED" && (
+                        <Button
+                          size="sm"
+                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
+                          onClick={() => handlePayNow(order.id)}
+                          disabled={payingId === order.id}
+                        >
+                          {payingId === order.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                          Pay Now
+                        </Button>
                       )}
-                      Cancel Order
-                    </Button>
+                      {order.status === "PLACED" && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
+                          onClick={() => setCancelReasonOrderId(order.id)}
+                          disabled={cancellingId === order.id}
+                        >
+                          {cancellingId === order.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4" />
+                          )}
+                          Cancel Order
+                        </Button>
+                      )}
+                      {order.status === "SERVED" && !feedbackSubmitted.has(order.id) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
+                          onClick={() => setFeedbackOrderId(order.id)}
+                        >
+                          <Star className="h-4 w-4" />
+                          Rate Order
+                        </Button>
+                      )}
+                      {order.status === "SERVED" && feedbackSubmitted.has(order.id) && (
+                        <Badge variant="secondary" className="gap-1.5">
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          Reviewed
+                        </Badge>
+                      )}
+                    </CardFooter>
                   )}
-                  {order.status === "SERVED" &&
-                    !feedbackSubmitted.has(order.id) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                        onClick={() => setFeedbackOrderId(order.id)}
-                      >
-                        <Star className="h-4 w-4" />
-                        Rate Order
-                      </Button>
-                    )}
-                  {order.status === "SERVED" &&
-                    feedbackSubmitted.has(order.id) && (
-                      <Badge variant="secondary" className="gap-1.5">
-                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                        Reviewed
-                      </Badge>
-                    )}
-                </CardFooter>
-              )}
-            </Card>
-          ))}
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

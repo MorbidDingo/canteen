@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { canteen } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { canteen, organizationDevice } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -20,11 +21,47 @@ const updateSchema = createSchema.partial().extend({
 export async function GET() {
   try {
     const access = await requireAccess({ scope: "organization" });
+    const organizationId = access.activeOrganizationId!;
+
+    if (access.membershipRole === "ADMIN") {
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["KIOSK"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ canteens: [] });
+      }
+
+      const rows = await db
+        .select({
+          id: canteen.id,
+          organizationId: canteen.organizationId,
+          name: canteen.name,
+          description: canteen.description,
+          location: canteen.location,
+          status: canteen.status,
+          createdAt: canteen.createdAt,
+          updatedAt: canteen.updatedAt,
+        })
+        .from(organizationDevice)
+        .innerJoin(canteen, eq(organizationDevice.canteenId, canteen.id))
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      const canteens = Array.from(new Map(rows.map((row) => [row.id, row])).values());
+      return NextResponse.json({ canteens });
+    }
 
     const canteens = await db
       .select()
       .from(canteen)
-      .where(eq(canteen.organizationId, access.activeOrganizationId!));
+      .where(eq(canteen.organizationId, organizationId));
 
     return NextResponse.json({ canteens });
   } catch (error) {

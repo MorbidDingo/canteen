@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { book, bookCopy } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
+import { book, bookCopy, organizationDevice } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 // POST /api/lib-operator/lookup-book — look up book by accession# or ISBN
 export async function POST(request: NextRequest) {
@@ -27,6 +28,45 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const organizationId = access.activeOrganizationId!;
+    const accessibleDeviceIds =
+      access.membershipRole === "LIB_OPERATOR"
+        ? await getUserAccessibleDeviceIds({
+            organizationId,
+            userId: access.actorUserId,
+            allowedDeviceTypes: ["LIBRARY"],
+          })
+        : null;
+
+    let accessibleLibraryIds: string[] | null = null;
+    if (accessibleDeviceIds) {
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ success: false, reason: "No assigned libraries." }, { status: 403 });
+      }
+
+      const scopedRows = await db
+        .select({ libraryId: organizationDevice.libraryId })
+        .from(organizationDevice)
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      accessibleLibraryIds = Array.from(
+        new Set(
+          scopedRows
+            .map((row) => row.libraryId)
+            .filter((value): value is string => Boolean(value && value.trim())),
+        ),
+      );
+
+      if (accessibleLibraryIds.length === 0) {
+        return NextResponse.json({ success: false, reason: "No assigned libraries." }, { status: 403 });
+      }
+    }
+
     const { scanInput } = (await request.json()) as { scanInput: string };
 
     if (!scanInput) {
@@ -40,7 +80,13 @@ export async function POST(request: NextRequest) {
     const copies = await db
       .select()
       .from(bookCopy)
-      .where(eq(bookCopy.accessionNumber, scanInput))
+      .where(
+        and(
+          eq(bookCopy.accessionNumber, scanInput),
+          eq(bookCopy.organizationId, organizationId),
+          accessibleLibraryIds ? inArray(bookCopy.libraryId, accessibleLibraryIds) : undefined,
+        ),
+      )
       .limit(1);
 
     if (copies.length > 0) {
@@ -48,7 +94,12 @@ export async function POST(request: NextRequest) {
       const books = await db
         .select()
         .from(book)
-        .where(eq(book.id, copy.bookId))
+        .where(
+          and(
+            eq(book.id, copy.bookId),
+            eq(book.organizationId, organizationId),
+          ),
+        )
         .limit(1);
 
       return NextResponse.json({
@@ -62,7 +113,13 @@ export async function POST(request: NextRequest) {
     const booksByIsbn = await db
       .select()
       .from(book)
-      .where(eq(book.isbn, scanInput))
+      .where(
+        and(
+          eq(book.isbn, scanInput),
+          eq(book.organizationId, organizationId),
+          accessibleLibraryIds ? inArray(book.libraryId, accessibleLibraryIds) : undefined,
+        ),
+      )
       .limit(1);
 
     if (booksByIsbn.length > 0) {
@@ -72,7 +129,11 @@ export async function POST(request: NextRequest) {
         .select()
         .from(bookCopy)
         .where(
-          eq(bookCopy.bookId, matchedBook.id)
+          and(
+            eq(bookCopy.bookId, matchedBook.id),
+            eq(bookCopy.organizationId, organizationId),
+            accessibleLibraryIds ? inArray(bookCopy.libraryId, accessibleLibraryIds) : undefined,
+          )
         )
         .limit(10);
 

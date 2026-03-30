@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, book, bookCopy, bookIssuance } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { child, book, bookCopy, bookIssuance, organizationDevice } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 // GET /api/lib-operator/pending-returns — list RETURN_PENDING issuances
 export async function GET() {
@@ -27,6 +28,43 @@ export async function GET() {
   }
 
   try {
+    const organizationId = access.activeOrganizationId!;
+    let accessibleLibraryIds: string[] | null = null;
+
+    if (access.membershipRole === "LIB_OPERATOR") {
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["LIBRARY"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ success: true, pendingReturns: [] });
+      }
+
+      const scopedRows = await db
+        .select({ libraryId: organizationDevice.libraryId })
+        .from(organizationDevice)
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      accessibleLibraryIds = Array.from(
+        new Set(
+          scopedRows
+            .map((row) => row.libraryId)
+            .filter((value): value is string => Boolean(value && value.trim())),
+        ),
+      );
+
+      if (accessibleLibraryIds.length === 0) {
+        return NextResponse.json({ success: true, pendingReturns: [] });
+      }
+    }
+
     const pendingIssuances = await db
       .select({
         id: bookIssuance.id,
@@ -46,7 +84,13 @@ export async function GET() {
       .innerJoin(bookCopy, eq(bookIssuance.bookCopyId, bookCopy.id))
       .innerJoin(book, eq(bookCopy.bookId, book.id))
       .innerJoin(child, eq(bookIssuance.childId, child.id))
-      .where(eq(bookIssuance.status, "RETURN_PENDING"));
+      .where(
+        and(
+          eq(bookIssuance.status, "RETURN_PENDING"),
+          eq(bookCopy.organizationId, organizationId),
+          accessibleLibraryIds ? inArray(bookCopy.libraryId, accessibleLibraryIds) : undefined,
+        ),
+      );
 
     return NextResponse.json({ success: true, pendingReturns: pendingIssuances });
   } catch (error) {

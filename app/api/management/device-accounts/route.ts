@@ -4,6 +4,8 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import {
   account,
+  canteen,
+  library,
   organizationDevice,
   organizationDeviceAssignment,
   organizationMembership,
@@ -44,6 +46,8 @@ export async function GET() {
         deviceCode: organizationDevice.deviceCode,
         status: organizationDevice.status,
         loginUserId: organizationDevice.loginUserId,
+        canteenId: organizationDevice.canteenId,
+        libraryId: organizationDevice.libraryId,
         currentIp: organizationDevice.currentIp,
         lastIp: organizationDevice.lastIp,
         lastSeenAt: organizationDevice.lastSeenAt,
@@ -51,6 +55,17 @@ export async function GET() {
       })
       .from(organizationDevice)
       .where(eq(organizationDevice.organizationId, organizationId));
+
+    // Fetch canteens and libraries for the resource picker
+    const orgCanteens = await db
+      .select({ id: canteen.id, name: canteen.name, location: canteen.location })
+      .from(canteen)
+      .where(eq(canteen.organizationId, organizationId));
+
+    const orgLibraries = await db
+      .select({ id: library.id, name: library.name, location: library.location })
+      .from(library)
+      .where(eq(library.organizationId, organizationId));
 
     const loginUserIds = Array.from(new Set(devices.map((device) => device.loginUserId).filter(Boolean))) as string[];
 
@@ -139,6 +154,8 @@ export async function GET() {
         assignments: assignmentsByDevice.get(device.id) ?? [],
       })),
       staffUsers,
+      canteens: orgCanteens,
+      libraries: orgLibraries,
     });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
@@ -166,6 +183,12 @@ export async function POST(request: NextRequest) {
       accountName?: string;
       accountEmail?: string;
       accountPassword?: string;
+      canteenName?: string;
+      canteenLocation?: string;
+      canteenDescription?: string;
+      libraryName?: string;
+      libraryLocation?: string;
+      libraryDescription?: string;
     };
 
     const deviceType = body.deviceType;
@@ -174,6 +197,12 @@ export async function POST(request: NextRequest) {
     const accountName = body.accountName?.trim();
     const accountEmail = body.accountEmail?.trim().toLowerCase();
     const accountPassword = body.accountPassword?.trim();
+    const canteenName = body.canteenName?.trim() || null;
+    const canteenLocation = body.canteenLocation?.trim() || null;
+    const canteenDescription = body.canteenDescription?.trim() || null;
+    const libraryName = body.libraryName?.trim() || null;
+    const libraryLocation = body.libraryLocation?.trim() || null;
+    const libraryDescription = body.libraryDescription?.trim() || null;
 
     if (!deviceType || !["GATE", "KIOSK", "LIBRARY"].includes(deviceType)) {
       return NextResponse.json({ error: "Invalid device type" }, { status: 400 });
@@ -185,6 +214,20 @@ export async function POST(request: NextRequest) {
 
     if (accountPassword.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
+    }
+
+    // Creating a kiosk/library device also creates its canteen/library record.
+    if (deviceType === "KIOSK" && !canteenName) {
+      return NextResponse.json({ error: "Kiosk devices must provide a canteen name" }, { status: 400 });
+    }
+    if (deviceType === "LIBRARY" && !libraryName) {
+      return NextResponse.json({ error: "Library devices must provide a library name" }, { status: 400 });
+    }
+    if (deviceType !== "KIOSK" && (canteenName || canteenLocation || canteenDescription)) {
+      return NextResponse.json({ error: "Canteen details are only valid for kiosk devices" }, { status: 400 });
+    }
+    if (deviceType !== "LIBRARY" && (libraryName || libraryLocation || libraryDescription)) {
+      return NextResponse.json({ error: "Library details are only valid for library devices" }, { status: 400 });
     }
 
     const [existingDevice] = await db
@@ -225,6 +268,37 @@ export async function POST(request: NextRequest) {
     const lastUserAgent = request.headers.get("user-agent")?.trim() || null;
 
     await db.transaction(async (tx) => {
+      let createdCanteenId: string | null = null;
+      let createdLibraryId: string | null = null;
+
+      if (deviceType === "KIOSK") {
+        createdCanteenId = crypto.randomUUID();
+        await tx.insert(canteen).values({
+          id: createdCanteenId,
+          organizationId,
+          name: canteenName!,
+          location: canteenLocation,
+          description: canteenDescription,
+          status: "ACTIVE",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      if (deviceType === "LIBRARY") {
+        createdLibraryId = crypto.randomUUID();
+        await tx.insert(library).values({
+          id: createdLibraryId,
+          organizationId,
+          name: libraryName!,
+          location: libraryLocation,
+          description: libraryDescription,
+          status: "ACTIVE",
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
       await tx.insert(user).values({
         id: userId,
         name: accountName,
@@ -266,6 +340,8 @@ export async function POST(request: NextRequest) {
         authTokenHash,
         currentIp,
         lastUserAgent,
+        canteenId: createdCanteenId,
+        libraryId: createdLibraryId,
         loginUserId: userId,
         createdByUserId: access.actorUserId,
         status: "ACTIVE",

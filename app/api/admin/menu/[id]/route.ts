@@ -1,10 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { canteen, menuItem } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { canteen, menuItem, organizationDevice } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
+
+async function getAdminAccessibleCanteenIds(organizationId: string, userId: string) {
+  const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+    organizationId,
+    userId,
+    allowedDeviceTypes: ["KIOSK"],
+  });
+
+  if (accessibleDeviceIds.length === 0) {
+    return [] as string[];
+  }
+
+  const scopedRows = await db
+    .select({ canteenId: organizationDevice.canteenId })
+    .from(organizationDevice)
+    .where(
+      and(
+        eq(organizationDevice.organizationId, organizationId),
+        inArray(organizationDevice.id, accessibleDeviceIds),
+      ),
+    );
+
+  return Array.from(
+    new Set(
+      scopedRows
+        .map((row) => row.canteenId)
+        .filter((value): value is string => Boolean(value && value.trim())),
+    ),
+  );
+}
 
 const updateMenuItemSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -29,6 +60,7 @@ export async function PATCH(
       scope: "organization",
       allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
     });
+    const organizationId = access.activeOrganizationId!;
 
     const { id } = await params;
     const body = await request.json();
@@ -45,13 +77,23 @@ export async function PATCH(
     const [existing] = await db
       .select()
       .from(menuItem)
-      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, organizationId)));
 
     if (!existing) {
       return NextResponse.json(
         { error: "Menu item not found" },
         { status: 404 }
       );
+    }
+
+    if (access.membershipRole === "ADMIN") {
+      const accessibleCanteenIds = await getAdminAccessibleCanteenIds(organizationId, access.actorUserId);
+      if (!existing.canteenId || !accessibleCanteenIds.includes(existing.canteenId)) {
+        return NextResponse.json({ error: "You are not assigned to this canteen" }, { status: 403 });
+      }
+      if (parsed.data.canteenId && !accessibleCanteenIds.includes(parsed.data.canteenId)) {
+        return NextResponse.json({ error: "You are not assigned to this canteen" }, { status: 403 });
+      }
     }
 
     if (parsed.data.canteenId) {
@@ -61,7 +103,7 @@ export async function PATCH(
         .where(
           and(
             eq(canteen.id, parsed.data.canteenId),
-            eq(canteen.organizationId, access.activeOrganizationId!),
+            eq(canteen.organizationId, organizationId),
           ),
         )
         .limit(1);
@@ -90,7 +132,7 @@ export async function PATCH(
     const [updated] = await db
       .update(menuItem)
       .set(updateData)
-      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)))
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, organizationId)))
       .returning();
 
     if (access.session?.user) {
@@ -134,13 +176,14 @@ export async function DELETE(
       scope: "organization",
       allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
     });
+    const organizationId = access.activeOrganizationId!;
 
     const { id } = await params;
 
     const [existing] = await db
       .select()
       .from(menuItem)
-      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, organizationId)));
 
     if (!existing) {
       return NextResponse.json(
@@ -149,9 +192,16 @@ export async function DELETE(
       );
     }
 
+    if (access.membershipRole === "ADMIN") {
+      const accessibleCanteenIds = await getAdminAccessibleCanteenIds(organizationId, access.actorUserId);
+      if (!existing.canteenId || !accessibleCanteenIds.includes(existing.canteenId)) {
+        return NextResponse.json({ error: "You are not assigned to this canteen" }, { status: 403 });
+      }
+    }
+
     await db
       .delete(menuItem)
-      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, access.activeOrganizationId!)));
+      .where(and(eq(menuItem.id, id), eq(menuItem.organizationId, organizationId)));
 
     if (access.session?.user) {
       logAudit({

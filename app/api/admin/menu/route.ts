@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { menuItem, discount, canteen } from "@/lib/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { menuItem, discount, canteen, organizationDevice } from "@/lib/db/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { sanitizeImageUrl } from "@/lib/image-url";
+import { getUserAccessibleDeviceIds } from "@/lib/device-context";
 
 // GET — list all menu items (including unavailable ones for admin)
 export async function GET(request: NextRequest) {
@@ -14,10 +15,53 @@ export async function GET(request: NextRequest) {
       scope: "organization",
       allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
     });
+    const organizationId = access.activeOrganizationId!;
+
+    let accessibleCanteenIds: string[] | null = null;
+    if (access.membershipRole === "ADMIN") {
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["KIOSK"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ items: [] });
+      }
+
+      const scopedRows = await db
+        .select({ canteenId: organizationDevice.canteenId })
+        .from(organizationDevice)
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      accessibleCanteenIds = Array.from(
+        new Set(
+          scopedRows
+            .map((row) => row.canteenId)
+            .filter((value): value is string => Boolean(value && value.trim())),
+        ),
+      );
+
+      if (accessibleCanteenIds.length === 0) {
+        return NextResponse.json({ items: [] });
+      }
+    }
 
     const canteenId = request.nextUrl.searchParams.get("canteenId")?.trim() || null;
 
-    const whereConditions = [eq(menuItem.organizationId, access.activeOrganizationId!)];
+    if (canteenId && accessibleCanteenIds && !accessibleCanteenIds.includes(canteenId)) {
+      return NextResponse.json({ error: "You are not assigned to this canteen" }, { status: 403 });
+    }
+
+    const whereConditions = [eq(menuItem.organizationId, organizationId)];
+    if (accessibleCanteenIds) {
+      whereConditions.push(inArray(menuItem.canteenId, accessibleCanteenIds));
+    }
     if (canteenId) {
       whereConditions.push(eq(menuItem.canteenId, canteenId));
     }
@@ -102,6 +146,7 @@ export async function POST(request: NextRequest) {
       scope: "organization",
       allowedOrgRoles: ["ADMIN", "MANAGEMENT", "OPERATOR"],
     });
+    const organizationId = access.activeOrganizationId!;
 
     const body = await request.json();
     const parsed = createMenuItemSchema.safeParse(body);
@@ -115,6 +160,42 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
+    if (access.membershipRole === "ADMIN") {
+      if (!data.canteenId) {
+        return NextResponse.json({ error: "Assigned canteen is required for admin account" }, { status: 400 });
+      }
+
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["KIOSK"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ error: "No assigned canteen devices" }, { status: 403 });
+      }
+
+      const scopedRows = await db
+        .select({ canteenId: organizationDevice.canteenId })
+        .from(organizationDevice)
+        .where(
+          and(
+            eq(organizationDevice.organizationId, organizationId),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      const accessibleCanteenIds = new Set(
+        scopedRows
+          .map((row) => row.canteenId)
+          .filter((value): value is string => Boolean(value && value.trim())),
+      );
+
+      if (!accessibleCanteenIds.has(data.canteenId)) {
+        return NextResponse.json({ error: "You are not assigned to this canteen" }, { status: 403 });
+      }
+    }
+
     if (data.canteenId) {
       const [canteenRow] = await db
         .select({ id: canteen.id })
@@ -122,7 +203,7 @@ export async function POST(request: NextRequest) {
         .where(
           and(
             eq(canteen.id, data.canteenId),
-            eq(canteen.organizationId, access.activeOrganizationId!),
+            eq(canteen.organizationId, organizationId),
           ),
         )
         .limit(1);
@@ -135,7 +216,7 @@ export async function POST(request: NextRequest) {
     const [created] = await db
       .insert(menuItem)
       .values({
-        organizationId: access.activeOrganizationId!,
+        organizationId,
         canteenId: data.canteenId ?? null,
         name: data.name,
         description: data.description || null,

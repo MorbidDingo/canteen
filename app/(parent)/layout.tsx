@@ -15,6 +15,7 @@ import {
   IndianRupee,
   Sparkles,
   MessageSquareText,
+  Store,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -91,6 +92,7 @@ function ParentLayoutContent({
   const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
 
+  const [mounted, setMounted] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
@@ -114,7 +116,11 @@ function ParentLayoutContent({
   const activeTab = getActiveTab(pathname);
   const pageHasInlineContextSelector =
     pathname === "/menu" || pathname === "/library-history" || pathname === "/library-showcase";
-  const showHeaderContextSelector = !pageHasInlineContextSelector;
+  // Show context selector in header only where it adds value: order history + cart
+  // Controls, settings, wallet, children, notifications — no canteen/library context needed
+  const showHeaderContextSelector =
+    !pageHasInlineContextSelector &&
+    pathname === "/cart";
 
   const withParentMode = useCallback(
     (href: string) => {
@@ -159,6 +165,18 @@ function ParentLayoutContent({
     } finally {
       setWalletsLoading(false);
     }
+  }, []);
+
+  const blurFocusedElement = useCallback(() => {
+    if (typeof document === "undefined") return;
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) {
+      activeElement.blur();
+    }
+  }, []);
+
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
   useEffect(() => {
@@ -263,7 +281,10 @@ function ParentLayoutContent({
                   <button
                     type="button"
                     aria-label="Open family wallet"
-                    onClick={() => setWalletDrawerOpen(true)}
+                    onClick={() => {
+                      blurFocusedElement();
+                      setWalletDrawerOpen(true);
+                    }}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
                   >
                     <Wallet className="h-5 w-5" />
@@ -339,7 +360,7 @@ function ParentLayoutContent({
             </div>
 
             <div className="flex min-w-0 items-center gap-2">
-              {showHeaderContextSelector && parentMode === "canteen" && (
+              {showHeaderContextSelector && parentMode === "canteen" && pathname !== "/cart" && (
                 <CanteenSelector
                   value={selectedCanteen}
                   onChange={setSelectedCanteen}
@@ -347,6 +368,15 @@ function ParentLayoutContent({
                   compact
                   className="w-[148px] sm:w-[180px]"
                 />
+              )}
+
+              {pathname === "/cart" && parentMode === "canteen" && (
+                <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm">
+                  <Store className="h-3.5 w-3.5 shrink-0 text-[#d4891a]" />
+                  <span className="max-w-[120px] truncate sm:max-w-[160px]">
+                    {cartItems[0]?.canteenName ?? "Cart"}
+                  </span>
+                </div>
               )}
 
               {showHeaderContextSelector && parentMode === "library" && (
@@ -362,7 +392,10 @@ function ParentLayoutContent({
               {parentMode === "canteen" && totalWalletBalance > 0 && (
                 <button
                   type="button"
-                  onClick={() => setWalletDrawerOpen(true)}
+                  onClick={() => {
+                    blurFocusedElement();
+                    setWalletDrawerOpen(true);
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
                 >
                   <IndianRupee className="h-3 w-3 text-primary" />
@@ -452,7 +485,7 @@ function ParentLayoutContent({
                     </span>
                   )}
 
-                  {tab.key === "cart" && cartCount > 0 && (
+                  {tab.key === "cart" && mounted && cartCount > 0 && (
                     <span className="absolute right-1 top-0 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
                       {cartCount}
                     </span>
@@ -636,7 +669,13 @@ function ParentLayoutContent({
         </>
       ) : (
         <>
-          <Sheet open={cartDrawerOpen} onOpenChange={setCartDrawerOpen}>
+          <Sheet
+            open={cartDrawerOpen}
+            onOpenChange={(open) => {
+              if (open) blurFocusedElement();
+              setCartDrawerOpen(open);
+            }}
+          >
             <SheetContent
               side="right"
               className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
@@ -715,7 +754,13 @@ function ParentLayoutContent({
             </SheetContent>
           </Sheet>
 
-          <Sheet open={walletDrawerOpen} onOpenChange={setWalletDrawerOpen}>
+          <Sheet
+            open={walletDrawerOpen}
+            onOpenChange={(open) => {
+              if (open) blurFocusedElement();
+              setWalletDrawerOpen(open);
+            }}
+          >
             <SheetContent
               side="right"
               className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"

@@ -9,13 +9,14 @@ const LOGO_ASPECT_RATIO = LOGO_WIDTH / LOGO_HEIGHT;
 interface CerteLogoProps {
   size?: number;
   className?: string;
+  priority?: boolean;
 }
 
 /**
  * certe logo rendered from the brand image with transparent background.
  * The size prop controls the height; width scales proportionally.
  */
-export function CerteLogo({ size = 40, className }: CerteLogoProps) {
+export function CerteLogo({ size = 40, className, priority = false }: CerteLogoProps) {
   return (
     <Image
       src="/logo-512.png"
@@ -23,7 +24,7 @@ export function CerteLogo({ size = 40, className }: CerteLogoProps) {
       width={Math.round(size * LOGO_ASPECT_RATIO)}
       height={size}
       className={cn("shrink-0", className)}
-      priority
+      priority={priority}
     />
   );
 }
