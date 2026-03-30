@@ -52,7 +52,7 @@ type CartItem = {
   quantity: number;
 };
 
-type KioskPhase = "tap" | "browse" | "result";
+type KioskPhase = "tap" | "browse" | "result" | "pending-orders";
 
 type OrderResult = {
   success: boolean;
@@ -63,6 +63,15 @@ type OrderResult = {
   childName?: string;
   reason?: string;
   currentBreakName?: string | null;
+};
+
+type PendingAppOrder = {
+  id: string;
+  shortRef: string;
+  status: string;
+  total: number;
+  items: { name: string; quantity: number }[];
+  createdAt: string;
 };
 
 type OrgContextDevice = {
@@ -85,6 +94,8 @@ export default function KioskPage() {
   const [orderLoading, setOrderLoading] = useState(false);
   const [result, setResult] = useState<OrderResult | null>(null);
   const [countdown, setCountdown] = useState(5);
+  const [pendingOrdersCountdown, setPendingOrdersCountdown] = useState(15);
+  const [pendingAppOrders, setPendingAppOrders] = useState<PendingAppOrder[]>([]);
   const [browseTimer, setBrowseTimer] = useState(20);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRfid, setActiveRfid] = useState("");
@@ -251,6 +262,21 @@ export default function KioskPage() {
     return () => clearInterval(interval);
   }, [phase]);
 
+  useEffect(() => {
+    if (phase !== "pending-orders") return;
+    setPendingOrdersCountdown(15);
+    const interval = setInterval(() => {
+      setPendingOrdersCountdown((prev) => {
+        if (prev <= 1) {
+          setPhase("browse");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
   // 20-second browse timer — resets when cart changes, expires to reset kiosk
   useEffect(() => {
     if (phase !== "browse") return;
@@ -305,6 +331,7 @@ export default function KioskPage() {
     setCart([]);
     setPhase("tap");
     setResult(null);
+    setPendingAppOrders([]);
     setActiveCategory("ALL");
     setSearchQuery("");
     setActiveRfid("");
@@ -398,6 +425,13 @@ export default function KioskPage() {
               : "Today pre-order placed automatically.",
         });
         setPhase("result");
+        return;
+      }
+
+      if (data.pendingAppOrders && (data.pendingAppOrders as PendingAppOrder[]).length > 0) {
+        setPendingAppOrders(data.pendingAppOrders as PendingAppOrder[]);
+        setPhase("pending-orders");
+        if (data.reason) toast.message(data.reason);
         return;
       }
 
@@ -512,6 +546,71 @@ export default function KioskPage() {
       label,
     })),
   ];
+
+  if (phase === "pending-orders" && pendingAppOrders.length > 0) {
+    return (
+      <div className="h-screen overflow-hidden flex flex-col items-center justify-center p-6 bg-gray-50">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="bg-[#d4891a]/10 rounded-full p-4 inline-block">
+            <ShoppingCart className="h-14 w-14 text-[#d4891a]" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-[#d4891a]">
+            Pending Orders
+          </h2>
+          {activeChildName && (
+            <p className="text-sm text-muted-foreground">
+              Welcome, <span className="font-semibold">{activeChildName}</span>
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Show the order reference below to the canteen staff to collect your order.
+          </p>
+
+          <div className="space-y-3 text-left">
+            {pendingAppOrders.map((o) => (
+              <Card key={o.id} className="border-[#d4891a]/30">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl font-mono font-bold tracking-widest text-[#d4891a]">
+                      {o.shortRef}
+                    </span>
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {o.status.toLowerCase()}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {o.items.map((i) => `${i.quantity}x ${i.name}`).join(", ")}
+                  </p>
+                  <p className="text-sm font-semibold">₹{o.total.toFixed(0)}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={resetKiosk}
+            >
+              Done
+            </Button>
+            <Button
+              className="flex-[2] bg-[#d4891a] hover:bg-[#b87314] text-white"
+              onClick={() => setPhase("browse")}
+            >
+              Order More
+            </Button>
+          </div>
+
+          <Badge variant="outline" className="text-xs py-1 px-3 text-muted-foreground">
+            Continuing in {pendingOrdersCountdown}s...
+          </Badge>
+        </div>
+      </div>
+    );
+  }
 
   if (phase === "tap") {
     return (

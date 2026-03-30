@@ -14,7 +14,7 @@ import {
   certeSubscription,
   appSetting,
 } from "@/lib/db/schema";
-import { eq, and, gte, sql, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, asc, inArray, isNull, desc } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
@@ -446,6 +446,35 @@ async function resolvePreOrderItemsForToday(childId: string, currentBreakName: s
   return null;
 }
 
+async function getPendingAppOrders(childId: string) {
+  const rows = await db.query.order.findMany({
+    where: and(
+      eq(order.childId, childId),
+      inArray(order.status, ["PLACED", "PREPARING"]),
+      isNull(order.tokenCode),
+    ),
+    orderBy: [desc(order.createdAt)],
+    with: {
+      items: {
+        with: {
+          menuItem: {
+            columns: { name: true },
+          },
+        },
+      },
+    },
+  });
+
+  return rows.map((o) => ({
+    id: o.id,
+    shortRef: `#${o.id.slice(-8).toUpperCase()}`,
+    status: o.status,
+    total: o.totalAmount,
+    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+    createdAt: o.createdAt,
+  }));
+}
+
 // POST /api/kiosk/order — no auth session; RFID card is the auth
 // Supports manual cart order and AUTO_PREORDER on card tap
 export async function POST(request: NextRequest) {
@@ -503,22 +532,26 @@ export async function POST(request: NextRequest) {
       const currentBreak = getCurrentBreakSlot(breakSlots, { timeZone: "Asia/Kolkata" });
 
       if (!currentBreak) {
+        const pendingAppOrders = await getPendingAppOrders(studentChild.id);
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: null,
           reason: "No active break right now.",
+          pendingAppOrders,
         });
       }
 
       const resolved = await resolvePreOrderItemsForToday(studentChild.id, currentBreak.name);
       if (!resolved) {
+        const pendingAppOrders = await getPendingAppOrders(studentChild.id);
         return NextResponse.json({
           success: true,
           autoPreOrder: false,
           childName: studentChild.name,
           currentBreakName: currentBreak.name,
+          pendingAppOrders,
         });
       }
 

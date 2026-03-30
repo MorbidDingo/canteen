@@ -46,6 +46,7 @@ type Order = {
   totalAmount: number;
   paymentMethod: string;
   paymentStatus: PaymentStatus;
+  tokenCode: string | null;
   createdAt: string;
   updatedAt: string;
   user: OrderUser;
@@ -279,6 +280,19 @@ function OrderCard({
               minute: "2-digit",
             })}
           </span>
+        </div>
+
+        {/* Token (kiosk orders) or short order reference */}
+        <div className="flex items-center gap-2">
+          {order.tokenCode ? (
+            <span className="font-mono font-bold text-base tracking-widest text-[#d4891a]">
+              {order.tokenCode}
+            </span>
+          ) : (
+            <span className="font-mono text-xs text-muted-foreground">
+              {`#${order.id.slice(-8).toUpperCase()}`}
+            </span>
+          )}
         </div>
 
         {/* Items on one line */}
