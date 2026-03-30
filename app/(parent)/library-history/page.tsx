@@ -79,6 +79,23 @@ function getDaysRemaining(dueDate: string) {
   return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+function BookCover({ url, title, size = "md" }: { url: string | null; title: string; size?: "sm" | "md" }) {
+  const sizeClasses = size === "sm" ? "h-10 w-7 rounded-md" : "h-16 w-11 rounded-lg";
+  const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
+  return (
+    <div className={cn("shrink-0 overflow-hidden bg-muted shadow-sm", sizeClasses)}>
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={title} className="h-full w-full object-cover" />
+      ) : (
+        <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground/40")}>
+          <BookOpen className={iconSize} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString(undefined, {
     month: "short",
@@ -255,16 +272,7 @@ export default function LibraryHistoryPage() {
                 >
                   <div className="flex gap-3">
                     {/* Book cover */}
-                    <div className="h-16 w-11 shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
-                      {item.bookCoverUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.bookCoverUrl} alt={item.bookTitle} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground/40">
-                          <BookOpen className="h-4 w-4" />
-                        </div>
-                      )}
-                    </div>
+                    <BookCover url={item.bookCoverUrl} title={item.bookTitle} />
 
                     {/* Details */}
                     <div className="min-w-0 flex-1">
@@ -331,16 +339,7 @@ export default function LibraryHistoryPage() {
                 className="flex items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-3 py-2.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-card/90"
               >
                 {/* Mini cover */}
-                <div className="h-10 w-7 shrink-0 overflow-hidden rounded-md bg-muted">
-                  {item.bookCoverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.bookCoverUrl} alt={item.bookTitle} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
-                      <BookOpen className="h-3 w-3" />
-                    </div>
-                  )}
-                </div>
+                <BookCover url={item.bookCoverUrl} title={item.bookTitle} size="sm" />
 
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-1 text-sm font-medium leading-tight">{item.bookTitle}</p>

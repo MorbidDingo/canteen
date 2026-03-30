@@ -299,7 +299,60 @@ function ParentLayoutContent({
       .slice(0, 2);
   };
 
-  const tabs = useMemo(() => {
+  type TabItem = {
+    key: string;
+    href: string;
+    icon: React.ElementType | null;
+    label: string;
+    locked: boolean;
+    isProfile?: boolean;
+  };
+
+  const renderNotificationList = () => (
+    <>
+      {notifLoading ? (
+        <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+          Loading notifications...
+        </div>
+      ) : notifItems.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+          <Bell className="mx-auto h-6 w-6 text-muted-foreground/30" />
+          <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {notifItems.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => void markNotifAsRead(n.id)}
+              className={cn(
+                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                n.readAt
+                  ? "hover:bg-card/70"
+                  : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                    {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                {!n.readAt && (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const tabs: TabItem[] = useMemo(() => {
     if (parentMode === "canteen") {
       return [
         { key: "home" as const, href: "/menu", icon: UtensilsCrossed, label: "Menu", locked: false },
@@ -482,7 +535,7 @@ function ParentLayoutContent({
             "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
-            {tabs.filter(t => !(t as { isProfile?: boolean }).isProfile).map((tab) => {
+            {tabs.filter(t => !t.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
               const Icon = tab.icon;
 
@@ -547,7 +600,7 @@ function ParentLayoutContent({
 
           {/* Floating profile/settings button */}
           {(() => {
-            const profileTab = tabs.find(t => (t as { isProfile?: boolean }).isProfile);
+            const profileTab = tabs.find(t => t.isProfile);
             if (!profileTab) return null;
             const isActive = activeTab === profileTab.key;
             return (
@@ -769,45 +822,7 @@ function ParentLayoutContent({
               </div>
 
               <div className="flex-1 overflow-y-auto p-3">
-                {notifLoading ? (
-                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                    Loading notifications...
-                  </div>
-                ) : notifItems.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-                    <Bell className="mx-auto h-6 w-6 text-muted-foreground/30" />
-                    <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {notifItems.map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => void markNotifAsRead(n.id)}
-                        className={cn(
-                          "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
-                          n.readAt
-                            ? "hover:bg-card/70"
-                            : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
-                        )}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-                              {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                          </div>
-                          {!n.readAt && (
-                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {renderNotificationList()}
               </div>
 
               <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -1027,45 +1042,7 @@ function ParentLayoutContent({
                 </SheetHeader>
 
                 <div className="flex-1 overflow-y-auto p-3">
-                  {notifLoading ? (
-                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                      Loading notifications...
-                    </div>
-                  ) : notifItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-                      <Bell className="mx-auto h-6 w-6 text-muted-foreground/30" />
-                      <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {notifItems.map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => void markNotifAsRead(n.id)}
-                          className={cn(
-                            "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
-                            n.readAt
-                              ? "hover:bg-card/70"
-                              : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
-                          )}
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                              <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-                                {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                              </p>
-                            </div>
-                            {!n.readAt && (
-                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  {renderNotificationList()}
                 </div>
 
                 <SheetFooter className="border-t border-border/60 bg-muted/30">
