@@ -505,6 +505,8 @@ async function handleGetRecommendations(
       price: r.price,
       score: Math.round(r.score * 100) / 100,
       reasons: r.reasons,
+      canteenId: r.canteenId,
+      canteenName: r.canteenName,
     })),
   });
 }

@@ -3,6 +3,7 @@ import {
   order,
   orderItem,
   menuItem,
+  canteen,
   wallet,
   walletTransaction,
   parentControl,
@@ -54,6 +55,8 @@ export interface MenuPopularityItem {
   price: number;
   totalOrdered: number;
   uniqueBuyers: number;
+  canteenId: string | null;
+  canteenName: string | null;
   /** Breakdown by hour-of-day (0–23) */
   hourlyDistribution: Record<number, number>;
   /** Breakdown by day-of-week (0–6) */
@@ -198,6 +201,8 @@ export async function getMenuPopularity(
       name: menuItem.name,
       category: menuItem.category,
       price: menuItem.price,
+      canteenId: menuItem.canteenId,
+      canteenName: canteen.name,
       quantity: orderItem.quantity,
       userId: order.userId,
       orderedAt: order.createdAt,
@@ -205,6 +210,7 @@ export async function getMenuPopularity(
     .from(orderItem)
     .innerJoin(order, eq(orderItem.orderId, order.id))
     .innerJoin(menuItem, eq(orderItem.menuItemId, menuItem.id))
+    .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
     .where(
       and(
         eq(menuItem.organizationId, orgId),
@@ -219,6 +225,8 @@ export async function getMenuPopularity(
       name: string;
       category: string;
       price: number;
+      canteenId: string | null;
+      canteenName: string | null;
       totalOrdered: number;
       buyers: Set<string>;
       hourly: Record<number, number>;
@@ -233,6 +241,8 @@ export async function getMenuPopularity(
         name: r.name,
         category: r.category,
         price: r.price,
+        canteenId: r.canteenId ?? null,
+        canteenName: r.canteenName ?? null,
         totalOrdered: 0,
         buyers: new Set(),
         hourly: {},
@@ -257,6 +267,8 @@ export async function getMenuPopularity(
       name: e.name,
       category: e.category,
       price: e.price,
+      canteenId: e.canteenId,
+      canteenName: e.canteenName,
       totalOrdered: e.totalOrdered,
       uniqueBuyers: e.buyers.size,
       hourlyDistribution: e.hourly,

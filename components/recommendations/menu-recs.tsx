@@ -5,6 +5,7 @@ import { useCartStore } from "@/lib/store/cart-store";
 import { Button } from "@/components/ui/button";
 import { motion } from "@/components/ui/motion";
 import { Sparkles, Plus, ShoppingCart, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Recommendation {
   menuItemId: string;
@@ -63,6 +64,7 @@ function RecCard({ rec }: { rec: Recommendation }) {
   const addItem = useCartStore((s) => s.addItem);
   const cartItems = useCartStore((s) => s.items);
   const inCart = cartItems.some((c) => c.menuItemId === rec.menuItemId);
+  const router = useRouter();
 
   return (
     <motion.div
@@ -77,6 +79,11 @@ function RecCard({ rec }: { rec: Recommendation }) {
       <span className="mt-0.5 text-[11px] text-muted-foreground">
         {rec.category} · ₹{rec.price}
       </span>
+      {rec.canteenName && (
+        <span className="text-[10px] text-muted-foreground/80 truncate">
+          {rec.canteenName}
+        </span>
+      )}
       {rec.reasons.length > 0 && (
         <span className="mt-1 text-[10px] text-muted-foreground/80 line-clamp-1">
           {rec.reasons[0]}
@@ -87,13 +94,17 @@ function RecCard({ rec }: { rec: Recommendation }) {
         variant={inCart ? "outline" : "default"}
         className="mt-2 gap-1 rounded-lg text-[11px] w-full"
         onClick={() => {
-          addItem({
-            menuItemId: rec.menuItemId,
-            name: rec.name,
-            price: rec.price,
-            canteenId: rec.canteenId ?? "",
-            canteenName: rec.canteenName ?? "Unknown",
-          });
+          if (inCart) {
+            router.push("/cart");
+          } else {
+            addItem({
+              menuItemId: rec.menuItemId,
+              name: rec.name,
+              price: rec.price,
+              canteenId: rec.canteenId ?? "",
+              canteenName: rec.canteenName ?? "Unknown",
+            });
+          }
         }}
       >
         {inCart ? (
