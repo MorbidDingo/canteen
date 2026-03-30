@@ -95,6 +95,8 @@ export async function GET() {
         price: item.price,
         score: 0.5,
         reasons: ["Complete meal option"],
+        canteenId: null,
+        canteenName: null,
       }));
     nutritionRecs.push(...supplements);
   }

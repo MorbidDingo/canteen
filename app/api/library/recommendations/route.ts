@@ -140,8 +140,8 @@ export async function GET() {
   };
 
   const allCandidates: Candidate[] = [
-    ...popularRows,
-    ...extraRows.map((r) => ({ ...r, borrowCount: 0 })),
+    ...popularRows.map((r) => ({ ...r, availableCopies: r.availableCopies ?? 0 })),
+    ...extraRows.map((r) => ({ ...r, availableCopies: r.availableCopies ?? 0, borrowCount: 0 })),
   ];
 
   // Score candidates using popularity + category/author affinity
