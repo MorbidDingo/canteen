@@ -94,7 +94,7 @@ export default function MenuPage() {
         className="mb-4"
       />
 
-      <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 bg-card/60 p-1 shadow-sm">
+      <div className="mb-5 inline-flex w-fit gap-1 rounded-xl border border-border/60 p-1 shadow-sm">
         <Link href="/menu">
           <Button type="button" variant="secondary" size="sm">
             Menu
@@ -131,14 +131,6 @@ export default function MenuPage() {
           )}
         </Link>
       </div>
-
-      {/* AI Quick Bar + ML Recommendations — Certe+ only */}
-      {certePlusActive && (
-        <div className="mb-6 space-y-4">
-          <AiQuickBar />
-          <MenuRecommendations />
-        </div>
-      )}
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">

@@ -94,10 +94,6 @@ export function AiQuickBar() {
     <div className="space-y-3">
       {/* Chip Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <div className="flex items-center gap-1 shrink-0">
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span className="text-[11px] font-semibold text-primary">AI</span>
-        </div>
         {QUICK_ACTIONS.map((action) => (
           <button
             key={action.label}

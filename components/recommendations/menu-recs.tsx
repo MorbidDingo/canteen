@@ -47,10 +47,8 @@ export function MenuRecommendations() {
 
   return (
     <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
+
         <span className="text-[13px] font-semibold">Suggested for you</span>
-      </div>
       <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none">
         {recs.map((rec) => (
           <RecCard key={rec.menuItemId} rec={rec} />

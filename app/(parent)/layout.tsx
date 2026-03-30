@@ -527,11 +527,11 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-lg items-end justify-center gap-2 px-3 md:max-w-4xl lg:max-w-6xl">
           {/* Main nav pills - icon only, compact */}
           <div className={cn(
-            "relative flex items-center gap-0.5 rounded-2xl border border-white/20 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+            "relative bottom-0 flex items-center gap-0.5 rounded-2xl border border-white/20 p-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
             "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
@@ -607,7 +607,7 @@ function ParentLayoutContent({
               <Link
                 href={profileTab.href}
                 className={cn(
-                  "relative flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+                  "relative bottom-1 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
                   "bg-background/60 backdrop-blur-2xl backdrop-saturate-[1.8]",
                   "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
                   "transition-all",

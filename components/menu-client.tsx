@@ -43,6 +43,9 @@ import {
   MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import { MenuRecommendations } from "./recommendations/menu-recs";
+import { AiQuickBar } from "./ai/ai-quick-bar";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
   SNACKS: Cookie,
@@ -81,6 +84,7 @@ function MenuItemImage({
     );
   }
 
+    
   return (
     <>
       {status === "loading" && (
@@ -145,6 +149,9 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [discountsOnly, setDiscountsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
   const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
+  const certePlusStatus = useCertePlusStore((s) => s.status);
+  const certePlusActive = certePlusStatus?.active === true;
+
 
   const discountedItems = useMemo(
     () => items.filter((i) => i.discountedPrice != null),
@@ -332,7 +339,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
         </div>
       )}
 
-      <div className="mb-6 space-y-3 rounded-2xl border border-amber-200/50 bg-amber-50/35 p-3 shadow-sm animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
+      <div className="mb-6 space-y-3 rounded-2xl p-3 animate-fade-in dark:border-amber-200/20 dark:bg-amber-950/12">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -369,6 +376,19 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             )}
           </Button>
         </div>
+        <div className="flex items-center gap-2">
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <h1 className="text-lg font-semibold text-orange-500">AI Quick Bar</h1>
+          </div>
+                            
+        
+              {/* AI Quick Bar + ML Recommendations — Certe+ only */}
+      {certePlusActive && (
+          <div className="mb-6 space-y-4">
+          <AiQuickBar />
+          <MenuRecommendations />
+        </div>
+      )}
 
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Category</Label>
