@@ -686,12 +686,13 @@ async function handleUpdateOrderStatus(
 ): Promise<string> {
   try {
     const orderIds = input.order_ids as string[];
-    const newStatus = input.status as string;
+    const rawStatus = input.status as string;
 
     if (!orderIds?.length) return JSON.stringify({ error: "No order IDs provided" });
-    if (!["PREPARING", "SERVED", "CANCELLED"].includes(newStatus)) {
+    if (!["PREPARING", "SERVED", "CANCELLED"].includes(rawStatus)) {
       return JSON.stringify({ error: "Invalid status. Must be PREPARING, SERVED, or CANCELLED" });
     }
+    const newStatus = rawStatus as "PLACED" | "PREPARING" | "SERVED" | "CANCELLED";
 
     const results: { orderId: string; tokenCode: string | null; from: string; to: string; success: boolean; error?: string }[] = [];
 
@@ -734,15 +735,21 @@ async function handleUpdateOrderStatus(
           .from(orderItem)
           .where(eq(orderItem.orderId, orderId));
 
-        if (items.length > 0) {
-          await incrementUnits(items);
-        }
+        await db.transaction(async (tx) => {
+          if (items.length > 0) {
+            await incrementUnits(items, tx);
+          }
+          await tx
+            .update(order)
+            .set({ status: newStatus, updatedAt: new Date() })
+            .where(eq(order.id, orderId));
+        });
+      } else {
+        await db
+          .update(order)
+          .set({ status: newStatus, updatedAt: new Date() })
+          .where(eq(order.id, orderId));
       }
-
-      await db
-        .update(order)
-        .set({ status: newStatus, updatedAt: new Date() })
-        .where(eq(order.id, orderId));
 
       results.push({
         orderId,

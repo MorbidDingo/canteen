@@ -17,6 +17,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
@@ -492,6 +493,7 @@ export default function AdminMenuPage() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:max-w-lg md:max-w-xl max-h-[92svh] overflow-hidden p-0">
+                <DialogTitle className="sr-only">{editingItem ? "Edit Menu Item" : "Add Menu Item"}</DialogTitle>
                 <MenuItemForm
                   formData={formData}
                   setFormData={setFormData}
