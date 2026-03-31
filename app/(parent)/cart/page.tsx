@@ -1200,9 +1200,12 @@ export default function CartPage() {
                   {items.reduce((s, i) => s + i.quantity, 0)} item{items.length !== 1 ? "s" : ""}
                 </span>
               </div>
-              <span className="text-base font-bold">
-                Checkout · ₹{total.toFixed(0)}
-              </span>
+              <div className="text-right leading-tight">
+                <p className="text-base font-bold">Checkout · ₹{total.toFixed(0)}</p>
+                <p className="text-[11px] text-primary-foreground/85">
+                  Includes ₹{platformFee.toFixed(2)} platform fee
+                </p>
+              </div>
             </button>
           </div>
 
