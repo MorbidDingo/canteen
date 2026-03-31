@@ -32,25 +32,46 @@ export async function GET(request: NextRequest) {
       conditions.push(or(eq(menuItem.canteenId, canteenId), isNull(menuItem.canteenId))!);
     }
 
-    const [items, orgCanteens] = await Promise.all([
-      db
-        .select({
-          item: menuItem,
-          canteenName: canteen.name,
-          canteenLocation: canteen.location,
-        })
-        .from(menuItem)
-        .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
-        .where(and(...conditions)),
-      db
-        .select({
-          id: canteen.id,
-          name: canteen.name,
-          location: canteen.location,
-        })
-        .from(canteen)
-        .where(and(eq(canteen.organizationId, organizationId), eq(canteen.status, "ACTIVE"))),
-    ]);
+    const orgCanteens = await db
+      .select({
+        id: canteen.id,
+        name: canteen.name,
+        location: canteen.location,
+        status: canteen.status,
+      })
+      .from(canteen)
+      .where(eq(canteen.organizationId, organizationId));
+
+    const activeCanteens = orgCanteens.filter((c) => c.status === "ACTIVE");
+    const selectedCanteen = canteenId
+      ? orgCanteens.find((c) => c.id === canteenId) ?? null
+      : null;
+    const selectedCanteenClosed = Boolean(
+      selectedCanteen && selectedCanteen.status !== "ACTIVE",
+    );
+
+    if (selectedCanteenClosed) {
+      return NextResponse.json({
+        items: [],
+        canteens: activeCanteens,
+        selectedCanteenId: canteenId,
+        selectedCanteenClosed,
+        selectedCanteenName: selectedCanteen?.name ?? null,
+      });
+    }
+
+    const itemConditions = [...conditions];
+    itemConditions.push(or(isNull(menuItem.canteenId), eq(canteen.status, "ACTIVE"))!);
+
+    const items = await db
+      .select({
+        item: menuItem,
+        canteenName: canteen.name,
+        canteenLocation: canteen.location,
+      })
+      .from(menuItem)
+      .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
+      .where(and(...itemConditions));
 
     // Fetch active discounts
     const activeDiscounts = await db
@@ -63,7 +84,7 @@ export async function GET(request: NextRequest) {
     );
 
     const now = new Date();
-    const filterCanteen = canteenId ? orgCanteens.find((c) => c.id === canteenId) ?? null : null;
+    const filterCanteen = canteenId ? activeCanteens.find((c) => c.id === canteenId) ?? null : null;
     const enriched = items.map(({ item, canteenName, canteenLocation }) => {
       const d = discountMap.get(item.id);
       let discountedPrice = null;
@@ -95,8 +116,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       items: enriched,
-      canteens: orgCanteens,
+      canteens: activeCanteens,
       selectedCanteenId: canteenId,
+      selectedCanteenClosed: false,
+      selectedCanteenName: selectedCanteen?.name ?? null,
+      hasActiveCanteens: activeCanteens.length > 0,
+      activeCanteenCount: activeCanteens.length,
+      totalCanteenCount: orgCanteens.length,
     });
   } catch {
     return NextResponse.json(

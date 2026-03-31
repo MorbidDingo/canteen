@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Card,
@@ -41,6 +41,9 @@ import {
   Store,
   MapPin,
   Play,
+  Pause,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
@@ -106,52 +109,162 @@ function MenuItemImage({
   );
 }
 
-/* ── Video player overlay — fullscreen with mute toggle ── */
-function VideoPlayerOverlay({
-  videoUrl,
-  onClose,
+function MenuItemMedia({
+  item,
 }: {
-  videoUrl: string;
-  onClose: () => void;
+  item: MenuItem;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
+  const mediaImages = [item.imageUrl, ...(item.additionalImages ?? [])].filter(
+    (value): value is string => Boolean(value),
+  );
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [playingVideo, setPlayingVideo] = useState(false);
+  const [dragStartX, setDragStartX] = useState<number | null>(null);
+  const [dragStartTs, setDragStartTs] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const toggleMute = useCallback(() => {
-    setMuted((m) => {
-      if (videoRef.current) videoRef.current.muted = !m;
-      return !m;
-    });
-  }, []);
+  const showCarouselControls = mediaImages.length > 1;
+  const currentImage = mediaImages[currentIndex] ?? null;
+
+  const prevImage = () => {
+    setPlayingVideo(false);
+    setCurrentIndex((prev) => (prev - 1 + mediaImages.length) % mediaImages.length);
+  };
+
+  const nextImage = () => {
+    setPlayingVideo(false);
+    setCurrentIndex((prev) => (prev + 1) % mediaImages.length);
+  };
+
+  const handleSwipeEnd = (endX: number) => {
+    if (dragStartX == null || dragStartTs == null || mediaImages.length < 2) return;
+
+    const deltaX = endX - dragStartX;
+    const elapsedMs = Math.max(1, Date.now() - dragStartTs);
+    const velocity = Math.abs(deltaX) / elapsedMs;
+
+    setDragStartX(null);
+    setDragStartTs(null);
+    setIsDragging(false);
+
+    const crossedDistance = Math.abs(deltaX) > 40;
+    const crossedVelocity = velocity > 0.6;
+    if (!crossedDistance && !crossedVelocity) return;
+
+    if (deltaX > 0) prevImage();
+    else nextImage();
+  };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute top-4 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 transition-colors"
-        aria-label="Close video"
-      >
-        <X className="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        onClick={toggleMute}
-        className="absolute bottom-6 right-6 z-10 flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/30 transition-colors"
-        aria-label={muted ? "Unmute" : "Mute"}
-      >
-        {muted ? "🔇 Muted" : "🔊 Sound On"}
-      </button>
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        autoPlay
-        playsInline
-        muted={muted}
-        controls
-        className="max-h-[80vh] max-w-[90vw] rounded-2xl"
-      />
-    </div>
+    <>
+      {playingVideo && item.videoUrl ? (
+        <video
+          src={item.videoUrl}
+          autoPlay
+          playsInline
+          controls
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          className={cn(
+            "relative h-full w-full select-none",
+            showCarouselControls && "cursor-grab active:cursor-grabbing",
+            isDragging && "cursor-grabbing",
+          )}
+          onPointerDown={(e) => {
+            if (!showCarouselControls) return;
+            setDragStartX(e.clientX);
+            setDragStartTs(Date.now());
+            setIsDragging(true);
+          }}
+          onPointerUp={(e) => handleSwipeEnd(e.clientX)}
+          onPointerCancel={() => {
+            setDragStartX(null);
+            setDragStartTs(null);
+            setIsDragging(false);
+          }}
+          onPointerLeave={(e) => {
+            if (!isDragging) return;
+            handleSwipeEnd(e.clientX);
+          }}
+        >
+          {mediaImages.length > 0 ? (
+            <div className="absolute inset-0 overflow-hidden">
+              <div
+                className="flex h-full w-full transition-transform duration-300 ease-out"
+                style={{ transform: `translate3d(-${currentIndex * 100}%, 0, 0)` }}
+              >
+                {mediaImages.map((imageSrc, imageIndex) => (
+                  <div key={`${item.id}-img-${imageIndex}`} className="relative h-full w-full shrink-0">
+                    <MenuItemImage
+                      src={imageSrc}
+                      alt={`${item.name} ${imageIndex + 1}`}
+                      category={item.category as MenuCategory}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <MenuItemImage
+              src={currentImage}
+              alt={item.name}
+              category={item.category as MenuCategory}
+            />
+          )}
+          {showCarouselControls && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  prevImage();
+                }}
+                className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 md:h-7 md:w-7"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  nextImage();
+                }}
+                className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 md:h-7 md:w-7"
+                aria-label="Next image"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {item.videoUrl && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setPlayingVideo((prev) => !prev);
+          }}
+          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-lg transition-transform hover:scale-110 hover:bg-black/75"
+          aria-label={playingVideo ? "Show images" : "Play video"}
+        >
+          {playingVideo ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-white" />}
+        </button>
+      )}
+
+      {showCarouselControls && (
+        <span className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
+          {currentIndex + 1}/{mediaImages.length}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -200,7 +313,6 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [discountsOnly, setDiscountsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
   const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
-  const [playingVideoUrl, setPlayingVideoUrl] = useState<string | null>(null);
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const certePlusActive = certePlusStatus?.active === true;
 
@@ -566,26 +678,7 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             >
               {/* Image area with consistent aspect ratio */}
               <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
-                <MenuItemImage
-                  src={item.imageUrl}
-                  alt={item.name}
-                  category={item.category as MenuCategory}
-                />
-                {/* Video play button — top right */}
-                {item.videoUrl && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setPlayingVideoUrl(item.videoUrl!);
-                    }}
-                    className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-lg transition-transform hover:scale-110 hover:bg-black/75"
-                    aria-label="Play video"
-                  >
-                    <Play className="h-3.5 w-3.5 fill-white" />
-                  </button>
-                )}
+                <MenuItemMedia item={item} />
                 {/* Category badge on image */}
                 <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80 shadow-sm">
                   {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
@@ -601,12 +694,6 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                       ? `${item.discountInfo.value}%`
                       : `₹${item.discountInfo?.value}`}
                   </Badge>
-                )}
-                {/* Multi-image indicator */}
-                {item.additionalImages && item.additionalImages.length > 0 && (
-                  <span className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
-                    +{item.additionalImages.length}
-                  </span>
                 )}
                 {/* Sold out overlay */}
                 {item.availableUnits === 0 && item.available && (
@@ -683,13 +770,6 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
         </div>
       )}
 
-      {/* Video player overlay */}
-      {playingVideoUrl && (
-        <VideoPlayerOverlay
-          videoUrl={playingVideoUrl}
-          onClose={() => setPlayingVideoUrl(null)}
-        />
-      )}
     </>
   );
 }

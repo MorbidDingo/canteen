@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import { UtensilsCrossed, Loader2, Lock, Sparkles, ShoppingCart, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import MenuClient from "../../../components/menu-client";
+import PreOrdersPage from "../pre-orders/page";
 import { useRealtimeData } from "@/lib/events";
 import { Button } from "@/components/ui/button";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
@@ -31,8 +31,31 @@ interface MenuItem {
   canteenLocation?: string | null;
 }
 
+type MenuApiResponse = {
+  items: MenuItem[];
+  selectedCanteenClosed?: boolean;
+  selectedCanteenName?: string | null;
+  hasActiveCanteens?: boolean;
+  activeCanteenCount?: number;
+  totalCanteenCount?: number;
+};
+
 export default function MenuPage() {
+  const [activeView, setActiveView] = useState<"menu" | "pre-orders">("menu");
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [menuMeta, setMenuMeta] = useState<{
+    selectedCanteenClosed: boolean;
+    selectedCanteenName: string | null;
+    hasActiveCanteens: boolean;
+    activeCanteenCount: number;
+    totalCanteenCount: number;
+  }>({
+    selectedCanteenClosed: false,
+    selectedCanteenName: null,
+    hasActiveCanteens: true,
+    activeCanteenCount: 0,
+    totalCanteenCount: 0,
+  });
   const [loading, setLoading] = useState(true);
   const {
     value: selectedCanteen,
@@ -54,8 +77,15 @@ export default function MenuPage() {
         : "/api/menu";
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
+      const data = (await res.json()) as MenuApiResponse;
       setItems(data.items);
+      setMenuMeta({
+        selectedCanteenClosed: data.selectedCanteenClosed === true,
+        selectedCanteenName: data.selectedCanteenName ?? null,
+        hasActiveCanteens: data.hasActiveCanteens !== false,
+        activeCanteenCount: data.activeCanteenCount ?? 0,
+        totalCanteenCount: data.totalCanteenCount ?? 0,
+      });
     } catch {
       // silently fail — items stay as-is
     } finally {
@@ -88,53 +118,78 @@ export default function MenuPage() {
       {/* Top row: Menu/Pre-order tabs + Canteen selector */}
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="inline-flex w-fit gap-1 rounded-xl border border-border/60 p-1 shadow-sm">
-          <Link href="/menu">
-            <Button type="button" variant="secondary" size="sm">
-              Menu
+          <Button
+            type="button"
+            variant={activeView === "menu" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setActiveView("menu")}
+          >
+            Menu
+          </Button>
+          {!certePlusResolved ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              disabled
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Pre-Orders
             </Button>
-          </Link>
-          <Link href="/pre-orders">
-            {!certePlusResolved ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-1 text-muted-foreground"
-                disabled
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Pre-Order
-              </Button>
-            ) : certePlusActive ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-              >
-                <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
-                  <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
-                  Pre-Order
-                </span>
-              </Button>
-            ) : (
-              <Button type="button" variant="ghost" size="sm" className="gap-1">
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                Pre-Order
-              </Button>
-            )}
-          </Link>
+          ) : certePlusActive ? (
+            <Button
+              type="button"
+              variant={activeView === "pre-orders" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setActiveView("pre-orders")}
+            >
+              <span className="bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent font-semibold flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5 text-[#e8a230]" />
+                Pre-Orders
+              </span>
+            </Button>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" className="gap-1" disabled>
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              Pre-Orders
+            </Button>
+          )}
         </div>
 
-        {/* Canteen selector — to the right of tabs */}
-        <CanteenSelector
-          value={selectedCanteen}
-          onChange={setSelectedCanteen}
-          showAll
-          compact
-        />
+        {/* Canteen selector — only for menu view */}
+        {activeView === "menu" && (
+          <CanteenSelector
+            value={selectedCanteen}
+            onChange={setSelectedCanteen}
+            showAll
+            compact
+            includeInactive
+          />
+        )}
       </div>
 
-      {items.length === 0 ? (
+      {activeView === "pre-orders" ? (
+        <PreOrdersPage embedded />
+      ) : menuMeta.selectedCanteenClosed ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h2 className="text-lg font-semibold">This canteen is currently closed</h2>
+          <p className="text-sm text-muted-foreground">
+            {menuMeta.selectedCanteenName
+              ? `${menuMeta.selectedCanteenName} is not serving right now. Please select another canteen.`
+              : "Please select another active canteen."}
+          </p>
+        </div>
+      ) : !menuMeta.hasActiveCanteens ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h2 className="text-lg font-semibold">All canteens are closed</h2>
+          <p className="text-sm text-muted-foreground">
+            No active canteens are serving at the moment. Please check again later.
+          </p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
           <h2 className="text-lg font-semibold">No items available</h2>

@@ -147,7 +147,12 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60">
+      <header
+        className={cn(
+          "sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60",
+          !isAdmin && "border-b border-border/50",
+        )}
+      >
         <div className="container mx-auto flex h-14 md:h-16 items-center justify-between px-4 md:px-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">

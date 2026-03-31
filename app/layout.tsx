@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cafe-venus.onrender.com"),
+  metadataBase: new URL("https://certe.in"),
 
   title: {
     default: "certe — Smart School Canteen, Campus Payments & Student Management",
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     "identity infrastructure",
   ],
 
-  authors: [{ name: "certe", url: "https://cafe-venus.onrender.com" }],
+  authors: [{ name: "certe", url: "https://certe.in" }],
   creator: "certe",
   publisher: "certe",
 
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
 
   openGraph: {
     type: "website",
-    url: "https://cafe-venus.onrender.com",
+    url: "https://certe.in",
     title: "certe — Smart School Canteen, Campus Payments & Student Management",
     description:
       "Pre-order meals, manage wallets, track attendance and run a digital library — all from one cashless, real-time platform. Contact: 9175113313 | eeshanvaidya14@gmail.com",
@@ -103,7 +103,7 @@ export const metadata: Metadata = {
   },
 
   alternates: {
-    canonical: "https://cafe-venus.onrender.com",
+    canonical: "https://certe.in",
   },
 
   category: "education",
@@ -139,7 +139,7 @@ export default function RootLayout({
               name: "certe",
               applicationCategory: "EducationalApplication",
               operatingSystem: "Web",
-              url: "https://cafe-venus.onrender.com",
+              url: "https://certe.in",
               description:
                 "Smart school canteen and campus management platform — pre-order meals, cashless wallets, gate attendance, and digital library.",
               offers: {

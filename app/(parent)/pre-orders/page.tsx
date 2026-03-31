@@ -162,7 +162,7 @@ function createClientId() {
   return `po-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export default function PreOrdersPage() {
+export default function PreOrdersPage({ embedded = false }: { embedded?: boolean }) {
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
@@ -610,7 +610,7 @@ export default function PreOrdersPage() {
   }
 
   return (
-    <div className="app-shell space-y-5 pb-28">
+    <div className={embedded ? "space-y-5 pb-28" : "app-shell space-y-5 pb-28"}>
       {/* ── Premium Hero ──────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 p-5 text-white dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:border dark:border-white/5">
         <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
@@ -654,6 +654,7 @@ export default function PreOrdersPage() {
               onChange={setSelectedCanteen}
               showAll
               compact
+              includeInactive
             />
             <p className="mt-1 text-xs text-muted-foreground">
               Ordering from: <span className="font-medium text-foreground">{selectedCanteenLabel}</span>

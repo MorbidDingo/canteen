@@ -15,7 +15,6 @@ import {
   IndianRupee,
   Sparkles,
   MessageSquareText,
-  Store,
   Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -277,6 +276,11 @@ function ParentLayoutContent({
     void fetchNotifications();
   }, [fetchNotifications]);
 
+  // Keep header balance chip populated even when wallet icon is removed
+  useEffect(() => {
+    void fetchWallets();
+  }, [fetchWallets]);
+
   useEffect(() => {
     if (!walletDrawerOpen) return;
     void fetchWallets();
@@ -404,21 +408,8 @@ function ParentLayoutContent({
             </Link>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* Wallet + Notification bubble */}
+              {/* Notification bubble */}
               <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
-                {parentMode === "canteen" && (
-                  <button
-                    type="button"
-                    aria-label="Open family wallet"
-                    onClick={() => {
-                      blurFocusedElement();
-                      setWalletDrawerOpen(true);
-                    }}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-foreground/85 transition-colors hover:bg-accent"
-                  >
-                    <Wallet className="h-5 w-5" />
-                  </button>
-                )}
                 <ParentNotificationBell
                   parentId={session?.user?.id}
                   externalUnreadCount={notifUnreadCount}
@@ -500,15 +491,6 @@ function ParentLayoutContent({
                 />
               )}
 
-              {pathname === "/cart" && parentMode === "canteen" && (
-                <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur-sm">
-                  <Store className="h-3.5 w-3.5 shrink-0 text-[#d4891a]" />
-                  <span className="max-w-[120px] truncate sm:max-w-[160px]">
-                    {cartItems[0]?.canteenName ?? "Cart"}
-                  </span>
-                </div>
-              )}
-
               {showHeaderContextSelector && parentMode === "library" && (
                 <LibrarySelector
                   value={selectedLibrary}
@@ -519,19 +501,17 @@ function ParentLayoutContent({
                 />
               )}
 
-              {parentMode === "canteen" && totalWalletBalance > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    blurFocusedElement();
-                    setWalletDrawerOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
-                >
-                  <IndianRupee className="h-3 w-3 text-primary" />
-                  <span>₹{totalWalletBalance.toFixed(0)}</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  blurFocusedElement();
+                  setWalletDrawerOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
+              >
+                <IndianRupee className="h-3 w-3 text-primary" />
+                <span>{totalWalletBalance.toFixed(0)}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -542,10 +522,10 @@ function ParentLayoutContent({
       </div>
 
       <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex items-end justify-center gap-2 px-3">
+        <div className="mx-auto flex items-end justify-center gap-4 px-3">
           {/* iOS-style compact tab bar */}
           <div className={cn(
-            "relative flex items-stretch rounded-2xl border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+            "w-70 h-16 flex items-stretch justify-between rounded-[72px] border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
             "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
             "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
           )}>
@@ -565,12 +545,12 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5"
+                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-5 py-1.5"
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute inset-0 rounded-xl bg-primary/10 dark:bg-primary/20"
+                      className="absolute inset-0 rounded-4xl bg-primary/10 dark:bg-primary/20"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
@@ -628,7 +608,7 @@ function ParentLayoutContent({
               <Link
                 href={profileTab.href}
                 className={cn(
-                  "relative flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
+                  "relative bottom-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
                   "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
                   "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
                   isActive && "ring-2 ring-primary/40",
@@ -636,7 +616,7 @@ function ParentLayoutContent({
               >
                 <motion.div whileTap={{ scale: 0.85 }}>
                   <Avatar className={cn(
-                    "h-7 w-7 ring-1 transition-all duration-200",
+                    "h-12 w-12 ring-1 transition-all duration-200",
                     isActive ? "ring-primary/40" : "ring-primary/20",
                   )}>
                     <AvatarFallback className={cn(

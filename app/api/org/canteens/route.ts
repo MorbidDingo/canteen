@@ -116,6 +116,41 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const data = updateSchema.parse(body);
 
+    if (access.membershipRole === "ADMIN") {
+      const accessibleDeviceIds = await getUserAccessibleDeviceIds({
+        organizationId: access.activeOrganizationId!,
+        userId: access.actorUserId,
+        allowedDeviceTypes: ["KIOSK"],
+      });
+
+      if (accessibleDeviceIds.length === 0) {
+        return NextResponse.json({ error: "No assigned canteens found" }, { status: 403 });
+      }
+
+      const allowedRows = await db
+        .select({ canteenId: organizationDevice.canteenId })
+        .from(organizationDevice)
+        .where(
+          and(
+            eq(organizationDevice.organizationId, access.activeOrganizationId!),
+            inArray(organizationDevice.id, accessibleDeviceIds),
+          ),
+        );
+
+      const allowedCanteenIds = new Set(
+        allowedRows
+          .map((row) => row.canteenId)
+          .filter((id): id is string => Boolean(id)),
+      );
+
+      if (!allowedCanteenIds.has(data.id)) {
+        return NextResponse.json(
+          { error: "You can only update canteens assigned to your devices" },
+          { status: 403 },
+        );
+      }
+    }
+
     const [updated] = await db
       .update(canteen)
       .set({

@@ -19,9 +19,10 @@ interface CanteenSelectorProps {
   showAll?: boolean;
   className?: string;
   compact?: boolean;
+  includeInactive?: boolean;
 }
 
-export function CanteenSelector({ value, onChange, showAll = false, className, compact = false }: CanteenSelectorProps) {
+export function CanteenSelector({ value, onChange, showAll = false, className, compact = false, includeInactive = false }: CanteenSelectorProps) {
   const [canteens, setCanteens] = useState<Canteen[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -30,21 +31,24 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
       const res = await fetch("/api/org/canteens", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { canteens: Canteen[] };
-      const active = (data.canteens || []).filter((c) => c.status === "ACTIVE");
-      setCanteens(active);
+      const allCanteens = data.canteens || [];
+      const visibleCanteens = includeInactive
+        ? allCanteens
+        : allCanteens.filter((c) => c.status === "ACTIVE");
+      setCanteens(visibleCanteens);
 
       // Reset stale value that doesn't match any loaded canteen
-      if (value && !active.some((c) => c.id === value)) {
+      if (value && !visibleCanteens.some((c) => c.id === value)) {
         onChange(null);
       }
       // Auto-select first canteen if none selected and showAll is off
-      else if (!value && active.length >= 1 && !showAll) {
-        onChange(active[0].id);
+      else if (!value && visibleCanteens.length >= 1 && !showAll) {
+        onChange(visibleCanteens[0].id);
       }
     } finally {
       setLoading(false);
     }
-  }, [onChange, value, showAll]);
+  }, [includeInactive, onChange, value, showAll]);
 
   useEffect(() => {
     void load();
@@ -113,6 +117,11 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
           <SelectItem key={c.id} value={c.id} className="rounded-lg">
             <div className="flex items-center gap-1.5">
               <span>{c.name}</span>
+              {includeInactive && c.status !== "ACTIVE" && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  Closed
+                </Badge>
+              )}
               {c.location && (
                 <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                   <MapPin className="h-3 w-3" />

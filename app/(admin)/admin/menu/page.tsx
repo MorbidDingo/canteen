@@ -18,8 +18,6 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
@@ -39,6 +37,8 @@ import {
   X,
   Loader2,
   Video,
+  Power,
+  PowerOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { emitEvent, useRealtimeData } from "@/lib/events";
@@ -62,6 +62,12 @@ interface MenuItem {
   subscribable: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+interface CanteenEntity {
+  id: string;
+  name: string;
+  status: "ACTIVE" | "INACTIVE";
 }
 
 interface FormData {
@@ -92,14 +98,144 @@ const emptyForm: FormData = {
   subscribable: true,
 };
 
+const MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024;
+
+function pickRecorderMimeType() {
+  const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  for (const mime of candidates) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(mime)) {
+      return mime;
+    }
+  }
+  return "video/webm";
+}
+
+async function loadVideoElementFromFile(file: File) {
+  const video = document.createElement("video");
+  video.preload = "auto";
+  video.muted = true;
+  video.playsInline = true;
+  const objectUrl = URL.createObjectURL(file);
+
+  await new Promise<void>((resolve, reject) => {
+    video.onloadedmetadata = () => resolve();
+    video.onerror = () => reject(new Error("Failed to read selected video."));
+    video.src = objectUrl;
+  });
+
+  return { video, objectUrl };
+}
+
+async function transcodeVideoAttempt(file: File, bitrate: number, scale: number): Promise<File> {
+  const { video, objectUrl } = await loadVideoElementFromFile(file);
+
+  try {
+    const capture = HTMLCanvasElement.prototype.captureStream as
+      | ((this: HTMLCanvasElement, frameRate?: number) => MediaStream)
+      | undefined;
+    if (!capture) {
+      throw new Error("Video compression is not supported in this browser.");
+    }
+
+    const width = Math.max(320, Math.floor(video.videoWidth * scale));
+    const height = Math.max(240, Math.floor(video.videoHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to initialize video compressor.");
+
+    const canvasStream = capture.call(canvas, 24);
+    const inputStream = (video as unknown as { captureStream?: () => MediaStream }).captureStream?.();
+    const mixedStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...(inputStream?.getAudioTracks() ?? []),
+    ]);
+
+    const mimeType = pickRecorderMimeType();
+    const recorder = new MediaRecorder(mixedStream, {
+      mimeType,
+      videoBitsPerSecond: bitrate,
+    });
+    const chunks: BlobPart[] = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+
+    const done = new Promise<Blob>((resolve, reject) => {
+      recorder.onerror = () => reject(new Error("Video compression failed."));
+      recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+    });
+
+    let raf = 0;
+    const draw = () => {
+      if (video.ended || video.paused) return;
+      ctx.drawImage(video, 0, 0, width, height);
+      raf = requestAnimationFrame(draw);
+    };
+
+    recorder.start(1000);
+    await video.play();
+    draw();
+
+    await new Promise<void>((resolve) => {
+      video.onended = () => resolve();
+    });
+
+    cancelAnimationFrame(raf);
+    recorder.stop();
+    const blob = await done;
+
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}-compressed.webm`, {
+      type: blob.type || "video/webm",
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function compressVideoBelow20MB(
+  file: File,
+  onStep?: (text: string) => void,
+): Promise<File> {
+  if (file.size <= MAX_VIDEO_SIZE_BYTES) return file;
+
+  const attempts: Array<{ bitrate: number; scale: number; label: string }> = [
+    { bitrate: 1_400_000, scale: 1, label: "Compressing video (pass 1/5)" },
+    { bitrate: 1_000_000, scale: 0.9, label: "Compressing video (pass 2/5)" },
+    { bitrate: 800_000, scale: 0.82, label: "Compressing video (pass 3/5)" },
+    { bitrate: 620_000, scale: 0.74, label: "Compressing video (pass 4/5)" },
+    { bitrate: 450_000, scale: 0.66, label: "Compressing video (pass 5/5)" },
+  ];
+
+  let candidate: File = file;
+  for (const attempt of attempts) {
+    onStep?.(attempt.label);
+    try {
+      candidate = await transcodeVideoAttempt(candidate, attempt.bitrate, attempt.scale);
+      if (candidate.size <= MAX_VIDEO_SIZE_BYTES) {
+        return candidate;
+      }
+    } catch {
+      // Try the next settings profile.
+    }
+  }
+
+  throw new Error("Could not compress video below 20MB. Try trimming the video and upload again.");
+}
+
 export default function AdminMenuPage() {
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [canteens, setCanteens] = useState<CanteenEntity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canteensLoading, setCanteensLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [formData, setFormData] = useState<FormData>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [togglingCanteenId, setTogglingCanteenId] = useState<string | null>(null);
   const {
     value: selectedCanteen,
     setValue: setSelectedCanteen,
@@ -123,10 +259,25 @@ export default function AdminMenuPage() {
     }
   }, [selectedCanteen]);
 
+  const fetchCanteens = useCallback(async () => {
+    try {
+      setCanteensLoading(true);
+      const res = await fetch("/api/org/canteens", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch canteens");
+      const data = (await res.json()) as { canteens: CanteenEntity[] };
+      setCanteens(data.canteens ?? []);
+    } catch {
+      toast.error("Failed to load canteens");
+    } finally {
+      setCanteensLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!canteenScopeHydrated) return;
-    fetchItems();
-  }, [fetchItems, canteenScopeHydrated]);
+    void fetchItems();
+    void fetchCanteens();
+  }, [fetchItems, fetchCanteens, canteenScopeHydrated]);
 
   // Instant refresh via SSE when any menu event occurs
   useRealtimeData(fetchItems, "menu-updated");
@@ -256,6 +407,29 @@ export default function AdminMenuPage() {
     }
   };
 
+  const toggleCanteenStatus = async (canteen: CanteenEntity) => {
+    setTogglingCanteenId(canteen.id);
+    try {
+      const nextStatus = canteen.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      const res = await fetch("/api/org/canteens", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: canteen.id, status: nextStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to update canteen");
+      }
+      toast.success(nextStatus === "ACTIVE" ? "Canteen opened" : "Canteen closed");
+      await Promise.all([fetchCanteens(), fetchItems()]);
+      emitEvent("menu-updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update canteen");
+    } finally {
+      setTogglingCanteenId(null);
+    }
+  };
+
   const categorized = Object.values(MENU_CATEGORIES).map((cat) => ({
     category: cat,
     label: MENU_CATEGORY_LABELS[cat],
@@ -289,12 +463,7 @@ export default function AdminMenuPage() {
                   <span className="hidden xs:inline">Add Item</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingItem ? "Edit Menu Item" : "Add Menu Item"}
-                  </DialogTitle>
-                </DialogHeader>
+              <DialogContent className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:max-w-lg md:max-w-xl max-h-[92svh] overflow-hidden p-0">
                 <MenuItemForm
                   formData={formData}
                   setFormData={setFormData}
@@ -311,7 +480,55 @@ export default function AdminMenuPage() {
           onChange={setSelectedCanteen}
           showAll
           compact
+          includeInactive
         />
+
+        <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Canteen serving control
+          </p>
+          {canteensLoading ? (
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading canteens...
+            </div>
+          ) : canteens.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">No canteens assigned to your account.</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {canteens.map((canteen) => {
+                const isOpen = canteen.status === "ACTIVE";
+                return (
+                  <div key={canteen.id} className="flex items-center justify-between gap-2 rounded-lg border bg-background px-2.5 py-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium">{canteen.name}</span>
+                      <Badge variant={isOpen ? "default" : "secondary"} className="text-[10px]">
+                        {isOpen ? "Open" : "Closed"}
+                      </Badge>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isOpen ? "destructive" : "default"}
+                      className="h-7 gap-1 px-2 text-xs"
+                      disabled={togglingCanteenId === canteen.id}
+                      onClick={() => void toggleCanteenStatus(canteen)}
+                    >
+                      {togglingCanteenId === canteen.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : isOpen ? (
+                        <PowerOff className="h-3 w-3" />
+                      ) : (
+                        <Power className="h-3 w-3" />
+                      )}
+                      {isOpen ? "Close" : "Open"}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -479,6 +696,7 @@ function MenuItemForm({
   const [uploading, setUploading] = useState(false);
   const [videoUploading, setVideoUploading] = useState(false);
   const [additionalImageUploading, setAdditionalImageUploading] = useState(false);
+  const [videoUploadStage, setVideoUploadStage] = useState<string>("");
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -488,6 +706,7 @@ function MenuItemForm({
     try {
       const form = new globalThis.FormData();
       form.append("file", file);
+      form.append("kind", "image");
 
       const res = await fetch("/api/admin/upload", {
         method: "POST",
@@ -518,11 +737,19 @@ function MenuItemForm({
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      toast.error("Please select a video file.");
+      return;
+    }
 
     setVideoUploading(true);
+    setVideoUploadStage("Preparing video...");
     try {
+      const compressed = await compressVideoBelow20MB(file, setVideoUploadStage);
       const form = new globalThis.FormData();
-      form.append("file", file);
+      form.append("file", compressed);
+      form.append("kind", "video");
+      setVideoUploadStage("Uploading compressed video...");
 
       const res = await fetch("/api/admin/upload", {
         method: "POST",
@@ -534,13 +761,14 @@ function MenuItemForm({
         throw new Error(data.error || "Upload failed");
       }
 
-      const { imageUrl } = await res.json();
-      setFormData({ ...formData, videoUrl: imageUrl });
+      const { assetUrl, imageUrl } = await res.json();
+      setFormData({ ...formData, videoUrl: (assetUrl as string) || (imageUrl as string) });
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to upload video",
       );
     } finally {
+      setVideoUploadStage("");
       setVideoUploading(false);
       if (videoInputRef.current) videoInputRef.current.value = "";
     }
@@ -554,6 +782,7 @@ function MenuItemForm({
     try {
       const form = new globalThis.FormData();
       form.append("file", file);
+      form.append("kind", "image");
 
       const res = await fetch("/api/admin/upload", {
         method: "POST",
@@ -588,7 +817,8 @@ function MenuItemForm({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex max-h-[82svh] flex-col">
+      <div className="space-y-4 overflow-y-auto px-4 pb-4 pt-2 sm:px-6">
       {/* Image Upload */}
       <div className="space-y-2">
         <Label>Food Photo</Label>
@@ -642,9 +872,11 @@ function MenuItemForm({
       <div className="space-y-2">
         <Label>Video (optional)</Label>
         {formData.videoUrl ? (
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-            <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm truncate flex-1">{formData.videoUrl.split("/").pop()}</span>
+          <div className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+            <Video className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="min-w-0 flex-1 whitespace-normal break-all text-sm leading-tight">
+              {formData.videoUrl.split("/").pop()}
+            </span>
             <button
               type="button"
               onClick={() => setFormData({ ...formData, videoUrl: "" })}
@@ -663,12 +895,12 @@ function MenuItemForm({
             {videoUploading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-xs">Uploading video...</span>
+                <span className="text-xs">{videoUploadStage || "Uploading video..."}</span>
               </>
             ) : (
               <>
                 <Video className="h-5 w-5" />
-                <span className="text-xs">Upload a video for this item</span>
+                <span className="text-xs">Upload a video for this item (auto-compressed to under 20MB)</span>
               </>
             )}
           </button>
@@ -844,13 +1076,17 @@ function MenuItemForm({
         </Label>
       </div>
 
-      <Button
-        className="w-full"
-        onClick={onSave}
-        disabled={saving || uploading}
-      >
-        {saving ? "Saving..." : isEdit ? "Update Item" : "Create Item"}
-      </Button>
+      </div>
+
+      <div className="border-t bg-background px-4 py-3 sm:px-6">
+        <Button
+          className="w-full"
+          onClick={onSave}
+          disabled={saving || uploading || videoUploading || additionalImageUploading}
+        >
+          {saving ? "Saving..." : isEdit ? "Update Item" : "Create Item"}
+        </Button>
+      </div>
     </div>
   );
 }
