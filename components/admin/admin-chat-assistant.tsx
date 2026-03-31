@@ -60,7 +60,7 @@ const ADMIN_PROMPT_CATEGORIES: PromptCategory[] = [
   {
     title: "Insights",
     prompts: [
-      { label: "How much to prep today?", icon: "🔮" },
+      { label: "How much to prep today?", icon: "📦" },
       { label: "Revenue trend this week", icon: "📈" },
       { label: "Show waste analysis", icon: "♻️" },
     ],

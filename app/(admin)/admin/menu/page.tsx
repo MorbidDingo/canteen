@@ -109,6 +109,10 @@ const emptyForm: FormData = {
 
 const MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024;
 
+function formatPrice(price: number): string {
+  return price % 1 === 0 ? `₹${price}` : `₹${price.toFixed(2)}`;
+}
+
 function pickRecorderMimeType() {
   const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
   for (const mime of candidates) {
@@ -478,7 +482,7 @@ export default function AdminMenuPage() {
               onClick={fetchItems}
               disabled={loading}
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -542,7 +546,10 @@ export default function AdminMenuPage() {
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
-                        className={`h-2 w-2 rounded-full shrink-0 ${isOpen ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
+                        className={cn(
+                          "h-2 w-2 rounded-full shrink-0",
+                          isOpen ? "bg-emerald-500" : "bg-muted-foreground/30",
+                        )}
                       />
                       <span className="truncate text-sm font-medium">{canteen.name}</span>
                     </div>
@@ -641,7 +648,7 @@ export default function AdminMenuPage() {
                           <div className="flex items-baseline justify-between gap-2">
                             <span className="font-medium truncate text-sm">{item.name}</span>
                             <span className="font-semibold text-sm tabular-nums shrink-0">
-                              ₹{item.price % 1 === 0 ? item.price : item.price.toFixed(2)}
+                              {formatPrice(item.price)}
                             </span>
                           </div>
                           {item.description && (
