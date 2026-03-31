@@ -22,9 +22,13 @@ import { cn } from "@/lib/utils";
 // ─── Admin-Specific Suggested Prompts ───────────────────
 
 const ADMIN_PROMPTS = [
+  { label: "Close all canteens", icon: "🔒" },
+  { label: "Open all canteens", icon: "🔓" },
+  { label: "Mark all items unavailable", icon: "🚫" },
+  { label: "Start preparing all placed orders", icon: "👨‍🍳" },
+  { label: "Cancel all placed orders", icon: "❌" },
   { label: "How much to prep today?", icon: "📦" },
   { label: "Revenue trend this week", icon: "📈" },
-  { label: "Which items are declining?", icon: "📉" },
   { label: "Show waste analysis", icon: "♻️" },
 ] as const;
 

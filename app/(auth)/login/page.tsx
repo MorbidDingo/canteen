@@ -149,7 +149,13 @@ export default function LoginPage() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message || "Invalid email or password");
+      // Session limit reached — user is already logged in on max devices
+      const msg = error.message?.toLowerCase() ?? "";
+      if (msg.includes("session") || error.status === 403) {
+        toast.error("You are already logged in on the maximum number of devices. Please log out from another device first.");
+      } else {
+        toast.error(error.message || "Invalid email or password");
+      }
       return;
     }
 

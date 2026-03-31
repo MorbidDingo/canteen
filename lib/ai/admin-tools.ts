@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { menuItem, discount } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { menuItem, discount, canteen, order, orderItem } from "@/lib/db/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { getSummary } from "@/lib/statistics";
 import { getFullAnalytics } from "@/lib/analytics";
 import {
@@ -11,6 +11,8 @@ import {
   getCustomerSegmentation,
   getOptimalPrepQuantities,
 } from "@/lib/ml/admin-insights";
+import { broadcast } from "@/lib/sse";
+import { incrementUnits } from "@/lib/units";
 import type Anthropic from "@anthropic-ai/sdk";
 
 // ─── Context passed to every admin tool handler ──────────
@@ -153,6 +155,110 @@ export const ADMIN_TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: [],
     },
   },
+
+  // ─── ACTION TOOLS ─────────────────────────────────────
+
+  {
+    name: "toggle_canteen_status",
+    description:
+      "Open or close one or multiple canteens. Changes canteen status between ACTIVE (open) and INACTIVE (closed).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        canteen_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of canteen IDs to toggle. Use get_canteens first to find IDs.",
+        },
+        status: {
+          type: "string",
+          enum: ["ACTIVE", "INACTIVE"],
+          description: "Target status: ACTIVE = open, INACTIVE = closed.",
+        },
+      },
+      required: ["canteen_ids", "status"],
+    },
+  },
+  {
+    name: "get_canteens",
+    description:
+      "Get all canteens in the organization with their current status (ACTIVE/INACTIVE), name, and location.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "set_item_availability",
+    description:
+      "Make one or multiple menu items available or unavailable for ordering.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of menu item IDs to update. Use get_menu_items first to find IDs.",
+        },
+        available: {
+          type: "boolean",
+          description: "true = available for ordering, false = unavailable.",
+        },
+      },
+      required: ["item_ids", "available"],
+    },
+  },
+  {
+    name: "update_item_quantity",
+    description:
+      "Change the available units (stock quantity) of a menu item. Set to 0 for sold out, null for unlimited.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        item_id: {
+          type: "string",
+          description: "The menu item ID to update.",
+        },
+        available_units: {
+          type: ["number", "null"],
+          description: "New unit count. 0 = sold out, null = unlimited, positive number = exact stock.",
+        },
+      },
+      required: ["item_id", "available_units"],
+    },
+  },
+  {
+    name: "update_order_status",
+    description:
+      "Change the status of one or multiple orders. Valid transitions: PLACED → PREPARING or CANCELLED, PREPARING → SERVED. Cancelling a paid order refunds wallet and restores stock.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        order_ids: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of order IDs to update.",
+        },
+        status: {
+          type: "string",
+          enum: ["PREPARING", "SERVED", "CANCELLED"],
+          description: "Target status for the orders.",
+        },
+      },
+      required: ["order_ids", "status"],
+    },
+  },
+  {
+    name: "get_active_orders",
+    description:
+      "Get all currently active (non-terminal) orders: PLACED and PREPARING. Use this to find order IDs before changing status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
+    },
+  },
 ];
 
 // ─── Tool Dispatcher ─────────────────────────────────────
@@ -183,6 +289,18 @@ export async function executeAdminTool(
       return handleGetMenuItems(ctx);
     case "get_active_discounts":
       return handleGetActiveDiscounts(ctx);
+    case "toggle_canteen_status":
+      return handleToggleCanteenStatus(ctx, input);
+    case "get_canteens":
+      return handleGetCanteens(ctx);
+    case "set_item_availability":
+      return handleSetItemAvailability(ctx, input);
+    case "update_item_quantity":
+      return handleUpdateItemQuantity(ctx, input);
+    case "update_order_status":
+      return handleUpdateOrderStatus(ctx, input);
+    case "get_active_orders":
+      return handleGetActiveOrders(ctx);
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
@@ -407,5 +525,268 @@ async function handleGetActiveDiscounts(
     return JSON.stringify(discounts);
   } catch (e) {
     return JSON.stringify({ error: `Failed to get discounts: ${formatError(e)}` });
+  }
+}
+
+// ─── ACTION Tool Handlers ────────────────────────────────
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  PLACED: ["PREPARING", "CANCELLED"],
+  PREPARING: ["SERVED"],
+  SERVED: [],
+  CANCELLED: [],
+};
+
+async function handleToggleCanteenStatus(
+  ctx: AdminToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  try {
+    const canteenIds = input.canteen_ids as string[];
+    const status = input.status as "ACTIVE" | "INACTIVE";
+
+    if (!canteenIds?.length) return JSON.stringify({ error: "No canteen IDs provided" });
+    if (!["ACTIVE", "INACTIVE"].includes(status)) {
+      return JSON.stringify({ error: "Status must be ACTIVE or INACTIVE" });
+    }
+
+    const results: { id: string; name: string; status: string }[] = [];
+
+    for (const id of canteenIds) {
+      const [existing] = await db
+        .select({ id: canteen.id, name: canteen.name, organizationId: canteen.organizationId })
+        .from(canteen)
+        .where(and(eq(canteen.id, id), eq(canteen.organizationId, ctx.orgId)))
+        .limit(1);
+
+      if (!existing) {
+        results.push({ id, name: "unknown", status: "NOT_FOUND" });
+        continue;
+      }
+
+      await db
+        .update(canteen)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(canteen.id, id));
+
+      results.push({ id, name: existing.name, status });
+    }
+
+    broadcast("menu-updated");
+    return JSON.stringify({
+      success: true,
+      message: `Updated ${results.filter((r) => r.status !== "NOT_FOUND").length} canteen(s)`,
+      results,
+    });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to toggle canteen: ${formatError(e)}` });
+  }
+}
+
+async function handleGetCanteens(
+  ctx: AdminToolContext,
+): Promise<string> {
+  try {
+    const canteens = await db
+      .select({
+        id: canteen.id,
+        name: canteen.name,
+        location: canteen.location,
+        status: canteen.status,
+      })
+      .from(canteen)
+      .where(eq(canteen.organizationId, ctx.orgId));
+    return JSON.stringify(canteens);
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to get canteens: ${formatError(e)}` });
+  }
+}
+
+async function handleSetItemAvailability(
+  ctx: AdminToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  try {
+    const itemIds = input.item_ids as string[];
+    const available = input.available as boolean;
+
+    if (!itemIds?.length) return JSON.stringify({ error: "No item IDs provided" });
+
+    // Verify items belong to this org
+    const items = await db
+      .select({ id: menuItem.id, name: menuItem.name })
+      .from(menuItem)
+      .where(
+        and(
+          eq(menuItem.organizationId, ctx.orgId),
+          inArray(menuItem.id, itemIds),
+        ),
+      );
+
+    if (items.length === 0) return JSON.stringify({ error: "No matching items found" });
+
+    await db
+      .update(menuItem)
+      .set({ available, updatedAt: new Date() })
+      .where(
+        and(
+          eq(menuItem.organizationId, ctx.orgId),
+          inArray(menuItem.id, itemIds),
+        ),
+      );
+
+    broadcast("menu-updated");
+    return JSON.stringify({
+      success: true,
+      message: `${items.length} item(s) marked ${available ? "available" : "unavailable"}`,
+      items: items.map((i) => ({ id: i.id, name: i.name, available })),
+    });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to update availability: ${formatError(e)}` });
+  }
+}
+
+async function handleUpdateItemQuantity(
+  ctx: AdminToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  try {
+    const itemId = input.item_id as string;
+    const units = input.available_units as number | null;
+
+    if (!itemId) return JSON.stringify({ error: "No item ID provided" });
+
+    const [item] = await db
+      .select({ id: menuItem.id, name: menuItem.name, availableUnits: menuItem.availableUnits })
+      .from(menuItem)
+      .where(and(eq(menuItem.id, itemId), eq(menuItem.organizationId, ctx.orgId)))
+      .limit(1);
+
+    if (!item) return JSON.stringify({ error: "Item not found" });
+
+    await db
+      .update(menuItem)
+      .set({ availableUnits: units, updatedAt: new Date() })
+      .where(eq(menuItem.id, itemId));
+
+    broadcast("menu-updated");
+    return JSON.stringify({
+      success: true,
+      message: `${item.name}: quantity updated from ${item.availableUnits ?? "unlimited"} to ${units ?? "unlimited"}`,
+      item: { id: item.id, name: item.name, previousUnits: item.availableUnits, newUnits: units },
+    });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to update quantity: ${formatError(e)}` });
+  }
+}
+
+async function handleUpdateOrderStatus(
+  ctx: AdminToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  try {
+    const orderIds = input.order_ids as string[];
+    const newStatus = input.status as string;
+
+    if (!orderIds?.length) return JSON.stringify({ error: "No order IDs provided" });
+    if (!["PREPARING", "SERVED", "CANCELLED"].includes(newStatus)) {
+      return JSON.stringify({ error: "Invalid status. Must be PREPARING, SERVED, or CANCELLED" });
+    }
+
+    const results: { orderId: string; tokenCode: string | null; from: string; to: string; success: boolean; error?: string }[] = [];
+
+    for (const orderId of orderIds) {
+      const [existing] = await db
+        .select({
+          id: order.id,
+          status: order.status,
+          tokenCode: order.tokenCode,
+          totalAmount: order.totalAmount,
+          paymentStatus: order.paymentStatus,
+          childId: order.childId,
+        })
+        .from(order)
+        .where(eq(order.id, orderId))
+        .limit(1);
+
+      if (!existing) {
+        results.push({ orderId, tokenCode: null, from: "?", to: newStatus, success: false, error: "Not found" });
+        continue;
+      }
+
+      const allowed = VALID_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes(newStatus)) {
+        results.push({
+          orderId,
+          tokenCode: existing.tokenCode,
+          from: existing.status,
+          to: newStatus,
+          success: false,
+          error: `Cannot go from ${existing.status} to ${newStatus}`,
+        });
+        continue;
+      }
+
+      // Handle cancellation with refund
+      if (newStatus === "CANCELLED" && existing.paymentStatus === "PAID") {
+        const items = await db
+          .select({ menuItemId: orderItem.menuItemId, quantity: orderItem.quantity })
+          .from(orderItem)
+          .where(eq(orderItem.orderId, orderId));
+
+        if (items.length > 0) {
+          await incrementUnits(items);
+        }
+      }
+
+      await db
+        .update(order)
+        .set({ status: newStatus, updatedAt: new Date() })
+        .where(eq(order.id, orderId));
+
+      results.push({
+        orderId,
+        tokenCode: existing.tokenCode,
+        from: existing.status,
+        to: newStatus,
+        success: true,
+      });
+    }
+
+    broadcast("orders-updated");
+    broadcast("menu-updated");
+
+    const successCount = results.filter((r) => r.success).length;
+    return JSON.stringify({
+      success: successCount > 0,
+      message: `${successCount}/${orderIds.length} order(s) updated to ${newStatus}`,
+      results,
+    });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to update orders: ${formatError(e)}` });
+  }
+}
+
+async function handleGetActiveOrders(
+  ctx: AdminToolContext,
+): Promise<string> {
+  try {
+    const activeOrders = await db
+      .select({
+        id: order.id,
+        tokenCode: order.tokenCode,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        createdAt: order.createdAt,
+      })
+      .from(order)
+      .where(
+        inArray(order.status, ["PLACED", "PREPARING"]),
+      );
+    return JSON.stringify(activeOrders);
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to get active orders: ${formatError(e)}` });
   }
 }

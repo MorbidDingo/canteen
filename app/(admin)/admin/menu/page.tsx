@@ -21,6 +21,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
   MENU_CATEGORIES,
   MENU_CATEGORY_LABELS,
   type MenuCategory,
@@ -39,6 +46,10 @@ import {
   Video,
   Power,
   PowerOff,
+  Search,
+  Package,
+  ChevronRight,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { emitEvent, useRealtimeData } from "@/lib/events";
@@ -236,6 +247,7 @@ export default function AdminMenuPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [togglingCanteenId, setTogglingCanteenId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const {
     value: selectedCanteen,
     setValue: setSelectedCanteen,
