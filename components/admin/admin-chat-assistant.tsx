@@ -19,18 +19,53 @@ import { ChatMessage, type ChatMessageData } from "@/components/ai/chat-message"
 import { MessageSquare, X, Send, Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ─── Admin-Specific Suggested Prompts ───────────────────
+// ─── Admin-Specific Suggested Prompt Categories ─────────
 
-const ADMIN_PROMPTS = [
-  { label: "Close all canteens", icon: "🔒" },
-  { label: "Open all canteens", icon: "🔓" },
-  { label: "Mark all items unavailable", icon: "🚫" },
-  { label: "Start preparing all placed orders", icon: "👨‍🍳" },
-  { label: "Cancel all placed orders", icon: "❌" },
-  { label: "How much to prep today?", icon: "📦" },
-  { label: "Revenue trend this week", icon: "📈" },
-  { label: "Show waste analysis", icon: "♻️" },
-] as const;
+interface PromptItem {
+  label: string;
+  icon: string;
+}
+
+interface PromptCategory {
+  title: string;
+  prompts: PromptItem[];
+}
+
+const ADMIN_PROMPT_CATEGORIES: PromptCategory[] = [
+  {
+    title: "Canteen Control",
+    prompts: [
+      { label: "Close all canteens", icon: "🔒" },
+      { label: "Open all canteens", icon: "🔓" },
+      { label: "Show canteen status", icon: "🏪" },
+    ],
+  },
+  {
+    title: "Menu & Stock",
+    prompts: [
+      { label: "Mark all items unavailable", icon: "🚫" },
+      { label: "Make all items available", icon: "✅" },
+      { label: "Show items running low on stock", icon: "📉" },
+      { label: "Set stock to 50 for all snack items", icon: "📦" },
+    ],
+  },
+  {
+    title: "Order Operations",
+    prompts: [
+      { label: "Start preparing all placed orders", icon: "👨‍🍳" },
+      { label: "Cancel all placed orders", icon: "❌" },
+      { label: "Show all active orders", icon: "📋" },
+    ],
+  },
+  {
+    title: "Insights",
+    prompts: [
+      { label: "How much to prep today?", icon: "📦" },
+      { label: "Revenue trend this week", icon: "📈" },
+      { label: "Show waste analysis", icon: "♻️" },
+    ],
+  },
+];
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -289,18 +324,27 @@ export function AdminChatAssistant() {
               </p>
             </div>
 
-            {/* Suggested Prompts */}
-            <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {ADMIN_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt.label}
-                  type="button"
-                  onClick={() => void sendMessage(prompt.label)}
-                  className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-muted/80 active:scale-[0.97]"
-                >
-                  <span>{prompt.icon}</span>
-                  <span>{prompt.label}</span>
-                </button>
+            {/* Categorized Suggested Prompts */}
+            <div className="mt-3 w-full space-y-3 px-2">
+              {ADMIN_PROMPT_CATEGORIES.map((category) => (
+                <div key={category.title}>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    {category.title}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {category.prompts.map((prompt) => (
+                      <button
+                        key={prompt.label}
+                        type="button"
+                        onClick={() => void sendMessage(prompt.label)}
+                        className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-2.5 py-1 text-[11px] font-medium transition-all hover:bg-primary/10 hover:border-primary/30 active:scale-[0.97]"
+                      >
+                        <span className="text-xs">{prompt.icon}</span>
+                        <span>{prompt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

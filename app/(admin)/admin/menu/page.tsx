@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,14 +46,13 @@ import {
   Power,
   PowerOff,
   Search,
-  Package,
-  ChevronRight,
   MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { emitEvent, useRealtimeData } from "@/lib/events";
 import { CanteenSelector } from "@/components/canteen-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { cn } from "@/lib/utils";
 
 interface MenuItem {
   id: string;
@@ -110,6 +108,10 @@ const emptyForm: FormData = {
 };
 
 const MAX_VIDEO_SIZE_BYTES = 20 * 1024 * 1024;
+
+function formatPrice(price: number): string {
+  return price % 1 === 0 ? `₹${price}` : `₹${price.toFixed(2)}`;
+}
 
 function pickRecorderMimeType() {
   const candidates = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
@@ -442,35 +444,49 @@ export default function AdminMenuPage() {
     }
   };
 
-  const categorized = Object.values(MENU_CATEGORIES).map((cat) => ({
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.toLowerCase();
+    return items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        i.description?.toLowerCase().includes(q) ||
+        i.canteenName?.toLowerCase().includes(q),
+    );
+  }, [items, searchQuery]);
+
+  const filteredCategorized = Object.values(MENU_CATEGORIES).map((cat) => ({
     category: cat,
     label: MENU_CATEGORY_LABELS[cat],
-    items: items.filter((i) => i.category === cat),
+    items: filteredItems.filter((i) => i.category === cat),
   }));
 
   return (
     <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
-      <div className="mb-6 animate-fade-in space-y-3">
+      {/* ─── Header ─────────────────────────────── */}
+      <div className="mb-5 animate-fade-in space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold">Menu Management</h1>
-            <p className="text-muted-foreground text-xs sm:text-sm">
-              Add, edit, and manage menu items
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Menu</h1>
+            <p className="text-muted-foreground text-xs mt-0.5">
+              {items.length} item{items.length !== 1 ? "s" : ""}{" "}
+              {items.filter((i) => i.available).length !== items.length &&
+                `· ${items.filter((i) => i.available).length} available`}
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 rounded-xl"
               onClick={fetchItems}
               disabled={loading}
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-1 h-9" onClick={openCreate}>
+                <Button size="sm" className="gap-1.5 h-9 rounded-xl" onClick={openCreate}>
                   <Plus className="h-4 w-4" />
                   <span className="hidden xs:inline">Add Item</span>
                 </Button>
@@ -487,6 +503,18 @@ export default function AdminMenuPage() {
             </Dialog>
           </div>
         </div>
+
+        {/* ─── Search ─────────────────────────────── */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search items..."
+            className="h-9 rounded-xl bg-muted/40 border-0 pl-9 text-sm placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/30"
+          />
+        </div>
+
         <CanteenSelector
           value={selectedCanteen}
           onChange={setSelectedCanteen}
@@ -495,34 +523,41 @@ export default function AdminMenuPage() {
           includeInactive
         />
 
-        <div className="rounded-xl border border-border/60 bg-muted/25 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Canteen serving control
+        {/* ─── Canteen Serving Control ─────────────── */}
+        <div className="rounded-xl border border-border/40 bg-card/50 p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 mb-2">
+            Canteen Serving Control
           </p>
           {canteensLoading ? (
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Loading canteens...
+              Loading…
             </div>
           ) : canteens.length === 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">No canteens assigned to your account.</p>
+            <p className="text-xs text-muted-foreground">No canteens assigned to your account.</p>
           ) : (
-            <div className="mt-2 space-y-2">
+            <div className="space-y-1.5">
               {canteens.map((canteen) => {
                 const isOpen = canteen.status === "ACTIVE";
                 return (
-                  <div key={canteen.id} className="flex items-center justify-between gap-2 rounded-lg border bg-background px-2.5 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
+                  <div
+                    key={canteen.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/30 bg-background/80 px-3 py-2 transition-colors"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className={cn(
+                          "h-2 w-2 rounded-full shrink-0",
+                          isOpen ? "bg-emerald-500" : "bg-muted-foreground/30",
+                        )}
+                      />
                       <span className="truncate text-sm font-medium">{canteen.name}</span>
-                      <Badge variant={isOpen ? "default" : "secondary"} className="text-[10px]">
-                        {isOpen ? "Open" : "Closed"}
-                      </Badge>
                     </div>
                     <Button
                       type="button"
                       size="sm"
                       variant={isOpen ? "destructive" : "default"}
-                      className="h-7 gap-1 px-2 text-xs"
+                      className="h-7 gap-1 px-2.5 text-xs rounded-lg"
                       disabled={togglingCanteenId === canteen.id}
                       onClick={() => void toggleCanteenStatus(canteen)}
                     >
@@ -543,142 +578,157 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
+      {/* ─── Content ─────────────────────────────── */}
       {loading ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="h-20" />
-            </Card>
+            <div key={i} className="animate-pulse rounded-xl border border-border/30 bg-card/50 p-4">
+              <div className="flex gap-3">
+                <div className="h-12 w-12 rounded-lg bg-muted" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-muted" />
+                  <div className="h-3 w-1/3 rounded bg-muted" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
-      ) : items.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <UtensilsCrossed className="h-12 w-12 mb-2 opacity-40" />
-            <p>No menu items yet</p>
-            <Button variant="link" className="mt-2" onClick={openCreate}>
+      ) : filteredItems.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/50 py-16 text-muted-foreground">
+          <UtensilsCrossed className="h-10 w-10 mb-3 opacity-30" />
+          <p className="text-sm font-medium">
+            {searchQuery ? "No items match your search" : "No menu items yet"}
+          </p>
+          {!searchQuery && (
+            <Button variant="link" size="sm" className="mt-1 text-xs" onClick={openCreate}>
               Add your first item
             </Button>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
-          {categorized
+          {filteredCategorized
             .filter((c) => c.items.length > 0)
             .map(({ category, label, items: catItems }) => (
               <div key={category}>
-                <h2 className="text-lg font-semibold mb-3">{label}</h2>
-                <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <h2 className="text-sm font-semibold tracking-tight">{label}</h2>
+                  <span className="text-[10px] text-muted-foreground/60 font-medium">
+                    {catItems.length}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
                   {catItems.map((item, index) => (
-                    <Card
+                    <div
                       key={item.id}
-                      className={`animate-fade-in-up ${!item.available ? "opacity-60" : ""}`}
-                      style={{ animationDelay: `${index * 40}ms` }}
+                      className={cn(
+                        "group rounded-xl border border-border/30 bg-card/50 p-3 transition-all hover:border-border/60 hover:bg-card/80 animate-fade-in-up",
+                        !item.available && "opacity-50",
+                      )}
+                      style={{ animationDelay: `${index * 30}ms` }}
                     >
-                      <CardContent className="p-3 space-y-2">
-                        {/* Top row: thumbnail + name + price */}
-                        <div className="flex items-start gap-3">
-                          <div className="h-14 w-14 sm:h-12 sm:w-12 rounded-lg overflow-hidden bg-muted shrink-0 flex items-center justify-center">
-                            {item.imageUrl ? (
-                              <Image
-                                src={item.imageUrl}
-                                alt={item.name}
-                                width={56}
-                                height={56}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <UtensilsCrossed className="h-5 w-5 text-muted-foreground/40" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="font-medium truncate text-sm sm:text-base">
-                                {item.name}
-                              </span>
-                              <span className="font-bold whitespace-nowrap text-sm">
-                                ₹{item.price.toFixed(2)}
-                              </span>
-                            </div>
-                            {item.description && (
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                {item.description}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap items-center gap-1 mt-1">
-                              {!item.available && (
-                                <Badge variant="secondary" className="text-[10px]">
-                                  Unavailable
-                                </Badge>
-                              )}
-                              {item.availableUnits !== null && (
-                                <Badge
-                                  variant={item.availableUnits === 0 ? "destructive" : "outline"}
-                                  className="text-[10px]"
-                                >
-                                  {item.availableUnits === 0
-                                    ? "Sold Out"
-                                    : `${item.availableUnits} left`}
-                                </Badge>
-                              )}
-                              {item.availableUnits === null && (
-                                <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                                  ∞
-                                </Badge>
-                              )}
-                              {item.canteenName && (
-                                <Badge variant="outline" className="text-[10px]">
-                                  {item.canteenName}
-                                  {item.canteenLocation ? ` · ${item.canteenLocation}` : ""}
-                                </Badge>
-                              )}
-                              {!item.subscribable && (
-                                <Badge variant="outline" className="text-[10px] text-orange-600">
-                                  No Sub
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
+                      <div className="flex items-start gap-3">
+                        {/* Thumbnail */}
+                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted/60 shrink-0 flex items-center justify-center">
+                          {item.imageUrl ? (
+                            <Image
+                              src={item.imageUrl}
+                              alt={item.name}
+                              width={48}
+                              height={48}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <UtensilsCrossed className="h-4 w-4 text-muted-foreground/30" />
+                          )}
                         </div>
-                        {/* Bottom row: action buttons */}
-                        <div className="flex items-center justify-end gap-1 border-t pt-2 -mb-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1 text-xs"
-                            onClick={() => toggleAvailability(item)}
-                          >
-                            {item.available ? (
-                              <Eye className="h-3.5 w-3.5" />
-                            ) : (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            )}
-                            <span className="hidden sm:inline">
-                              {item.available ? "Hide" : "Show"}
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="font-medium truncate text-sm">{item.name}</span>
+                            <span className="font-semibold text-sm tabular-nums shrink-0">
+                              {formatPrice(item.price)}
                             </span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1 text-xs"
-                            onClick={() => openEdit(item)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Edit</span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1 text-xs text-destructive hover:text-destructive"
-                            disabled={deleting === item.id}
-                            onClick={() => handleDelete(item.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="hidden sm:inline">Delete</span>
-                          </Button>
+                          </div>
+                          {item.description && (
+                            <p className="text-[11px] text-muted-foreground/70 truncate mt-0.5">
+                              {item.description}
+                            </p>
+                          )}
+
+                          {/* Badges */}
+                          <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                            {!item.available && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 rounded-md">
+                                Hidden
+                              </Badge>
+                            )}
+                            {item.availableUnits !== null && (
+                              <Badge
+                                variant={item.availableUnits === 0 ? "destructive" : "outline"}
+                                className="text-[10px] px-1.5 py-0 h-4 rounded-md tabular-nums"
+                              >
+                                {item.availableUnits === 0
+                                  ? "Sold Out"
+                                  : `${item.availableUnits} left`}
+                              </Badge>
+                            )}
+                            {item.availableUnits === null && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 rounded-md text-muted-foreground/60">
+                                ∞ stock
+                              </Badge>
+                            )}
+                            {item.canteenName && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 rounded-md">
+                                {item.canteenName}
+                              </Badge>
+                            )}
+                            {!item.subscribable && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 rounded-md text-orange-500/80">
+                                No Sub
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </CardContent>
-                    </Card>
+
+                        {/* Actions Menu */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 rounded-lg opacity-60 group-hover:opacity-100 transition-opacity"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36">
+                            <DropdownMenuItem onClick={() => toggleAvailability(item)}>
+                              {item.available ? (
+                                <EyeOff className="h-3.5 w-3.5 mr-2" />
+                              ) : (
+                                <Eye className="h-3.5 w-3.5 mr-2" />
+                              )}
+                              {item.available ? "Hide" : "Show"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(item)}>
+                              <Pencil className="h-3.5 w-3.5 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              disabled={deleting === item.id}
+                              onClick={() => handleDelete(item.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
