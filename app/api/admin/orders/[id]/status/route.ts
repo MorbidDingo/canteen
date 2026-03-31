@@ -8,6 +8,7 @@ import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { incrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { createSettlementLedgerEntryForOrder } from "@/lib/settlement-ledger";
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   PLACED: ["PREPARING", "CANCELLED"],
@@ -61,7 +62,9 @@ export async function PATCH(
         tokenCode: order.tokenCode,
         status: order.status,
         totalAmount: order.totalAmount,
+        platformFee: order.platformFee,
         paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
         childOrganizationId: child.organizationId,
         deviceOrganizationId: organizationDevice.organizationId,
       })
@@ -92,6 +95,7 @@ export async function PATCH(
 
     // If cancelling a PAID order, refund wallet + restore stock
     if (newStatus === "CANCELLED" && existingOrder.paymentStatus === "PAID") {
+      const payableAmount = Math.round((existingOrder.totalAmount + (existingOrder.platformFee ?? 0)) * 100) / 100;
       const items = await db
         .select({ menuItemId: orderItem.menuItemId, quantity: orderItem.quantity })
         .from(orderItem)
@@ -121,7 +125,7 @@ export async function PATCH(
             .limit(1);
 
           if (walletRow) {
-            const newBalance = walletRow.balance + existingOrder.totalAmount;
+            const newBalance = walletRow.balance + payableAmount;
 
             await tx
               .update(wallet)
@@ -131,7 +135,7 @@ export async function PATCH(
             await tx.insert(walletTransaction).values({
               walletId: walletRow.id,
               type: "REFUND",
-              amount: existingOrder.totalAmount,
+              amount: payableAmount,
               balanceAfter: newBalance,
               description: `Refund for cancelled order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)}`,
               orderId: id,
@@ -151,6 +155,13 @@ export async function PATCH(
       });
 
       broadcast("menu-updated");
+
+      if (existingOrder.paymentMethod !== "CASH") {
+        await createSettlementLedgerEntryForOrder({
+          orderId: id,
+          entryType: "REVERSAL",
+        });
+      }
     } else {
       await db
         .update(order)

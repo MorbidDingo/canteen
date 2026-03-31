@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Loader2, Save, Settings2, Plus, Trash2, Clock3, Sparkles, Store, Library, Pencil, X, Check, MapPin, Power, PowerOff } from "lucide-react";
+import Link from "next/link";
 import {
   type BreakSlot,
   parseBreakSlots,
@@ -340,6 +341,11 @@ export default function AdminSettingsPage() {
                 Configure premium pre-order rules and break windows used by parents and kiosk automation.
               </p>
             </div>
+          </div>
+          <div className="mt-4 sm:mt-0 sm:ml-auto">
+            <Button asChild variant="secondary" size="sm">
+              <Link href="/admin/settings/settlement">Open Settlement Settings</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

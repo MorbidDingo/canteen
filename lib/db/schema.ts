@@ -527,6 +527,7 @@ export const order = pgTable("order", {
     .notNull()
     .default("PLACED"),
   totalAmount: doublePrecision("total_amount").notNull(),
+  platformFee: doublePrecision("platform_fee").notNull().default(0),
   paymentMethod: text("payment_method", { enum: ["CASH", "UPI", "ONLINE", "WALLET"] }).notNull().default("CASH"),
   paymentStatus: text("payment_status", { enum: ["PAID", "UNPAID"] }).notNull().default("UNPAID"),
   razorpayOrderId: text("razorpay_order_id"),
@@ -546,6 +547,102 @@ export const orderItem = pgTable("order_item", {
   quantity: integer("quantity").notNull().default(1),
   unitPrice: doublePrecision("unit_price").notNull(),
   instructions: text("instructions"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const settlementAccount = pgTable(
+  "settlement_account",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountType: text("account_type", { enum: ["CANTEEN_ADMIN", "MANAGEMENT"] }).notNull(),
+    label: text("label").notNull(),
+    method: text("method", { enum: ["BANK_ACCOUNT", "UPI"] }).notNull(),
+    bankAccountNumber: text("bank_account_number"),
+    bankIfsc: text("bank_ifsc"),
+    bankAccountHolderName: text("bank_account_holder_name"),
+    upiVpa: text("upi_vpa"),
+    razorpayContactId: text("razorpay_contact_id"),
+    razorpayFundAccountId: text("razorpay_fund_account_id"),
+    status: text("status", { enum: ["ACTIVE", "BLOCKED", "PENDING_VERIFICATION"] })
+      .notNull()
+      .default("PENDING_VERIFICATION"),
+    blockedByUserId: text("blocked_by_user_id").references(() => user.id, { onDelete: "set null" }),
+    blockedAt: timestamp("blocked_at"),
+    blockReason: text("block_reason"),
+    createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+    updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    uniqueSettlementAccountDetails: unique("settlement_account_org_user_method_details_unique").on(
+      table.organizationId,
+      table.userId,
+      table.method,
+      table.bankAccountNumber,
+      table.bankIfsc,
+      table.upiVpa,
+    ),
+  }),
+);
+
+export const canteenPaymentRouting = pgTable("canteen_payment_routing", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  canteenId: text("canteen_id")
+    .notNull()
+    .unique()
+    .references(() => canteen.id, { onDelete: "cascade" }),
+  settlementAccountId: text("settlement_account_id")
+    .notNull()
+    .references(() => settlementAccount.id),
+  overriddenByUserId: text("overridden_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  overriddenAt: timestamp("overridden_at"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const settlementLedger = pgTable("settlement_ledger", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  settlementAccountId: text("settlement_account_id").references(() => settlementAccount.id),
+  orderId: text("order_id").references(() => order.id, { onDelete: "set null" }),
+  grossAmount: doublePrecision("gross_amount").notNull(),
+  platformFee: doublePrecision("platform_fee").notNull(),
+  netAmount: doublePrecision("net_amount").notNull(),
+  entryType: text("entry_type", { enum: ["DEBIT", "REVERSAL"] }).notNull(),
+  status: text("status", { enum: ["PENDING", "PROCESSING", "SETTLED", "FAILED"] })
+    .notNull()
+    .default("PENDING"),
+  razorpayPayoutId: text("razorpay_payout_id"),
+  settledAt: timestamp("settled_at"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const settlementBatch = pgTable("settlement_batch", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  settlementAccountId: text("settlement_account_id")
+    .notNull()
+    .references(() => settlementAccount.id),
+  totalGross: doublePrecision("total_gross").notNull(),
+  totalFee: doublePrecision("total_fee").notNull(),
+  totalNet: doublePrecision("total_net").notNull(),
+  orderCount: integer("order_count").notNull().default(0),
+  status: text("status", { enum: ["PENDING", "PROCESSING", "SETTLED", "FAILED", "PARTIALLY_FAILED"] })
+    .notNull()
+    .default("PENDING"),
+  razorpayPayoutId: text("razorpay_payout_id"),
+  processedAt: timestamp("processed_at"),
+  failureReason: text("failure_reason"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -580,6 +677,11 @@ export const userRelations = relations(user, ({ many }) => ({
   assignedDevices: many(organizationDeviceAssignment, { relationName: "organization_device_assignment_user" }),
   createdDeviceAssignments: many(organizationDeviceAssignment, {
     relationName: "organization_device_assignment_created_by",
+  }),
+  settlementAccounts: many(settlementAccount, { relationName: "settlement_account_owner" }),
+  blockedSettlementAccounts: many(settlementAccount, { relationName: "settlement_account_blocked_by" }),
+  overriddenCanteenPaymentRoutings: many(canteenPaymentRouting, {
+    relationName: "canteen_payment_routing_overridden_by",
   }),
 }));
 
@@ -620,6 +722,9 @@ export const organizationRelations = relations(organization, ({ one, many }) => 
   temporaryRfidAccesses: many(temporaryRfidAccess),
   canteens: many(canteen),
   libraries: many(library),
+  settlementAccounts: many(settlementAccount),
+  settlementLedgers: many(settlementLedger),
+  settlementBatches: many(settlementBatch),
 }));
 
 // ─── Canteen & Library Relations ─────────────────────────
@@ -630,6 +735,7 @@ export const canteenRelations = relations(canteen, ({ one, many }) => ({
   orders: many(order),
   preOrders: many(preOrder),
   devices: many(organizationDevice, { relationName: "device_canteen" }),
+  paymentRoutings: many(canteenPaymentRouting),
 }));
 
 export const libraryRelations = relations(library, ({ one, many }) => ({
@@ -842,11 +948,74 @@ export const orderRelations = relations(order, ({ one, many }) => ({
   canteen: one(canteen, { fields: [order.canteenId], references: [canteen.id] }),
   device: one(organizationDevice, { fields: [order.deviceId], references: [organizationDevice.id] }),
   items: many(orderItem),
+  settlementLedgers: many(settlementLedger),
 }));
 
 export const orderItemRelations = relations(orderItem, ({ one }) => ({
   order: one(order, { fields: [orderItem.orderId], references: [order.id] }),
   menuItem: one(menuItem, { fields: [orderItem.menuItemId], references: [menuItem.id] }),
+}));
+
+export const settlementAccountRelations = relations(settlementAccount, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [settlementAccount.organizationId],
+    references: [organization.id],
+  }),
+  user: one(user, {
+    fields: [settlementAccount.userId],
+    references: [user.id],
+    relationName: "settlement_account_owner",
+  }),
+  blockedBy: one(user, {
+    fields: [settlementAccount.blockedByUserId],
+    references: [user.id],
+    relationName: "settlement_account_blocked_by",
+  }),
+  canteenRoutings: many(canteenPaymentRouting),
+  ledgerEntries: many(settlementLedger),
+  batches: many(settlementBatch),
+}));
+
+export const canteenPaymentRoutingRelations = relations(canteenPaymentRouting, ({ one }) => ({
+  canteen: one(canteen, {
+    fields: [canteenPaymentRouting.canteenId],
+    references: [canteen.id],
+  }),
+  settlementAccount: one(settlementAccount, {
+    fields: [canteenPaymentRouting.settlementAccountId],
+    references: [settlementAccount.id],
+  }),
+  overriddenBy: one(user, {
+    fields: [canteenPaymentRouting.overriddenByUserId],
+    references: [user.id],
+    relationName: "canteen_payment_routing_overridden_by",
+  }),
+}));
+
+export const settlementLedgerRelations = relations(settlementLedger, ({ one }) => ({
+  organization: one(organization, {
+    fields: [settlementLedger.organizationId],
+    references: [organization.id],
+  }),
+  settlementAccount: one(settlementAccount, {
+    fields: [settlementLedger.settlementAccountId],
+    references: [settlementAccount.id],
+  }),
+  order: one(order, {
+    fields: [settlementLedger.orderId],
+    references: [order.id],
+  }),
+}));
+
+export const settlementBatchRelations = relations(settlementBatch, ({ one }) => ({
+  organization: one(organization, {
+    fields: [settlementBatch.organizationId],
+    references: [organization.id],
+  }),
+  settlementAccount: one(settlementAccount, {
+    fields: [settlementBatch.settlementAccountId],
+    references: [settlementAccount.id],
+  }),
 }));
 
 export const menuItemRelations = relations(menuItem, ({ one, many }) => ({

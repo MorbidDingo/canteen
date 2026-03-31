@@ -7,6 +7,8 @@ import { getSession } from "@/lib/auth-server";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
+import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { createSettlementLedgerEntryForOrder } from "@/lib/settlement-ledger";
 
 const orderItemSchema = z.object({
   menuItemId: z.string().min(1),
@@ -115,6 +117,8 @@ export async function POST(request: NextRequest) {
     const totalAmount = orderItems.reduce((sum, item) => {
       return sum + effectivePriceMap.get(item.menuItemId)! * item.quantity;
     }, 0);
+    const platformFee = Math.round(totalAmount * (PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+    const payableAmount = Math.round((totalAmount + platformFee) * 100) / 100;
 
     // Validate available units
     const unitError = await validateUnits(
@@ -168,9 +172,9 @@ export async function POST(request: NextRequest) {
 
         walletRow = wallets[0];
 
-        if (walletRow.balance < totalAmount) {
+        if (walletRow.balance < payableAmount) {
           throw new Error(
-            `Insufficient wallet balance. Available: ₹${walletRow.balance.toFixed(2)}, Required: ₹${totalAmount.toFixed(2)}`
+            `Insufficient wallet balance. Available: ₹${walletRow.balance.toFixed(2)}, Required: ₹${payableAmount.toFixed(2)}`
           );
         }
       }
@@ -182,6 +186,7 @@ export async function POST(request: NextRequest) {
           childId: childId || undefined,
           canteenId: resolvedCanteenId || undefined,
           totalAmount,
+          platformFee,
           paymentMethod,
           status: "PLACED",
           paymentStatus: paymentMethod === "WALLET" ? "PAID" : "UNPAID",
@@ -200,7 +205,7 @@ export async function POST(request: NextRequest) {
 
       // Debit wallet if WALLET payment
       if (paymentMethod === "WALLET" && walletRow) {
-        const newBalance = walletRow.balance - totalAmount;
+        const newBalance = walletRow.balance - payableAmount;
 
         await tx
           .update(wallet)
@@ -210,7 +215,7 @@ export async function POST(request: NextRequest) {
         await tx.insert(walletTransaction).values({
           walletId: walletRow.id,
           type: "DEBIT",
-          amount: totalAmount,
+          amount: payableAmount,
           balanceAfter: newBalance,
           description: `Order #${createdOrder.tokenCode || createdOrder.id.slice(0, 6)}`,
           orderId: createdOrder.id,
@@ -228,6 +233,10 @@ export async function POST(request: NextRequest) {
 
     // Emit SSE events
     if (paymentMethod === "WALLET") {
+      await createSettlementLedgerEntryForOrder({
+        orderId: newOrder.id,
+        entryType: "DEBIT",
+      });
       broadcast("menu-updated");
     }
     broadcast("orders-updated");
@@ -244,8 +253,8 @@ export async function POST(request: NextRequest) {
         childId,
         type: "KIOSK_ORDER_GIVEN",
         title: "Order placed",
-        message: `Order #${newOrder.tokenCode || newOrder.id.slice(0, 6)} for ₹${totalAmount} placed via wallet — ${itemNames}.`,
-        metadata: { orderId: newOrder.id, paymentMethod: "WALLET", totalAmount },
+        message: `Order #${newOrder.tokenCode || newOrder.id.slice(0, 6)} for ₹${payableAmount.toFixed(2)} placed via wallet — ${itemNames}.`,
+        metadata: { orderId: newOrder.id, paymentMethod: "WALLET", totalAmount, platformFee, payableAmount },
       }).catch(() => {});
     }
 

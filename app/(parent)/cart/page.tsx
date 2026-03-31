@@ -39,7 +39,7 @@ import {
   Store,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
+import { CERTE_PLUS, PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
 import Link from "next/link";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
@@ -251,7 +251,9 @@ export default function CartPage() {
   }, [paymentMethod]);
 
   const selectedWallet = wallets.find((w) => w.childId === selectedChildId);
-  const total = getTotal();
+  const subtotal = getTotal();
+  const platformFee = Math.round(subtotal * (CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+  const total = Math.round((subtotal + platformFee) * 100) / 100;
   const rawCanteenName = items[0]?.canteenName;
   const orderingCanteenName =
     (rawCanteenName && rawCanteenName !== "Unknown" ? rawCanteenName : null) ||
@@ -312,8 +314,14 @@ export default function CartPage() {
   };
 
   const childTotals = getChildTotals();
+  const childPayableTotals = new Map(
+    [...childTotals.entries()].map(([childId, amount]) => {
+      const fee = Math.round(amount * (CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+      return [childId, Math.round((amount + fee) * 100) / 100] as const;
+    }),
+  );
   const familyWalletBalance = wallets[0]?.balance ?? 0;
-  const familyWalletRequired = [...childTotals.values()].reduce(
+  const familyWalletRequired = [...childPayableTotals.values()].reduce(
     (sum, amount) => sum + amount,
     0
   );
@@ -566,9 +574,12 @@ export default function CartPage() {
             ? await walletsRes.json()
             : [];
 
+          const createdOrderPayableTotal =
+            Math.round(((createdOrder.totalAmount ?? 0) + (createdOrder.platformFee ?? 0)) * 100) / 100;
+
           // Pick the first wallet with enough balance, or the first wallet
           const bestWallet =
-            walletsData.find((w) => w.balance >= createdOrder.totalAmount) ||
+            walletsData.find((w) => w.balance >= createdOrderPayableTotal) ||
             walletsData[0];
 
           if (bestWallet) {
@@ -855,6 +866,14 @@ export default function CartPage() {
               ))}
               <Separator />
               <div className="flex justify-between font-semibold text-lg">
+                <span>Subtotal</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Platform Fee ({CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT}%)</span>
+                <span>₹{platformFee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-semibold text-lg">
                 <span>Total</span>
                 <span>₹{total.toFixed(2)}</span>
               </div>
@@ -1015,7 +1034,7 @@ export default function CartPage() {
                               <p className="text-xs font-medium text-muted-foreground">
                                 Required per child wallet
                               </p>
-                              {[...childTotals.entries()].map(([childId, amount]) => {
+                              {[...childPayableTotals.entries()].map(([childId, amount]) => {
                                 const childName = childNameById.get(childId);
                                 const wallet = wallets.find((w) => w.childId === childId);
                                 const amountClassName =
@@ -1212,6 +1231,16 @@ export default function CartPage() {
               </div>
 
               <Separator />
+
+              <div className="flex justify-between font-bold text-lg">
+                <span>Subtotal</span>
+                <span>₹{subtotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Platform Fee ({CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT}%)</span>
+                <span>₹{platformFee.toFixed(2)}</span>
+              </div>
 
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>

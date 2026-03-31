@@ -5,6 +5,7 @@ import { child, order } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth-server";
 import { getRazorpayForOrganization, getRazorpayPublicKeyForOrganization } from "@/lib/razorpay";
+import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
 
 const createPaymentSchema = z.object({
   orderId: z.string().min(1, "Order ID is required"),
@@ -50,8 +51,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const subtotal = existingOrder.totalAmount;
+    const computedPlatformFee = Math.round(subtotal * (PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+    const platformFee = Math.max(existingOrder.platformFee ?? 0, computedPlatformFee);
+    const total = Math.round((subtotal + platformFee) * 100) / 100;
+
     // Amount in paise (smallest currency unit) — Razorpay expects integer paise
-    const amountInPaise = Math.round(existingOrder.totalAmount * 100);
+    const amountInPaise = Math.round(total * 100);
 
     let organizationId: string | null = null;
     if (existingOrder.childId) {
@@ -80,6 +86,7 @@ export async function POST(request: NextRequest) {
       .set({
         razorpayOrderId: razorpayOrder.id,
         paymentMethod: "ONLINE",
+        platformFee,
         updatedAt: new Date(),
       })
       .where(eq(order.id, orderId));
@@ -89,6 +96,11 @@ export async function POST(request: NextRequest) {
       amount: amountInPaise,
       currency: "INR",
       keyId: await getRazorpayPublicKeyForOrganization(organizationId),
+      breakdown: {
+        subtotal,
+        platformFee,
+        total,
+      },
     });
   } catch (error) {
     console.error("Razorpay order creation error:", error);

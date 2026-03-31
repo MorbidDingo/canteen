@@ -29,6 +29,9 @@ import {
   MonitorCog,
   ChevronsLeft,
   ChevronsRight,
+  Landmark,
+  Route,
+  HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrgSwitcher } from "@/components/org-switcher";
@@ -43,6 +46,9 @@ const links = [
   { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },
+  { href: "/management/settlement-accounts", label: "Settlement Accounts", icon: Landmark },
+  { href: "/management/payment-routing", label: "Payment Routing", icon: Route },
+  { href: "/management/settlements", label: "Settlements", icon: HandCoins },
   { href: "/management/audit", label: "Audit Log", icon: ScrollText },
   { href: "/management/library/books", label: "Library", icon: BookOpen },
 ];

@@ -86,6 +86,7 @@ interface OrderData {
   id: string;
   status: string;
   totalAmount: number;
+  platformFee: number;
   paymentMethod: string;
   paymentStatus: string;
   createdAt: string;
@@ -142,7 +143,7 @@ export default function OrdersPage() {
     for (const o of filteredOrders) {
       if (o.status === "CANCELLED" || o.paymentStatus !== "PAID") continue;
       const week = getWeekStart(new Date(o.createdAt));
-      map.set(week, (map.get(week) ?? 0) + o.totalAmount);
+      map.set(week, (map.get(week) ?? 0) + o.totalAmount + (o.platformFee ?? 0));
     }
     return Array.from(map.entries())
       .sort(([a], [b]) => b.localeCompare(a)) // newest week first
@@ -439,9 +440,17 @@ export default function OrdersPage() {
                         </div>
                       ))}
                       <Separator />
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>₹{order.totalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Platform Fee (2%)</span>
+                        <span>₹{(order.platformFee ?? 0).toFixed(2)}</span>
+                      </div>
                       <div className="flex justify-between font-semibold">
                         <span>Total</span>
-                        <span>₹{order.totalAmount.toFixed(2)}</span>
+                        <span>₹{(order.totalAmount + (order.platformFee ?? 0)).toFixed(2)}</span>
                       </div>
                     </div>
                   </CardContent>

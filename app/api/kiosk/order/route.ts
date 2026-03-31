@@ -15,13 +15,14 @@ import {
   appSetting,
 } from "@/lib/db/schema";
 import { eq, and, gte, sql, asc, inArray, desc } from "drizzle-orm";
-import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS } from "@/lib/constants";
+import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS, PLATFORM_FEE_PERCENT } from "@/lib/constants";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { getCurrentBreakSlot, parseBreakSlots } from "@/lib/break-slots";
 import { resolveChildByRfid } from "@/lib/rfid-access";
 import { resolveOrganizationDeviceFromRequest, touchOrganizationDevice } from "@/lib/device-context";
+import { createSettlementLedgerEntryForOrder } from "@/lib/settlement-ledger";
 
 type IncomingItem = { menuItemId: string; quantity: number };
 
@@ -308,9 +309,12 @@ async function placeOrderFromItems(
     }
   }
 
+  const platformFee = Math.round(total * (PLATFORM_FEE_PERCENT / 100) * 100) / 100;
+  const payableTotal = Math.round((total + platformFee) * 100) / 100;
+
   // Check for Certe+ overdraft eligibility
   let overdraftAllowance = 0;
-  if (studentWallet.balance < total) {
+  if (studentWallet.balance < payableTotal) {
     const now = new Date();
     const [activeSub] = await db
       .select({ id: certeSubscription.id, walletOverdraftUsed: certeSubscription.walletOverdraftUsed })
@@ -329,15 +333,15 @@ async function placeOrderFromItems(
     }
   }
 
-  if (studentWallet.balance + overdraftAllowance < total) {
+  if (studentWallet.balance + overdraftAllowance < payableTotal) {
     return {
       success: false,
-      reason: `Insufficient balance. You have Rs${studentWallet.balance.toFixed(0)}${overdraftAllowance > 0 ? ` (+Rs${overdraftAllowance.toFixed(0)} overdraft)` : ""} but need Rs${total.toFixed(0)}.`,
+      reason: `Insufficient balance. You have Rs${studentWallet.balance.toFixed(0)}${overdraftAllowance > 0 ? ` (+Rs${overdraftAllowance.toFixed(0)} overdraft)` : ""} but need Rs${payableTotal.toFixed(0)}.`,
     };
   }
 
   const tokenCode = generateTokenCode();
-  const newBalance = studentWallet.balance - total;
+  const newBalance = studentWallet.balance - payableTotal;
 
   // Track overdraft usage if balance went negative
   if (newBalance < 0) {
@@ -366,6 +370,7 @@ async function placeOrderFromItems(
       tokenCode,
       status: "PLACED",
       totalAmount: total,
+      platformFee,
       paymentMethod: "WALLET",
       paymentStatus: "PAID",
     })
@@ -388,7 +393,7 @@ async function placeOrderFromItems(
   await db.insert(walletTransaction).values({
     walletId: studentWallet.id,
     type: "DEBIT",
-    amount: total,
+    amount: payableTotal,
     balanceAfter: newBalance,
     description: `${sourceLabel} - Token ${tokenCode}`,
     orderId: newOrder.id,
@@ -398,6 +403,11 @@ async function placeOrderFromItems(
     orderItemsData.map((oi) => ({ menuItemId: oi.menuItemId, quantity: oi.quantity })),
     db as unknown as Parameters<Parameters<typeof db.transaction>[0]>[0],
   );
+
+  await createSettlementLedgerEntryForOrder({
+    orderId: newOrder.id,
+    entryType: "DEBIT",
+  });
 
   broadcast("orders-updated");
   broadcast("menu-updated");
@@ -419,7 +429,9 @@ async function placeOrderFromItems(
       : `Ordered at kiosk: ${formatItemSummary(compactItems)}.`,
     metadata: {
       tokenCode,
-      total,
+      total: payableTotal,
+      subtotal: total,
+      platformFee,
       source: sourceLabel,
       items: compactItems,
       balanceAfter: newBalance,
@@ -435,7 +447,7 @@ async function placeOrderFromItems(
       quantity: oi.quantity,
       subtotal: oi.unitPrice * oi.quantity,
     })),
-    total,
+    total: payableTotal,
     balanceAfter: newBalance,
   };
 }

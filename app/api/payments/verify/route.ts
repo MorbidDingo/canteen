@@ -9,6 +9,7 @@ import { decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { getRazorpaySecretForOrganization } from "@/lib/razorpay";
+import { createSettlementLedgerEntryForOrder } from "@/lib/settlement-ledger";
 
 const verifyPaymentSchema = z.object({
   razorpay_order_id: z.string().min(1),
@@ -114,6 +115,12 @@ export async function POST(request: NextRequest) {
       );
       broadcast("menu-updated");
     }
+
+    await createSettlementLedgerEntryForOrder({
+      orderId,
+      entryType: "DEBIT",
+    });
+
     broadcast("orders-updated");
 
     // Notify parent in real-time about successful payment

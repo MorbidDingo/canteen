@@ -41,6 +41,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   WALLET: "Wallet",
 };
 
+export const PLATFORM_FEE_PERCENT = 2;
+
 export const PAYMENT_STATUS = {
   PAID: "PAID",
   UNPAID: "UNPAID",
@@ -355,7 +357,7 @@ export const CERTE_PLUS = {
   WALLET_OVERDRAFT_LIMIT: 299,
   LIBRARY_PENALTY_ALLOWANCE: 10,
   PRE_ORDER_MIN_SCHOOL_DAYS: 5, // minimum 1 week (5 school days)
-  PRE_ORDER_PLATFORM_FEE_PERCENT: 2, // 2% platform fee on pre-order payments
+  PRE_ORDER_PLATFORM_FEE_PERCENT: PLATFORM_FEE_PERCENT, // 2% platform fee on pre-order payments
 } as const;
 
 // ─── Organization Owner Subscription Plans ──────────────
