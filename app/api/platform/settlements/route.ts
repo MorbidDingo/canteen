@@ -24,7 +24,12 @@ export async function GET(request: NextRequest) {
     });
 
     const url = new URL(request.url);
-    const status = url.searchParams.get("status") || "PENDING";
+    const validStatuses = ["PENDING", "PROCESSING", "SETTLED", "FAILED", "PARTIALLY_FAILED"] as const;
+    type SettlementStatus = (typeof validStatuses)[number];
+    const rawStatus = url.searchParams.get("status");
+    const status: SettlementStatus = rawStatus && (validStatuses as readonly string[]).includes(rawStatus)
+      ? (rawStatus as SettlementStatus)
+      : "PENDING";
 
     const batches = await db
       .select({
