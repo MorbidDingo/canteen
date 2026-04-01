@@ -1,15 +1,13 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { settlementAccount, settlementBatch, settlementLedger } from "@/lib/db/schema";
-import { createPayout, hasRazorpayPayoutCredentials } from "@/lib/razorpay-payout";
 
 export type SettlementProcessSummary = {
   success: boolean;
   source: "cron" | "realtime";
-  batchesInitiated: number;
+  batchesCreated: number;
   skippedBlocked: number;
   skippedNonPositive: number;
-  skippedMissingFundAccount: number;
   errors: Array<{ accountId: string; error: string }>;
   message?: string;
 };
@@ -18,24 +16,16 @@ function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Groups pending settlement ledger entries by account and creates
+ * settlement batches with status PENDING.  The platform owner will
+ * mark batches as SETTLED manually when they pay the vendor.
+ */
 export async function processPendingSettlements(options?: {
   settlementAccountId?: string;
   source?: "cron" | "realtime";
 }): Promise<SettlementProcessSummary> {
   const source = options?.source ?? "cron";
-
-  if (!hasRazorpayPayoutCredentials()) {
-    return {
-      success: true,
-      source,
-      message: "Razorpay payout credentials not configured. No-op run.",
-      batchesInitiated: 0,
-      skippedBlocked: 0,
-      skippedNonPositive: 0,
-      skippedMissingFundAccount: 0,
-      errors: [],
-    };
-  }
 
   const pending = await db
     .select({
@@ -69,10 +59,9 @@ export async function processPendingSettlements(options?: {
     grouped.set(key, current);
   }
 
-  let batchesInitiated = 0;
+  let batchesCreated = 0;
   let skippedBlocked = 0;
   let skippedNonPositive = 0;
-  let skippedMissingFundAccount = 0;
   const errors: Array<{ accountId: string; error: string }> = [];
 
   for (const [key, entries] of grouped.entries()) {
@@ -83,7 +72,6 @@ export async function processPendingSettlements(options?: {
       .select({
         id: settlementAccount.id,
         status: settlementAccount.status,
-        razorpayFundAccountId: settlementAccount.razorpayFundAccountId,
       })
       .from(settlementAccount)
       .where(eq(settlementAccount.id, settlementAccountId))
@@ -91,11 +79,6 @@ export async function processPendingSettlements(options?: {
 
     if (!account || account.status === "BLOCKED") {
       skippedBlocked += 1;
-      continue;
-    }
-
-    if (!account.razorpayFundAccountId) {
-      skippedMissingFundAccount += 1;
       continue;
     }
 
@@ -119,57 +102,24 @@ export async function processPendingSettlements(options?: {
       continue;
     }
 
-    const [batch] = await db
-      .insert(settlementBatch)
-      .values({
-        organizationId,
-        settlementAccountId,
-        totalGross,
-        totalFee,
-        totalNet,
-        orderCount: entries.length,
-        status: "PENDING",
-      })
-      .returning({ id: settlementBatch.id });
-
     try {
-      const payoutId = await createPayout({
-        fundAccountId: account.razorpayFundAccountId,
-        amountPaise: Math.round(totalNet * 100),
-        reference: batch.id,
-      });
-
       await db
-        .update(settlementBatch)
-        .set({
-          status: "PROCESSING",
-          razorpayPayoutId: payoutId,
-          processedAt: new Date(),
-        })
-        .where(eq(settlementBatch.id, batch.id));
+        .insert(settlementBatch)
+        .values({
+          organizationId,
+          settlementAccountId,
+          totalGross,
+          totalFee,
+          totalNet,
+          orderCount: entries.length,
+          status: "PENDING",
+        });
 
-      await db
-        .update(settlementLedger)
-        .set({
-          status: "PROCESSING",
-          razorpayPayoutId: payoutId,
-        })
-        .where(inArray(settlementLedger.id, entries.map((entry) => entry.id)));
-
-      batchesInitiated += 1;
+      batchesCreated += 1;
     } catch (error) {
-      await db
-        .update(settlementBatch)
-        .set({
-          status: "FAILED",
-          failureReason: error instanceof Error ? error.message : "Unknown payout failure",
-          processedAt: new Date(),
-        })
-        .where(eq(settlementBatch.id, batch.id));
-
       errors.push({
         accountId: settlementAccountId,
-        error: error instanceof Error ? error.message : "Unknown payout failure",
+        error: error instanceof Error ? error.message : "Unknown batch creation failure",
       });
     }
   }
@@ -177,10 +127,9 @@ export async function processPendingSettlements(options?: {
   return {
     success: true,
     source,
-    batchesInitiated,
+    batchesCreated,
     skippedBlocked,
     skippedNonPositive,
-    skippedMissingFundAccount,
     errors,
   };
 }

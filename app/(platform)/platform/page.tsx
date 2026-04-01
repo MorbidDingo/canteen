@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, LogOut, RefreshCw } from "lucide-react";
+import { Loader2, LogOut, RefreshCw, CheckCircle, XCircle, IndianRupee } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,48 @@ type ReactivationRequest = {
   createdAt: string;
 };
 
+type SettlementAccountInfo = {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  userId: string;
+  ownerName: string;
+  ownerEmail: string;
+  accountType: string;
+  label: string;
+  method: string;
+  bankIfsc: string | null;
+  bankAccountHolderName: string | null;
+  upiVpa: string | null;
+  status: string;
+  blockReason: string | null;
+  createdAt: string;
+};
+
+type SettlementBatchInfo = {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  accountLabel: string;
+  accountMethod: string;
+  ownerName: string;
+  ownerEmail: string;
+  totalGross: number;
+  totalFee: number;
+  totalNet: number;
+  orderCount: number;
+  status: string;
+  processedAt: string | null;
+  createdAt: string;
+};
+
+type SettlementSummary = {
+  totalPending: number;
+  totalSettled: number;
+  totalFees: number;
+  batchCount: number;
+};
+
 export default function PlatformDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +119,11 @@ export default function PlatformDashboardPage() {
   const [orgAdmins, setOrgAdmins] = useState<OrgAdmin[]>([]);
   const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
   const [reactivationRequests, setReactivationRequests] = useState<ReactivationRequest[]>([]);
+  const [settlementAccounts, setSettlementAccounts] = useState<SettlementAccountInfo[]>([]);
+  const [pendingBatches, setPendingBatches] = useState<SettlementBatchInfo[]>([]);
+  const [settlementSummary, setSettlementSummary] = useState<SettlementSummary | null>(null);
+  const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [approvingAccount, setApprovingAccount] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -87,35 +134,51 @@ export default function PlatformDashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [orgRes, adminRes, approvalRes, reactivationRes] = await Promise.all([
+      const results = await Promise.allSettled([
         fetch("/api/platform/organizations", { cache: "no-store" }),
         fetch("/api/platform/org-admins", { cache: "no-store" }),
         fetch("/api/platform/approval-requests?status=PENDING", { cache: "no-store" }),
         fetch("/api/platform/reactivation-requests?status=PENDING", { cache: "no-store" }),
+        fetch("/api/platform/settlement-accounts", { cache: "no-store" }),
+        fetch("/api/platform/settlements?status=PENDING", { cache: "no-store" }),
       ]);
 
-      if (!orgRes.ok || !adminRes.ok) {
-        throw new Error("Failed to load platform dashboard data");
+      const [orgResult, adminResult, approvalResult, reactivationResult, stlAccountResult, stlBatchResult] = results;
+
+      if (orgResult.status === "fulfilled" && orgResult.value.ok) {
+        const data = (await orgResult.value.json()) as { organizations: Organization[] };
+        setOrganizations(data.organizations || []);
       }
 
-      const orgData = (await orgRes.json()) as { organizations: Organization[] };
-      const adminData = (await adminRes.json()) as { admins: OrgAdmin[] };
-      const approvalData = (await approvalRes.json()) as { requests: ApprovalRequest[] };
-      const reactivationData = (await reactivationRes.json()) as { requests: ReactivationRequest[] };
-      if (approvalRes.ok) {
-        setApprovalRequests(approvalData.requests || []);
+      if (adminResult.status === "fulfilled" && adminResult.value.ok) {
+        const data = (await adminResult.value.json()) as { admins: OrgAdmin[] };
+        setOrgAdmins(data.admins || []);
+      }
+
+      if (approvalResult.status === "fulfilled" && approvalResult.value.ok) {
+        const data = (await approvalResult.value.json()) as { requests: ApprovalRequest[] };
+        setApprovalRequests(data.requests || []);
       } else {
         setApprovalRequests([]);
       }
 
-      if (reactivationRes.ok) {
-        setReactivationRequests(reactivationData.requests || []);
+      if (reactivationResult.status === "fulfilled" && reactivationResult.value.ok) {
+        const data = (await reactivationResult.value.json()) as { requests: ReactivationRequest[] };
+        setReactivationRequests(data.requests || []);
       } else {
         setReactivationRequests([]);
       }
 
-      setOrganizations(orgData.organizations || []);
-      setOrgAdmins(adminData.admins || []);
+      if (stlAccountResult.status === "fulfilled" && stlAccountResult.value.ok) {
+        const data = (await stlAccountResult.value.json()) as { accounts: SettlementAccountInfo[] };
+        setSettlementAccounts(data.accounts || []);
+      }
+
+      if (stlBatchResult.status === "fulfilled" && stlBatchResult.value.ok) {
+        const data = (await stlBatchResult.value.json()) as { batches: SettlementBatchInfo[]; summary: SettlementSummary };
+        setPendingBatches(data.batches || []);
+        setSettlementSummary(data.summary || null);
+      }
     } catch (error) {
       console.error(error);
       toast.error("Failed to load platform data");
@@ -277,6 +340,79 @@ export default function PlatformDashboardPage() {
     await loadData();
   }
 
+  async function markBatchPaid(batchId: string) {
+    setMarkingPaid(batchId);
+    try {
+      const res = await fetch("/api/platform/settlements", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchIds: [batchId] }),
+      });
+
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        toast.error(data?.error || "Failed to mark as paid");
+        return;
+      }
+
+      toast.success("Settlement marked as paid");
+      await loadData();
+    } catch {
+      toast.error("Failed to mark settlement as paid");
+    } finally {
+      setMarkingPaid(null);
+    }
+  }
+
+  async function approveSettlementAccount(accountId: string) {
+    setApprovingAccount(accountId);
+    try {
+      const res = await fetch("/api/platform/settlement-accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, action: "approve" }),
+      });
+
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        toast.error(data?.error || "Failed to approve account");
+        return;
+      }
+
+      toast.success("Settlement account approved");
+      await loadData();
+    } catch {
+      toast.error("Failed to approve account");
+    } finally {
+      setApprovingAccount(null);
+    }
+  }
+
+  async function blockSettlementAccount(accountId: string) {
+    const reason = window.prompt("Block reason", "Blocked by platform owner") || "Blocked by platform owner";
+    setApprovingAccount(accountId);
+    try {
+      const res = await fetch("/api/platform/settlement-accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, action: "block", reason }),
+      });
+
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        toast.error(data?.error || "Failed to block account");
+        return;
+      }
+
+      toast.success("Settlement account blocked");
+      await loadData();
+    } catch {
+      toast.error("Failed to block account");
+    } finally {
+      setApprovingAccount(null);
+    }
+  }
+
   function handleSignOut() {
     signOut({
       fetchOptions: {
@@ -329,6 +465,137 @@ export default function PlatformDashboardPage() {
           <CardContent className="text-3xl font-semibold">{suspendedCount}</CardContent>
         </Card>
       </div>
+
+      {/* Settlement Summary */}
+      {settlementSummary && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1"><IndianRupee className="h-4 w-4" /> Pending Payouts</CardTitle>
+              <CardDescription>Awaiting manual payment</CardDescription>
+            </CardHeader>
+            <CardContent className="text-3xl font-semibold text-amber-600">₹{Number(settlementSummary.totalPending).toFixed(0)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1"><CheckCircle className="h-4 w-4" /> Total Settled</CardTitle>
+              <CardDescription>Paid to vendors</CardDescription>
+            </CardHeader>
+            <CardContent className="text-3xl font-semibold text-green-600">₹{Number(settlementSummary.totalSettled).toFixed(0)}</CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1"><IndianRupee className="h-4 w-4" /> Platform Fees</CardTitle>
+              <CardDescription>Total fees collected</CardDescription>
+            </CardHeader>
+            <CardContent className="text-3xl font-semibold">₹{Number(settlementSummary.totalFees).toFixed(0)}</CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Pending Settlement Batches */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pending Settlement Batches</CardTitle>
+          <CardDescription>Mark batches as paid after manual vendor payment.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading batches...
+            </div>
+          ) : pendingBatches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pending settlement batches.</p>
+          ) : (
+            pendingBatches.map((batch) => (
+              <div key={batch.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <p className="font-medium">{batch.organizationName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {batch.ownerName} • {batch.accountLabel} ({batch.accountMethod})
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {batch.orderCount} orders • Gross: ₹{batch.totalGross.toFixed(0)} • Fee: ₹{batch.totalFee.toFixed(0)} • <span className="font-semibold">Net: ₹{batch.totalNet.toFixed(0)}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    Created: {new Date(batch.createdAt).toLocaleDateString("en-IN")}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => void markBatchPaid(batch.id)}
+                  disabled={markingPaid === batch.id}
+                >
+                  {markingPaid === batch.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CheckCircle className="mr-1 h-3 w-3" />}
+                  Mark Paid
+                </Button>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Payment Account Requests */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment Account Requests</CardTitle>
+          <CardDescription>Approve or block vendor settlement accounts.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading accounts...
+            </div>
+          ) : settlementAccounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No settlement accounts found.</p>
+          ) : (
+            settlementAccounts.map((account) => (
+              <div key={account.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                <div>
+                  <p className="font-medium">{account.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {account.organizationName} • {account.ownerName} ({account.ownerEmail})
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {account.method === "BANK_ACCOUNT"
+                      ? `Bank: ${account.bankAccountHolderName || "N/A"} (IFSC: ${account.bankIfsc || "N/A"})`
+                      : `UPI: ${account.upiVpa || "N/A"}`}
+                  </p>
+                  <Badge variant={account.status === "ACTIVE" ? "default" : account.status === "BLOCKED" ? "destructive" : "secondary"} className="mt-1">
+                    {account.status}
+                  </Badge>
+                  {account.blockReason && (
+                    <p className="text-xs text-red-600 mt-1">Reason: {account.blockReason}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {account.status === "PENDING_VERIFICATION" && (
+                    <Button
+                      size="sm"
+                      onClick={() => void approveSettlementAccount(account.id)}
+                      disabled={approvingAccount === account.id}
+                    >
+                      {approvingAccount === account.id ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CheckCircle className="mr-1 h-3 w-3" />}
+                      Approve
+                    </Button>
+                  )}
+                  {account.status !== "BLOCKED" && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => void blockSettlementAccount(account.id)}
+                      disabled={approvingAccount === account.id}
+                    >
+                      <XCircle className="mr-1 h-3 w-3" />
+                      Block
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

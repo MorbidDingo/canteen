@@ -219,6 +219,27 @@ export default function ManagementSettlementAccountsPage() {
     }
   }
 
+  async function approveAccount(accountId: string) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/management/settlement-accounts/${accountId}/approve`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to approve account");
+      }
+
+      toast.success("Account approved");
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to approve account");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="container mx-auto max-w-7xl px-4 py-6 space-y-6">
       <Card>
@@ -304,6 +325,15 @@ export default function ManagementSettlementAccountsPage() {
                           <Button size="sm" variant="outline" disabled={saving} onClick={() => void unblockAccount(account.id)}>
                             <ShieldCheck className="h-4 w-4" /> Unblock
                           </Button>
+                        ) : account.status === "PENDING_VERIFICATION" ? (
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="default" disabled={saving} onClick={() => void approveAccount(account.id)}>
+                              <ShieldCheck className="h-4 w-4" /> Approve
+                            </Button>
+                            <Button size="sm" variant="destructive" disabled={saving} onClick={() => openBlockDialog(account.id)}>
+                              <ShieldBan className="h-4 w-4" /> Block
+                            </Button>
+                          </div>
                         ) : (
                           <Button size="sm" variant="destructive" disabled={saving} onClick={() => openBlockDialog(account.id)}>
                             <ShieldBan className="h-4 w-4" /> Block

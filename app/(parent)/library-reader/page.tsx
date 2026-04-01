@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "@/components/ui/motion";
@@ -61,7 +61,7 @@ export default function LibraryReaderPage() {
   const [certePlusRequired, setCertePlusRequired] = useState(false);
   const [startingBookId, setStartingBookId] = useState<string | null>(null);
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
-  const [seedingPublicBooks, setSeedingPublicBooks] = useState(false);
+  const seedingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -83,8 +83,8 @@ export default function LibraryReaderPage() {
 
         // Auto-seed public domain books if none exist
         const hasPublicBooks = (booksData.books || []).some((b: ReaderBook) => b.isPublicDomain);
-        if (!hasPublicBooks && !seedingPublicBooks) {
-          setSeedingPublicBooks(true);
+        if (!hasPublicBooks && !seedingRef.current) {
+          seedingRef.current = true;
           try {
             const seedRes = await fetch("/api/library/reader/public-books");
             if (seedRes.ok) {
@@ -98,7 +98,7 @@ export default function LibraryReaderPage() {
           } catch {
             // Silently fail — public books are supplementary
           } finally {
-            setSeedingPublicBooks(false);
+            seedingRef.current = false;
           }
         }
       }
@@ -117,7 +117,7 @@ export default function LibraryReaderPage() {
     } finally {
       setLoading(false);
     }
-  }, [seedingPublicBooks]);
+  }, []);
 
   useEffect(() => {
     fetchData();

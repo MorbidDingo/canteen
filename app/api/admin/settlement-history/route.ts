@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { settlementAccount, settlementBatch } from "@/lib/db/schema";
+import { settlementAccount, settlementBatch, settlementLedger } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 export async function GET() {
@@ -25,6 +25,7 @@ export async function GET() {
         id: settlementAccount.id,
         label: settlementAccount.label,
         method: settlementAccount.method,
+        status: settlementAccount.status,
       })
       .from(settlementAccount)
       .where(
@@ -49,7 +50,6 @@ export async function GET() {
               totalNet: settlementBatch.totalNet,
               orderCount: settlementBatch.orderCount,
               status: settlementBatch.status,
-              razorpayPayoutId: settlementBatch.razorpayPayoutId,
               processedAt: settlementBatch.processedAt,
               failureReason: settlementBatch.failureReason,
               createdAt: settlementBatch.createdAt,
@@ -59,12 +59,56 @@ export async function GET() {
             .orderBy(desc(settlementBatch.createdAt))
         : [];
 
+    // Weekly revenue summary for this admin's org
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
+    weekStart.setHours(0, 0, 0, 0);
+
+    const weeklyRevenueRows = await db
+      .select({
+        totalRevenue: sql<number>`coalesce(sum(${settlementLedger.grossAmount}), 0)`,
+        totalFees: sql<number>`coalesce(sum(${settlementLedger.platformFee}), 0)`,
+        netRevenue: sql<number>`coalesce(sum(${settlementLedger.netAmount}), 0)`,
+        settledAmount: sql<number>`coalesce(sum(case when ${settlementLedger.status} = 'SETTLED' then ${settlementLedger.netAmount} else 0 end), 0)`,
+        pendingAmount: sql<number>`coalesce(sum(case when ${settlementLedger.status} = 'PENDING' then ${settlementLedger.netAmount} else 0 end), 0)`,
+      })
+      .from(settlementLedger)
+      .where(
+        and(
+          eq(settlementLedger.organizationId, organizationId),
+          eq(settlementLedger.entryType, "DEBIT"),
+          gte(settlementLedger.createdAt, weekStart),
+        ),
+      );
+
+    const weeklyRevenue = weeklyRevenueRows[0] ?? {
+      totalRevenue: 0,
+      totalFees: 0,
+      netRevenue: 0,
+      settledAmount: 0,
+      pendingAmount: 0,
+    };
+
+    // Weekly pay status: is there a pending batch from this week?
+    const weeklyBatchStatus =
+      batches.filter((b) => new Date(b.createdAt) >= weekStart).length > 0
+        ? batches.filter((b) => new Date(b.createdAt) >= weekStart).every((b) => b.status === "SETTLED")
+          ? "PAID"
+          : "PENDING"
+        : "NO_BATCHES";
+
     return NextResponse.json({
       accounts,
       batches: batches.map((batch) => ({
         ...batch,
         account: accountById.get(batch.settlementAccountId) ?? null,
       })),
+      weeklyRevenue: {
+        ...weeklyRevenue,
+        weekStart: weekStart.toISOString(),
+        payStatus: weeklyBatchStatus,
+      },
     });
   } catch (error) {
     if (error instanceof AccessDeniedError) {

@@ -121,31 +121,6 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const togglePayment = async (orderId: string, currentStatus: PaymentStatus) => {
-    setActionLoading(orderId);
-    const nextStatus = currentStatus === "PAID" ? "UNPAID" : "PAID";
-
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/payment`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentStatus: nextStatus }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to update payment");
-      }
-
-      toast.success(`Payment marked as ${nextStatus.toLowerCase()}`);
-      emitEvent("orders-updated");
-      fetchOrders();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update payment");
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const counts = useMemo(() => ({
     PLACED: orders.filter((o) => o.status === ORDER_STATUS.PLACED).length,
@@ -241,7 +216,6 @@ export default function AdminOrdersPage() {
               order={order}
               actionLoading={actionLoading}
               onUpdateStatus={updateStatus}
-              onTogglePayment={togglePayment}
             />
           ))}
         </div>
@@ -254,12 +228,10 @@ function OrderCard({
   order,
   actionLoading,
   onUpdateStatus,
-  onTogglePayment,
 }: {
   order: Order;
   actionLoading: string | null;
   onUpdateStatus: (id: string, status: OrderStatus) => void;
-  onTogglePayment: (id: string, current: PaymentStatus) => void;
 }) {
   const isLoading = actionLoading === order.id;
   const itemsSummary = order.items
@@ -309,8 +281,7 @@ function OrderCard({
             {ORDER_STATUS_LABELS[order.status]}
           </Badge>
           <Badge
-            className={`${PAYMENT_STATUS_COLORS[order.paymentStatus]} cursor-pointer text-[10px] px-1.5 py-0`}
-            onClick={() => !isLoading && onTogglePayment(order.id, order.paymentStatus)}
+            className={`${PAYMENT_STATUS_COLORS[order.paymentStatus]} text-[10px] px-1.5 py-0`}
           >
             {order.paymentStatus}
           </Badge>

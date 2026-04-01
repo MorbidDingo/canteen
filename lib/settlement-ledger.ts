@@ -10,7 +10,6 @@ import {
   settlementLedger,
 } from "@/lib/db/schema";
 import { getUserAccessibleDeviceIds } from "@/lib/device-context";
-import { processPendingSettlements } from "@/lib/settlement-processor";
 
 type LedgerEntryType = "DEBIT" | "REVERSAL";
 
@@ -225,29 +224,5 @@ export async function createSettlementLedgerEntryForOrder(options: {
       status: settlementLedger.status,
     });
 
-  let realtimeResult:
-    | { attempted: true; batchesInitiated: number; errors: Array<{ accountId: string; error: string }> }
-    | { attempted: false; reason: "UNROUTED" | "PROCESSING_FAILED" }
-    | undefined;
-
-  if (created.settlementAccountId) {
-    try {
-      const processResult = await processPendingSettlements({
-        settlementAccountId: created.settlementAccountId,
-        source: "realtime",
-      });
-      realtimeResult = {
-        attempted: true,
-        batchesInitiated: processResult.batchesInitiated,
-        errors: processResult.errors,
-      };
-    } catch (error) {
-      console.error("Realtime settlement trigger failed:", error);
-      realtimeResult = { attempted: false, reason: "PROCESSING_FAILED" };
-    }
-  } else {
-    realtimeResult = { attempted: false, reason: "UNROUTED" };
-  }
-
-  return { created: true, ledger: created, realtimeResult };
+  return { created: true, ledger: created };
 }
