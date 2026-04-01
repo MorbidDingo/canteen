@@ -1104,7 +1104,7 @@ export default function CartPage() {
                                   <div className="flex items-center gap-2 text-white animate-scale-in">
                                     <Check className="h-5 w-5" />
                                     <span className="text-sm font-bold">
-                                      Paid ₹{total.toFixed(0)}!
+                                      Paid ₹{total.toFixed(2)}!
                                     </span>
                                   </div>
                                 )}
@@ -1201,7 +1201,7 @@ export default function CartPage() {
                 </span>
               </div>
               <div className="text-right leading-tight">
-                <p className="text-base font-bold">Checkout · ₹{total.toFixed(0)}</p>
+                <p className="text-base font-bold">Checkout · ₹{total.toFixed(2)}</p>
                 <p className="text-[11px] text-primary-foreground/85">
                   Includes ₹{platformFee.toFixed(2)} platform fee
                 </p>
@@ -1346,7 +1346,7 @@ export default function CartPage() {
                   ) : (
                     <CreditCard className="h-4 w-4" />
                   )}
-                  Pay ₹{total.toFixed(0)} with Razorpay
+                  Pay ₹{total.toFixed(2)} with Razorpay
                 </Button>
               ) : paymentMethod === "WALLET" && selectedWallet ? (
                 <div className="pt-1">
@@ -1378,7 +1378,7 @@ export default function CartPage() {
                       {slideState === "paid" && (
                         <div className="flex items-center gap-2 text-white">
                           <Check className="h-5 w-5" />
-                          <span className="text-sm font-bold">Paid ₹{total.toFixed(0)}!</span>
+                          <span className="text-sm font-bold">Paid ₹{total.toFixed(2)}!</span>
                         </div>
                       )}
                     </div>

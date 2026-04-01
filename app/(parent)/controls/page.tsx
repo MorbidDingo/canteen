@@ -31,6 +31,7 @@ import {
   BookOpen,
   Search,
   Clock,
+  Sparkles,
 } from "lucide-react";
 import {
   MENU_CATEGORY_LABELS,
@@ -40,6 +41,8 @@ import {
   type BookCategory,
 } from "@/lib/constants";
 import { AnomalyInsights } from "@/components/recommendations/anomaly-insights";
+import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import Link from "next/link";
 
 type LibraryBook = {
   id: string;
@@ -86,11 +89,18 @@ type ControlMode = "canteen" | "library";
 export default function ControlsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
+  const certePlusResolved = useCertePlusStore((s) => s.status !== null);
+  const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [children, setChildren] = useState<ChildControl[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [controlMode, setControlMode] = useState<ControlMode>("canteen");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void ensureCertePlusFresh(45_000);
+  }, [ensureCertePlusFresh]);
 
   // Canteen controls
   const [dailyLimit, setDailyLimit] = useState("");
@@ -301,10 +311,37 @@ export default function ControlsPage() {
     }
   };
 
-  if (loading) {
+  if (!certePlusResolved || loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!certePlusActive) {
+    const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
+    return (
+      <div className="app-shell-compact space-y-4">
+        <Card className="overflow-hidden rounded-2xl border-2 border-amber-200/50">
+          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+              <Shield className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Controls require Certe+</h2>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                Set spend limits, block items and manage library restrictions with a Certe+ subscription.
+              </p>
+            </div>
+            <Link href={`/settings?mode=${parentMode}`}>
+              <Button variant="premium" size="lg" className="gap-2">
+                <Sparkles className="h-4 w-4" />
+                Upgrade to Certe+
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }

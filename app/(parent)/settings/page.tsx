@@ -263,6 +263,11 @@ export default function SettingsPage() {
   const visibleSettingItems = settingItems;
   const certePlusBenefits = [
     {
+      title: "AI-powered personal assistant",
+      description:
+        "Get instant help with orders, spending insights, and smart recommendations via the AI chat.",
+    },
+    {
       title: `${CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} library late-return protections`,
       description:
         "Reduce surprise library penalties across your family during the active cycle.",
@@ -284,6 +289,11 @@ export default function SettingsPage() {
         "Apply spend limits and item restrictions with better family-level control.",
     },
     {
+      title: "AI spending insights & anomaly detection",
+      description:
+        "Automatically spot unusual spending patterns and get proactive alerts.",
+    },
+    {
       title: "Healthy Food access",
       description: "Priority rollout when curated healthy menus go live.",
       comingSoon: true,
@@ -303,33 +313,33 @@ export default function SettingsPage() {
       </div>
 
       {/* Certe+ Subscription Card */}
-      <Card className="overflow-hidden rounded-2xl border-2 border-amber-200/50">
-        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+      <Card className="overflow-hidden rounded-2xl border border-amber-200/40 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 shadow-[0_4px_24px_rgba(180,120,0,0.08)] dark:border-amber-200/15 dark:from-amber-950/25 dark:via-background dark:to-orange-950/20 dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-sm">Certe+</h3>
+                <h3 className="font-bold text-sm tracking-tight">Certe+</h3>
                 <p className="text-[11px] text-muted-foreground">
                   {certePlus?.active
-                    ? "What you currently have"
-                    : "What you unlock after subscribing"}
+                    ? "Your premium benefits"
+                    : "Premium features & AI"}
                 </p>
               </div>
             </div>
             {certePlusResolved ? (
               certePlus?.active ? (
-                <Badge className="border-emerald-200 bg-emerald-100 text-emerald-700">
+                <Badge className="border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300">
                   <CheckCircle className="mr-1 h-3 w-3" /> Active
                 </Badge>
               ) : (
                 <Badge
                   variant="outline"
-                  className="border-amber-300 text-amber-700"
+                  className="border-amber-300/60 text-amber-700 dark:border-amber-400/30 dark:text-amber-300"
                 >
-                  Starts at 79 credits/week
+                  From 79/week
                 </Badge>
               )
             ) : (
@@ -344,56 +354,47 @@ export default function SettingsPage() {
           </div>
 
           {!certePlusResolved ? (
-            <div className="flex items-center gap-2 rounded-lg border border-white/40 bg-white/50 px-3 py-2 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-xl border border-amber-200/40 bg-white/60 px-3 py-2.5 text-xs text-muted-foreground dark:bg-white/5">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Syncing your Certe+ status...
             </div>
           ) : certePlus?.active && certePlus.subscription ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-emerald-200/50 bg-emerald-50/60 p-3 dark:border-emerald-800/50 dark:bg-emerald-950/20">
-                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                  Your Certe+ access is active
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  These premium benefits are currently live for your account.
-                </p>
-              </div>
-
               <div
                 className={cn(
                   "grid gap-2",
                   isGeneralAccount ? "grid-cols-2" : "grid-cols-3",
                 )}
               >
-                <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
-                  <p className="text-xs text-muted-foreground">Expires</p>
+                <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                  <p className="text-[10px] text-muted-foreground">Expires</p>
                   <p className="text-xs font-semibold">
                     {new Date(certePlus.subscription.endDate).toLocaleDateString()}
                   </p>
                 </div>
                 {!isGeneralAccount && (
-                  <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
-                    <p className="text-xs text-muted-foreground">Overdraft</p>
+                  <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                    <p className="text-[10px] text-muted-foreground">Overdraft</p>
                     <p className="text-xs font-semibold">
                       {(
                         CERTE_PLUS.WALLET_OVERDRAFT_LIMIT -
                         certePlus.subscription.walletOverdraftUsed
                       ).toFixed(0)}{" "}
-                      credits left
+                      left
                     </p>
                   </div>
                 )}
-                <div className="rounded-lg bg-white/60 p-2 text-center dark:bg-white/10">
-                  <p className="text-xs text-muted-foreground">Late returns</p>
+                <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                  <p className="text-[10px] text-muted-foreground">Late returns</p>
                   <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
                 </div>
               </div>
 
-              <ul className="space-y-2 border-t border-amber-200/40 pt-2">
+              <ul className="space-y-1.5 pt-1">
                 {visibleCertePlusBenefits.map((benefit) => (
                   <li key={benefit.title} className="flex items-start gap-2">
                     <span
-                      className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full ${
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                         benefit.comingSoon
                           ? "bg-muted text-muted-foreground"
                           : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
@@ -409,7 +410,7 @@ export default function SettingsPage() {
                       <p className="text-[11px] font-medium text-foreground">
                         {benefit.title}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
                         {benefit.description}
                       </p>
                     </div>
@@ -419,21 +420,11 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="rounded-xl border border-amber-200/60 bg-white/65 p-3 dark:bg-white/5">
-                <p className="text-xs font-semibold text-foreground">
-                  What you unlock with Certe+
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Upgrade once and these premium protections and conveniences go
-                  live instantly.
-                </p>
-              </div>
-
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {visibleCertePlusBenefits.map((benefit) => (
                   <li key={benefit.title} className="flex items-start gap-2">
                     <span
-                      className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full ${
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                         benefit.comingSoon
                           ? "bg-muted text-muted-foreground"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -449,7 +440,7 @@ export default function SettingsPage() {
                       <p className="text-[11px] font-medium text-foreground">
                         {benefit.title}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
                         {benefit.description}
                       </p>
                     </div>
@@ -458,7 +449,7 @@ export default function SettingsPage() {
               </ul>
 
               {/* Plan Selection */}
-              <p className="text-[11px] font-medium text-foreground">
+              <p className="text-[11px] font-medium text-foreground pt-1">
                 Choose a plan
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -467,11 +458,12 @@ export default function SettingsPage() {
                     key={plan.key}
                     type="button"
                     onClick={() => setSelectedPlan(plan.key)}
-                    className={`rounded-lg border p-2 text-left transition-all ${
+                    className={cn(
+                      "rounded-xl border p-2.5 text-left transition-all",
                       selectedPlan === plan.key
-                        ? "border-amber-500 bg-amber-100/80 dark:bg-amber-900/30 ring-1 ring-amber-400"
-                        : "border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-white/5 hover:border-amber-300"
-                    }`}
+                        ? "border-amber-400 bg-amber-50/80 ring-1 ring-amber-400/50 dark:bg-amber-900/25"
+                        : "border-amber-200/40 bg-white/60 hover:border-amber-300 dark:border-amber-200/15 dark:bg-white/5",
+                    )}
                   >
                     <p className="text-xs font-semibold">{plan.label}</p>
                     <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
@@ -486,7 +478,7 @@ export default function SettingsPage() {
 
               <Button
                 size="sm"
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-sm"
                 onClick={handleSubscribe}
                 disabled={subscribing}
               >
@@ -511,7 +503,7 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
-        </div>
+        </CardContent>
       </Card>
 
       <CardContent className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-0">

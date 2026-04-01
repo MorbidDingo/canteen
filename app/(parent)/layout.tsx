@@ -29,6 +29,7 @@ import { CanteenSelector } from "@/components/canteen-selector";
 import { LibrarySelector } from "@/components/library-selector";
 import { motion, BottomSheet } from "@/components/ui/motion";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { useRealtimeData } from "@/lib/events";
 import {
   Sheet,
   SheetContent,
@@ -286,6 +287,9 @@ function ParentLayoutContent({
     void fetchWallets();
   }, [fetchWallets, walletDrawerOpen]);
 
+  // Auto-refresh wallet balance when orders/payments change via SSE
+  useRealtimeData(fetchWallets, "orders-updated");
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(max-width: 767px)");
@@ -510,7 +514,7 @@ function ParentLayoutContent({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
               >
                 <IndianRupee className="h-3 w-3 text-primary" />
-                <span>{totalWalletBalance.toFixed(0)}</span>
+                <span>{totalWalletBalance.toFixed(2)}</span>
               </button>
             </div>
           </div>

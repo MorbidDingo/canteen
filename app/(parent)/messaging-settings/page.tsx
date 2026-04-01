@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  AlertCircle,
   CheckCircle,
   Loader2,
   MessageCircle,
@@ -19,8 +18,8 @@ import {
   Ban,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface MessagingPreferences {
   id: string;
@@ -41,35 +40,13 @@ type ChannelOption = {
   key: "WHATSAPP" | "SMS" | "BOTH";
   label: string;
   note: string;
-  accent: string;
 };
 
 const CHANNEL_OPTIONS: ChannelOption[] = [
-  {
-    key: "WHATSAPP",
-    label: "WhatsApp",
-    note: "Rich and fast updates",
-    accent:
-      "border-emerald-400/70 bg-emerald-50/80 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-950/30 dark:text-emerald-200",
-  },
-  {
-    key: "SMS",
-    label: "SMS",
-    note: "Works on every phone",
-    accent:
-      "border-sky-400/70 bg-sky-50/80 text-sky-700 dark:border-sky-500/50 dark:bg-sky-950/30 dark:text-sky-200",
-  },
-  {
-    key: "BOTH",
-    label: "Both",
-    note: "Primary + fallback",
-    accent:
-      "border-amber-400/70 bg-amber-50/80 text-amber-700 dark:border-amber-500/50 dark:bg-amber-950/30 dark:text-amber-200",
-  },
+  { key: "WHATSAPP", label: "WhatsApp", note: "Rich & fast" },
+  { key: "SMS", label: "SMS", note: "Every phone" },
+  { key: "BOTH", label: "Both", note: "Primary + fallback" },
 ];
-
-const PREMIUM_CARD =
-  "rounded-3xl border border-amber-200/55 bg-[linear-gradient(130deg,rgba(255,255,255,0.9),rgba(255,245,219,0.74)_45%,rgba(255,233,176,0.46)_100%)] shadow-[0_12px_38px_rgba(161,108,0,0.14)] backdrop-blur-xl dark:border-amber-200/15 dark:bg-[linear-gradient(130deg,rgba(32,24,8,0.8),rgba(58,39,9,0.7)_45%,rgba(88,58,12,0.54)_100%)] dark:shadow-[0_10px_34px_rgba(0,0,0,0.4)]";
 
 export default function MessagingSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -214,132 +191,69 @@ export default function MessagingSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center min-h-[50vh]">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   const notificationOptions = [
-    {
-      id: "gate",
-      label: "Gate Entry/Exit",
-      note: "Instantly know when your child enters or exits the campus.",
-      checked: gateEnabled,
-      onChange: setGateEnabled,
-      Icon: Shield,
-    },
-    {
-      id: "order",
-      label: "Kiosk Orders",
-      note: "Order placed, preparing, and ready-for-pickup updates.",
-      checked: orderEnabled,
-      onChange: setOrderEnabled,
-      Icon: ShoppingCart,
-    },
-    {
-      id: "spending",
-      label: "Wallet Transactions",
-      note: "Top-up and spend alerts in real time.",
-      checked: spendingEnabled,
-      onChange: setSpendingEnabled,
-      Icon: Wallet,
-    },
-    {
-      id: "card",
-      label: "Card Issuance",
-      note: "Permanent and temporary card issuance alerts.",
-      checked: cardEnabled,
-      onChange: setCardEnabled,
-      Icon: CreditCard,
-    },
-    {
-      id: "blocked",
-      label: "Blocked Attempts",
-      note: "Get notified when control rules block purchases.",
-      checked: blockedEnabled,
-      onChange: setBlockedEnabled,
-      Icon: Ban,
-    },
+    { id: "gate", label: "Gate Entry/Exit", note: "Know when your child enters or exits campus.", checked: gateEnabled, onChange: setGateEnabled, Icon: Shield },
+    { id: "order", label: "Kiosk Orders", note: "Order placed, preparing, and ready-for-pickup.", checked: orderEnabled, onChange: setOrderEnabled, Icon: ShoppingCart },
+    { id: "spending", label: "Wallet Transactions", note: "Top-up and spend alerts in real time.", checked: spendingEnabled, onChange: setSpendingEnabled, Icon: Wallet },
+    { id: "card", label: "Card Issuance", note: "Permanent and temporary card issuance.", checked: cardEnabled, onChange: setCardEnabled, Icon: CreditCard },
+    { id: "blocked", label: "Blocked Attempts", note: "When control rules block purchases.", checked: blockedEnabled, onChange: setBlockedEnabled, Icon: Ban },
   ] as const;
 
   return (
-    <div className="relative space-y-5 pb-4">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(100%_55%_at_20%_0%,rgba(245,158,11,0.17),transparent_55%),radial-gradient(80%_40%_at_100%_0%,rgba(250,204,21,0.12),transparent_52%)]" />
-
-      <Card className={PREMIUM_CARD}>
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <Badge className="mb-3 border-amber-300/70 bg-amber-100/70 text-amber-800 dark:border-amber-400/40 dark:bg-amber-900/40 dark:text-amber-200">
-                Premium Messaging
-              </Badge>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                Messaging & Notifications
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground sm:text-base">
-                Manage WhatsApp and SMS updates with a premium alert experience.
-              </p>
-            </div>
-            <div className="hidden h-12 w-12 items-center justify-center rounded-2xl border border-amber-300/60 bg-amber-100/70 text-amber-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] sm:flex dark:border-amber-400/30 dark:bg-amber-900/35 dark:text-amber-200">
-              <MessageCircle className="h-5 w-5" />
-            </div>
+    <div className="app-shell-compact space-y-4 pb-6">
+      {/* Header */}
+      <div className="app-header-card bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 dark:from-amber-950/20 dark:via-background dark:to-orange-950/15">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-sm">
+            <MessageCircle className="h-5 w-5 text-white" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <h1 className="app-title">Messaging</h1>
+            <p className="text-xs text-muted-foreground">WhatsApp & SMS notification preferences</p>
+          </div>
+        </div>
+      </div>
 
-      <Alert className="rounded-2xl border-amber-300/65 bg-amber-50/80 text-amber-900 dark:border-amber-400/30 dark:bg-amber-950/35 dark:text-amber-100">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Time-critical gate and card alerts are sent instantly through your selected channel.
-        </AlertDescription>
-      </Alert>
-
-      <Card className={PREMIUM_CARD}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <Smartphone className="h-5 w-5 text-primary" />
-            Contact Number
-          </CardTitle>
-          <CardDescription>
-            This number receives your WhatsApp and SMS notifications.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
+      {/* Phone number */}
+      <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card/80">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Smartphone className="h-4 w-4 text-muted-foreground" />
+            <Label htmlFor="phone" className="text-sm font-medium">Contact Number</Label>
+          </div>
           <Input
             id="phone"
             type="tel"
             placeholder="9876543210 or +919876543210"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
-            className={
+            className={cn(
+              "rounded-xl",
               phoneNumber && !validatePhone(phoneNumber)
                 ? "border-red-500 focus-visible:ring-red-500"
-                : "border-amber-300/60 bg-white/85 dark:bg-amber-950/20"
-            }
+                : "",
+            )}
           />
-          <p className="text-xs text-muted-foreground">
-            Enter a valid 10-digit Indian number. +91 prefix is supported.
-          </p>
           {phoneNumber && !validatePhone(phoneNumber) && (
             <p className="text-xs text-red-500">Invalid phone number format</p>
           )}
         </CardContent>
       </Card>
 
-      <Card className={PREMIUM_CARD}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-            <MessageCircle className="h-5 w-5 text-primary" />
-            Delivery Channel
-          </CardTitle>
-          <CardDescription>
-            Pick how notifications should be delivered.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* Channel selector */}
+      <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card/80">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Delivery Channel</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             {CHANNEL_OPTIONS.map((option) => {
               const selected = preferredChannel === option.key;
               return (
@@ -347,20 +261,21 @@ export default function MessagingSettingsPage() {
                   key={option.key}
                   type="button"
                   onClick={() => setPreferredChannel(option.key)}
-                  className={`rounded-2xl border p-3 text-left transition-all duration-200 ${
+                  className={cn(
+                    "rounded-xl border p-2.5 text-center transition-all",
                     selected
-                      ? `${option.accent} shadow-[0_6px_20px_rgba(180,120,0,0.14)]`
-                      : "border-amber-200/60 bg-white/70 hover:border-amber-300/80 dark:border-amber-200/20 dark:bg-white/[0.03]"
-                  }`}
+                      ? "border-primary bg-primary/5 shadow-sm"
+                      : "border-border/60 hover:border-primary/30",
+                  )}
                 >
-                  <p className="text-sm font-semibold">{option.label}</p>
-                  <p className="mt-1 text-xs opacity-80">{option.note}</p>
+                  <p className={cn("text-xs font-semibold", selected && "text-primary")}>{option.label}</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{option.note}</p>
                 </button>
               );
             })}
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl border border-amber-200/65 bg-white/65 p-3 dark:border-amber-200/20 dark:bg-white/[0.03]">
+          <div className="flex items-center gap-3 rounded-xl border border-border/50 p-3">
             <Checkbox
               id="fallback"
               checked={fallbackEnabled}
@@ -369,86 +284,75 @@ export default function MessagingSettingsPage() {
               }
               disabled={preferredChannel === "BOTH"}
             />
-            <label htmlFor="fallback" className="cursor-pointer text-sm">
-              Use SMS fallback if WhatsApp delivery fails.
+            <label htmlFor="fallback" className="cursor-pointer text-xs">
+              SMS fallback if WhatsApp fails
             </label>
           </div>
         </CardContent>
       </Card>
 
-      <Card className={PREMIUM_CARD}>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Notification Types</CardTitle>
-          <CardDescription>
-            Choose exactly which events you want to be alerted about.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {notificationOptions.map((option) => (
-            <div
-              key={option.id}
-              className="flex items-start gap-3 rounded-2xl border border-amber-200/65 bg-white/65 p-3 dark:border-amber-200/20 dark:bg-white/[0.03]"
-            >
-              <Checkbox
-                id={option.id}
-                checked={option.checked}
-                onCheckedChange={(checked: boolean | string) =>
-                  option.onChange(checked as boolean)
-                }
-                className="mt-0.5"
-              />
-              <label htmlFor={option.id} className="flex flex-1 cursor-pointer gap-3">
-                <span className="mt-0.5 rounded-xl border border-amber-300/60 bg-amber-100/70 p-1.5 text-amber-700 dark:border-amber-400/30 dark:bg-amber-900/35 dark:text-amber-200">
-                  <option.Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{option.label}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{option.note}</span>
-                </span>
-              </label>
-            </div>
-          ))}
+      {/* Notification types */}
+      <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card/80">
+        <CardContent className="p-4 space-y-2">
+          <span className="text-sm font-medium">Notification Types</span>
+          <div className="space-y-1.5">
+            {notificationOptions.map((option) => (
+              <div
+                key={option.id}
+                className="flex items-center gap-3 rounded-xl border border-border/50 p-3"
+              >
+                <Checkbox
+                  id={option.id}
+                  checked={option.checked}
+                  onCheckedChange={(checked: boolean | string) =>
+                    option.onChange(checked as boolean)
+                  }
+                />
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted">
+                  <option.Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <label htmlFor={option.id} className="cursor-pointer min-w-0 flex-1">
+                  <span className="block text-sm font-medium leading-tight">{option.label}</span>
+                  <span className="block text-[11px] text-muted-foreground leading-snug">{option.note}</span>
+                </label>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
-      <Card className={PREMIUM_CARD}>
-        <CardHeader>
-          <CardTitle className="text-base sm:text-lg">Consent & Compliance</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-200/65 bg-white/65 p-4 dark:border-amber-200/20 dark:bg-white/[0.03]">
+      {/* Consent */}
+      <Card className="overflow-hidden rounded-2xl border border-border/60 bg-card/80">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border/50 p-3">
             <Checkbox
               id="consent"
               checked={consentGiven}
               onCheckedChange={(checked: boolean | string) =>
                 setConsentGiven(checked as boolean)
               }
-              className="mt-0.5"
             />
             <label htmlFor="consent" className="cursor-pointer text-sm leading-relaxed">
-              <span className="block font-medium">I consent to SMS and WhatsApp notifications</span>
-              <span className="mt-1.5 block text-xs text-muted-foreground">
-                You can modify this anytime from this page.
-              </span>
+              <span className="block font-medium">I consent to SMS & WhatsApp notifications</span>
+              <span className="block text-[11px] text-muted-foreground">You can change this anytime.</span>
             </label>
           </div>
 
           {preferences?.consentGivenAt && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/75 p-2 text-xs text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-950/30 dark:text-emerald-200">
-              <CheckCircle className="h-4 w-4" />
-              Consent recorded on {new Date(preferences.consentGivenAt).toLocaleDateString()}
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-300/50 bg-emerald-50/60 p-2.5 text-xs text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-950/30 dark:text-emerald-200">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Consent recorded {new Date(preferences.consentGivenAt).toLocaleDateString()}
             </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      {/* Actions */}
+      <div className="flex gap-2">
         <Button
           onClick={handleSave}
           disabled={!hasChanges || !phoneNumber || !validatePhone(phoneNumber) || saving}
-          size="lg"
-          variant="premium"
-          className="sm:min-w-[190px]"
+          className="flex-1"
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Save Preferences
@@ -457,15 +361,13 @@ export default function MessagingSettingsPage() {
           onClick={handleReset}
           variant="outline"
           disabled={!hasChanges}
-          size="lg"
-          className="border-amber-300/60 bg-white/70 hover:bg-amber-50/70 dark:border-amber-200/20 dark:bg-white/[0.03]"
         >
           Reset
         </Button>
       </div>
 
       {!hasChanges && phoneNumber && (
-        <Alert className="rounded-2xl border-emerald-300/55 bg-emerald-50/75 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-950/30 dark:text-emerald-200">
+        <Alert className="rounded-2xl border-emerald-300/40 bg-emerald-50/60 text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-950/30 dark:text-emerald-200">
           <CheckCircle className="h-4 w-4" />
           <AlertDescription>Your messaging preferences are up to date.</AlertDescription>
         </Alert>
