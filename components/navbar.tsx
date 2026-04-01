@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { Badge } from "@/components/ui/badge";
-import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import { CanteenSelector } from "@/components/canteen-selector";
 import { LibrarySelector } from "@/components/library-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
@@ -158,8 +158,7 @@ export function Navbar() {
         <div className="container mx-auto flex h-14 md:h-16 items-center justify-between px-4 md:px-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-            <CerteLogo size={36} />
-            <CerteWordmark className="text-lg" />
+            <CerteWordmark className="text-2xl" />
           </Link>
 
           {/* Desktop: Mode toggle for parents */}
