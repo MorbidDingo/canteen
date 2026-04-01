@@ -43,7 +43,9 @@ export interface ParsedChapter {
 
 const GUTENDEX_API = "https://gutendex.com/books";
 const GUTENBERG_FILES = "https://www.gutenberg.org";
-const FETCH_TIMEOUT = 15_000;
+const FETCH_TIMEOUT = 30_000;
+const FETCH_CONTENT_TIMEOUT = 60_000;
+const FETCH_RETRIES = 3;
 const CHARS_PER_PAGE = 2000; // approximate characters per "page"
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -56,6 +58,23 @@ async function fetchWithTimeout(url: string, timeoutMs = FETCH_TIMEOUT): Promise
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchWithRetry(url: string, timeoutMs = FETCH_TIMEOUT, retries = FETCH_RETRIES): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, timeoutMs);
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries - 1) {
+        // Exponential backoff: 1s, 2s, 4s
+        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 // ─── Public API ─────────────────────────────────────────────
@@ -79,7 +98,7 @@ export async function searchGutenbergBooks(options?: {
   params.set("sort", "popular");
 
   const url = `${GUTENDEX_API}?${params.toString()}`;
-  const response = await fetchWithTimeout(url);
+  const response = await fetchWithRetry(url);
 
   if (!response.ok) {
     throw new Error(`Gutendex API error: ${response.status} ${response.statusText}`);
@@ -93,7 +112,7 @@ export async function searchGutenbergBooks(options?: {
  * Get metadata for a single Gutenberg book by its ID.
  */
 export async function getGutenbergBook(gutenbergId: number): Promise<GutenbergBook | null> {
-  const response = await fetchWithTimeout(`${GUTENDEX_API}/${gutenbergId}`);
+  const response = await fetchWithRetry(`${GUTENDEX_API}/${gutenbergId}`);
   if (!response.ok) return null;
   return (await response.json()) as GutenbergBook;
 }
@@ -124,7 +143,7 @@ export async function fetchBookContent(gutenbergId: number): Promise<string | nu
   const textUrl = getTextUrl(book);
   if (!textUrl) return null;
 
-  const response = await fetchWithTimeout(textUrl, 30_000);
+  const response = await fetchWithRetry(textUrl, FETCH_CONTENT_TIMEOUT);
   if (!response.ok) return null;
 
   return await response.text();

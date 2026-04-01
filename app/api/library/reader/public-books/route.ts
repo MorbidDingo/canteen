@@ -11,10 +11,13 @@ import {
   fetchBookContent,
   parseIntoChapters,
   estimatePages,
+  type GutenbergBook,
 } from "@/lib/gutenberg";
 import { searchBookImage } from "@/lib/book-search";
 
 const MAX_BOOK_TITLE_LENGTH = 200;
+// Matches ISBN-13 (978/979 prefix + 10 digits) and ISBN-10 (9 digits + digit/X)
+const ISBN_REGEX = /\b97[89]\d{10}\b|\b\d{9}[\dX]\b/;
 
 /**
  * GET /api/library/reader/public-books
@@ -90,17 +93,29 @@ export async function GET(request: NextRequest) {
   // Seed popular public domain books from Gutenberg
   const { search, topic } = Object.fromEntries(new URL(request.url).searchParams);
   try {
-    const { books: gutenbergBooks } = await searchGutenbergBooks({
-      search: search || undefined,
-      topic: topic || undefined,
-      languages: "en",
-    });
+    // Fetch up to 3 pages (~96 books) of popular English public domain books
+    const MAX_PAGES = 3;
+    const allGutenbergBooks: GutenbergBook[] = [];
 
-    // Take top 20 popular English books
-    const booksToSeed = gutenbergBooks.slice(0, 20);
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      try {
+        const { books } = await searchGutenbergBooks({
+          search: search || undefined,
+          topic: topic || undefined,
+          languages: "en",
+          page,
+        });
+        if (books.length === 0) break;
+        allGutenbergBooks.push(...books);
+      } catch {
+        // If a page fails, stop paginating but continue with what we have
+        break;
+      }
+    }
+
     const seededBooks = [];
 
-    for (const gb of booksToSeed) {
+    for (const gb of allGutenbergBooks) {
       // Check if this Gutenberg book already exists for the org
       const [existing] = await db
         .select({ id: readableBook.id })
@@ -131,6 +146,10 @@ export async function GET(request: NextRequest) {
       const description = gb.subjects.slice(0, 3).join(", ") || null;
       const language = gb.languages[0] || "en";
 
+      // Extract ISBN from Gutenberg formats if available (e.g. from Open Library links)
+      const isbnMatch = Object.values(gb.formats).join(" ").match(ISBN_REGEX);
+      const isbn = isbnMatch ? isbnMatch[0] : null;
+
       const [inserted] = await db
         .insert(readableBook)
         .values({
@@ -148,6 +167,7 @@ export async function GET(request: NextRequest) {
           sourceUrl: `https://www.gutenberg.org/ebooks/${gb.id}`,
           contentType: "TEXT",
           status: "ACTIVE",
+          isbn,
         })
         .returning();
 
@@ -169,6 +189,7 @@ export async function GET(request: NextRequest) {
         isPublicDomain: readableBook.isPublicDomain,
         gutenbergId: readableBook.gutenbergId,
         contentType: readableBook.contentType,
+        isbn: readableBook.isbn,
       })
       .from(readableBook)
       .where(
