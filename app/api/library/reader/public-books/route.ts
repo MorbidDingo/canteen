@@ -5,7 +5,6 @@ import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
 import { and, eq, gte } from "drizzle-orm";
 import {
   searchGutenbergBooks,
-  getGutenbergBook,
   getCoverImageUrl,
   formatAuthorName,
   mapCategory,

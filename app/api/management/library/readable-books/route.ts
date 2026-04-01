@@ -260,8 +260,8 @@ export async function POST(request: NextRequest) {
       await logAudit({
         action: AUDIT_ACTIONS.READABLE_BOOK_CREATED,
         userId: access.session.user.id,
-        organizationId,
-        metadata: {
+        userRole: access.membershipRole ?? "UNKNOWN",
+        details: {
           readableBookId: inserted.id,
           title: inserted.title,
           contentType: normalizedContentType,
