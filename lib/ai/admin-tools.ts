@@ -259,6 +259,47 @@ export const ADMIN_TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: [],
     },
   },
+  {
+    name: "create_menu_items",
+    description:
+      "Create one or more new menu items in the canteen. Use this when the canteen person asks to add items like 'samosa - 25, vada pav - 20' where the number after the dash is the price in rupees. If a default quantity is mentioned (e.g. 'keep all items to 25'), apply it to all items.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        items: {
+          type: "array",
+          description: "Array of menu items to create.",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Item name (e.g. Samosa, Vada Pav)" },
+              price: { type: "number", description: "Price in Indian Rupees (e.g. 25)" },
+              category: {
+                type: "string",
+                enum: ["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"],
+                description: "Category for the item. Default to SNACKS if unsure.",
+              },
+              quantity: {
+                type: "number",
+                description: "Available units for this item. Omit or set null for unlimited.",
+              },
+            },
+            required: ["name", "price"],
+          },
+        },
+        default_quantity: {
+          type: "number",
+          description:
+            "Default quantity to apply to all items if individual quantity is not set. Use when the user says 'keep all items to X quantity'.",
+        },
+        canteen_id: {
+          type: "string",
+          description: "Canteen ID to add the items to. Use get_canteens first if you don't have this.",
+        },
+      },
+      required: ["items"],
+    },
+  },
 ];
 
 // ─── Tool Dispatcher ─────────────────────────────────────
@@ -301,6 +342,8 @@ export async function executeAdminTool(
       return handleUpdateOrderStatus(ctx, input);
     case "get_active_orders":
       return handleGetActiveOrders(ctx);
+    case "create_menu_items":
+      return handleCreateMenuItems(ctx, input);
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
@@ -795,5 +838,90 @@ async function handleGetActiveOrders(
     return JSON.stringify(activeOrders);
   } catch (e) {
     return JSON.stringify({ error: `Failed to get active orders: ${formatError(e)}` });
+  }
+}
+
+async function handleCreateMenuItems(
+  ctx: AdminToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  try {
+    type ItemInput = { name: string; price: number; category?: string; quantity?: number | null };
+    const rawItems = input.items as ItemInput[] | undefined;
+    const defaultQty = typeof input.default_quantity === "number" ? input.default_quantity : undefined;
+    const canteenId = typeof input.canteen_id === "string" ? input.canteen_id : null;
+
+    if (!rawItems || rawItems.length === 0) {
+      return JSON.stringify({ error: "No items provided" });
+    }
+
+    // Validate canteen belongs to this org (if provided)
+    if (canteenId) {
+      const [existingCanteen] = await db
+        .select({ id: canteen.id })
+        .from(canteen)
+        .where(and(eq(canteen.id, canteenId), eq(canteen.organizationId, ctx.orgId)))
+        .limit(1);
+      if (!existingCanteen) {
+        return JSON.stringify({ error: "Canteen not found or does not belong to this organization" });
+      }
+    }
+
+    const validCategories = ["SNACKS", "MEALS", "DRINKS", "PACKED_FOOD"] as const;
+    type Category = (typeof validCategories)[number];
+
+    const results: { name: string; id?: string; success: boolean; error?: string }[] = [];
+
+    for (const item of rawItems) {
+      if (!item.name?.trim()) {
+        results.push({ name: item.name ?? "(unknown)", success: false, error: "Name is required" });
+        continue;
+      }
+      if (typeof item.price !== "number" || item.price <= 0) {
+        results.push({ name: item.name, success: false, error: "Price must be a positive number" });
+        continue;
+      }
+
+      const category: Category = validCategories.includes(item.category as Category)
+        ? (item.category as Category)
+        : "SNACKS";
+
+      const units: number | null =
+        item.quantity != null
+          ? item.quantity
+          : defaultQty != null
+            ? defaultQty
+            : null;
+
+      try {
+        const [created] = await db
+          .insert(menuItem)
+          .values({
+            organizationId: ctx.orgId,
+            canteenId: canteenId ?? undefined,
+            name: item.name.trim(),
+            price: item.price,
+            category,
+            availableUnits: units,
+            available: true,
+            subscribable: true,
+          })
+          .returning({ id: menuItem.id });
+
+        results.push({ name: item.name, id: created?.id, success: true });
+      } catch (e) {
+        results.push({ name: item.name, success: false, error: formatError(e) });
+      }
+    }
+
+    broadcast("menu-updated");
+    const successCount = results.filter((r) => r.success).length;
+    return JSON.stringify({
+      success: successCount > 0,
+      message: `${successCount}/${rawItems.length} item(s) created successfully`,
+      results,
+    });
+  } catch (e) {
+    return JSON.stringify({ error: `Failed to create menu items: ${formatError(e)}` });
   }
 }

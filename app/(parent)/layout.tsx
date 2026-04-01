@@ -39,6 +39,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 type ParentMode = "canteen" | "library";
 type WalletSnapshot = {
@@ -57,6 +65,15 @@ type NotificationItem = {
   createdAt: string | Date;
   childName: string;
   childGrNumber: string | null;
+};
+
+type NoticeItem = {
+  id: string;
+  title: string;
+  message: string;
+  targetType: string;
+  createdAt: string | Date;
+  acknowledged: boolean;
 };
 
 function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
@@ -120,6 +137,8 @@ function ParentLayoutContent({
   const [walletError, setWalletError] = useState<string | null>(null);
   const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [noticeItems, setNoticeItems] = useState<NoticeItem[]>([]);
+  const [activeNotice, setActiveNotice] = useState<NoticeItem | null>(null);
   const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
     "certe:selected-canteen-id",
   );
@@ -204,15 +223,33 @@ function ParentLayoutContent({
     }
   }, []);
 
+  const fetchNotices = useCallback(async () => {
+    try {
+      const res = await fetch("/api/parent/notices", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { notices: NoticeItem[] };
+      setNoticeItems(data.notices ?? []);
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
   /** Fetch notifications first, then open the drawer once loaded */
   const openNotificationDrawer = useCallback(async () => {
     blurFocusedElement();
     setNotifLoading(true);
     try {
-      const res = await fetch("/api/parent/notifications?limit=30", { cache: "no-store" });
-      if (res.ok) {
-        const data = (await res.json()) as { notifications: NotificationItem[] };
+      const [notifRes, noticeRes] = await Promise.all([
+        fetch("/api/parent/notifications?limit=30", { cache: "no-store" }),
+        fetch("/api/parent/notices", { cache: "no-store" }),
+      ]);
+      if (notifRes.ok) {
+        const data = (await notifRes.json()) as { notifications: NotificationItem[] };
         setNotifItems(data.notifications ?? []);
+      }
+      if (noticeRes.ok) {
+        const data = (await noticeRes.json()) as { notices: NoticeItem[] };
+        setNoticeItems(data.notices ?? []);
       }
     } finally {
       setNotifLoading(false);
@@ -242,9 +279,23 @@ function ParentLayoutContent({
     });
   }, []);
 
+  const acknowledgeNotice = useCallback(async (noticeId: string) => {
+    setNoticeItems((prev) =>
+      prev.map((n) => (n.id === noticeId ? { ...n, acknowledged: true } : n)),
+    );
+    setActiveNotice(null);
+    await fetch("/api/parent/notices", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ noticeId }),
+    });
+  }, []);
+
   const notifUnreadCount = useMemo(
-    () => notifItems.filter((n) => !n.readAt).length,
-    [notifItems],
+    () =>
+      notifItems.filter((n) => !n.readAt).length +
+      noticeItems.filter((n) => !n.acknowledged).length,
+    [notifItems, noticeItems],
   );
 
   useEffect(() => {
@@ -278,6 +329,14 @@ function ParentLayoutContent({
   useEffect(() => {
     void fetchNotifications();
   }, [fetchNotifications]);
+
+  // Fetch notices on mount for badge count
+  useEffect(() => {
+    void fetchNotices();
+  }, [fetchNotices]);
+
+  // Refresh notices when management sends a new one
+  useRealtimeData(fetchNotices, "notice-updated");
 
   // Keep header balance chip populated even when wallet icon is removed
   useEffect(() => {
@@ -340,13 +399,50 @@ function ParentLayoutContent({
         <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Loading notifications...
         </div>
-      ) : notifItems.length === 0 ? (
+      ) : noticeItems.length === 0 && notifItems.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
           <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
         </div>
       ) : (
         <div className="space-y-1">
+          {/* Management notices – shown first with premium styling */}
+          {noticeItems.map((n) => (
+            <div
+              key={n.id}
+              className={cn(
+                "rounded-xl border px-3 py-2.5 transition-colors",
+                n.acknowledged
+                  ? "border-border/40 bg-card/50"
+                  : "border-violet-200 bg-violet-50/70 dark:border-violet-800/50 dark:bg-violet-950/20",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-semibold text-violet-900 dark:text-violet-100")}>
+                    {n.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{n.message}</p>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveNotice(n)}
+                      className="text-[11px] font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 underline-offset-2 hover:underline"
+                    >
+                      Open to view full
+                    </button>
+                    <span className="text-[10px] text-muted-foreground/60">
+                      · {new Date(n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                </div>
+                {!n.acknowledged && (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+                )}
+              </div>
+            </div>
+          ))}
+          {/* Regular notifications */}
           {notifItems.map((n) => (
             <button
               key={n.id}
@@ -1113,6 +1209,43 @@ function ParentLayoutContent({
 
       <ChatAssistant open={chatOpen} onOpenChange={setChatOpen} />
       <LibraryChatAssistant open={libraryChatOpen} onOpenChange={setLibraryChatOpen} />
+
+      {/* Notice Detail Dialog */}
+      <Dialog open={activeNotice !== null} onOpenChange={(open) => { if (!open) setActiveNotice(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base leading-snug pr-4">
+              {activeNotice?.title ?? "Notice"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">Notice from management</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-violet-100 bg-violet-50/50 dark:border-violet-900/30 dark:bg-violet-950/20 p-4">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+              {activeNotice?.message}
+            </p>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {activeNotice && new Date(activeNotice.createdAt).toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+          </p>
+          <DialogFooter>
+            {activeNotice && !activeNotice.acknowledged ? (
+              <Button
+                className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+                onClick={() => { if (activeNotice) void acknowledgeNotice(activeNotice.id); }}
+              >
+                Acknowledge
+              </Button>
+            ) : (
+              <Button variant="outline" className="w-full" onClick={() => setActiveNotice(null)}>
+                Close
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -12,7 +12,8 @@ export type AppEvent =
   | "menu-updated"
   | "library-updated"
   | "gate-tap"
-  | "parent-notification";
+  | "parent-notification"
+  | "notice-updated";
 
 export type AppEventMessage = {
   type: AppEvent;
