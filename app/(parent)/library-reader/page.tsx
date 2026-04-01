@@ -61,6 +61,7 @@ export default function LibraryReaderPage() {
   const [certePlusRequired, setCertePlusRequired] = useState(false);
   const [startingBookId, setStartingBookId] = useState<string | null>(null);
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
+  const [seedingPublicBooks, setSeedingPublicBooks] = useState(false);
   const seedingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
@@ -85,6 +86,7 @@ export default function LibraryReaderPage() {
         const hasPublicBooks = (booksData.books || []).some((b: ReaderBook) => b.isPublicDomain);
         if (!hasPublicBooks && !seedingRef.current) {
           seedingRef.current = true;
+          setSeedingPublicBooks(true);
           try {
             const seedRes = await fetch("/api/library/reader/public-books");
             if (seedRes.ok) {
@@ -99,6 +101,7 @@ export default function LibraryReaderPage() {
             // Silently fail — public books are supplementary
           } finally {
             seedingRef.current = false;
+            setSeedingPublicBooks(false);
           }
         }
       }
