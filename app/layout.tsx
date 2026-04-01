@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono } from "next/font/google";
+import { Geist_Mono, Cormorant_Garamond } from "next/font/google";
+
+const cormorantGaramond = Cormorant_Garamond({
+  weight: ["600", "700"],
+  variable: "--font-brand",
+  subsets: ["latin"],
+  display: "swap",
+});
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
@@ -162,7 +169,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistMono.variable} font-sans antialiased`}
+        className={`${geistMono.variable} ${cormorantGaramond.variable} font-sans antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider>

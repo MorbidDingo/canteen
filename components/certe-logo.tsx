@@ -30,16 +30,16 @@ export function CerteLogo({ size = 40, className, priority = false }: CerteLogoP
 }
 
 /**
- * The certe wordmark — lowercase "erte" with premium orange-gold styling.
- * Use this wherever the brand name should appear as styled text.
- * The icon already carries the "c" shape, so the text wordmark stays "erte".
- * When showPlus is true, a small "+" superscript is shown above the word.
+ * The certe wordmark — premium display serif with gold gradient.
+ * Renders the full brand name "certe" in Cormorant Garamond, suitable for
+ * both light and dark modes.
+ * When showPlus is true, a small "+" superscript is shown.
  */
 export function CerteWordmark({ className, showPlus }: { className?: string; showPlus?: boolean }) {
   return (
     <span
       className={cn(
-        "font-semibold tracking-tight bg-gradient-to-r from-[#e8a230] via-[#d4891a] to-[#b87314] bg-clip-text text-transparent",
+        "font-[family-name:var(--font-brand)] font-semibold tracking-wide bg-gradient-to-r from-[#e8a230] via-[#d4891a] to-[#b87314] bg-clip-text text-transparent select-none",
         className,
       )}
     >
