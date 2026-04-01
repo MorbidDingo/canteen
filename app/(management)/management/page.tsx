@@ -1,86 +1,89 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
-  Users,
-  GraduationCap,
-  Upload,
-  CreditCard,
-  UtensilsCrossed,
-  BarChart3,
-  ScrollText,
-  BookOpen,
-  ShieldCheck,
-  MonitorCog,
-  ChevronRight,
-} from "lucide-react";
+  IoShieldCheckmark,
+  IoDesktop,
+  IoPeople,
+  IoSchool,
+  IoCloudUpload,
+  IoCard,
+  IoRestaurant,
+  IoBarChart,
+  IoReader,
+  IoBook,
+  IoChevronForward,
+  IoFingerPrint,
+} from "react-icons/io5";
 
 const groups = [
   {
-    title: "Organisational",
+    title: "Organisation",
     items: [
-      { href: "/management/accounts", label: "Accounts", icon: ShieldCheck },
-      { href: "/management/device-accounts", label: "Device Accounts", icon: MonitorCog },
-      { href: "/management/parents", label: "Parents", icon: Users },
-      { href: "/management/students", label: "Students", icon: GraduationCap },
-      { href: "/management/bulk-upload", label: "Bulk Uploads", icon: Upload },
-      { href: "/management/cards", label: "RFID Cards", icon: CreditCard },
+      { href: "/management/accounts", label: "Accounts", desc: "Roles & access", icon: IoShieldCheckmark, color: "text-amber-600" },
+      { href: "/management/device-accounts", label: "Device Accounts", desc: "Terminal devices", icon: IoDesktop, color: "text-slate-600" },
+      { href: "/management/parents", label: "Parents", desc: "Parent accounts", icon: IoPeople, color: "text-blue-600" },
+      { href: "/management/students", label: "Students", desc: "Student records", icon: IoSchool, color: "text-emerald-600" },
+      { href: "/management/bulk-upload", label: "Bulk Uploads", desc: "Import data", icon: IoCloudUpload, color: "text-violet-600" },
+      { href: "/management/cards", label: "RFID Cards", desc: "Card management", icon: IoCard, color: "text-orange-600" },
     ],
   },
   {
     title: "Canteen",
     items: [
-      { href: "/admin/orders", label: "Admin Orders", icon: UtensilsCrossed },
-      { href: "/management/statistics", label: "Management Statistics", icon: BarChart3 },
-      { href: "/management/attendance", label: "Attendance Statistics", icon: BarChart3 },
-      { href: "/management/audit", label: "Audit Log", icon: ScrollText },
+      { href: "/admin/orders", label: "Admin Orders", desc: "Live order queue", icon: IoRestaurant, color: "text-rose-600" },
+      { href: "/management/statistics", label: "Statistics", desc: "Management metrics", icon: IoBarChart, color: "text-cyan-600" },
+      { href: "/management/attendance", label: "Attendance", desc: "Attendance data", icon: IoFingerPrint, color: "text-teal-600" },
+      { href: "/management/audit", label: "Audit Log", desc: "Activity trail", icon: IoReader, color: "text-stone-600" },
     ],
   },
   {
     title: "Library",
     items: [
-      { href: "/management/library/books", label: "Books", icon: BookOpen },
-      { href: "/management/library/bulk-upload", label: "Bulk Upload", icon: Upload },
-      { href: "/management/library/statistics", label: "Statistics", icon: BarChart3 },
+      { href: "/management/library/books", label: "Books", desc: "Catalogue & inventory", icon: IoBook, color: "text-indigo-600" },
+      { href: "/management/library/bulk-upload", label: "Bulk Upload", desc: "Import books", icon: IoCloudUpload, color: "text-purple-600" },
+      { href: "/management/library/statistics", label: "Statistics", desc: "Library metrics", icon: IoBarChart, color: "text-sky-600" },
     ],
   },
 ];
 
 export default function ManagementHomePage() {
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-6 space-y-4">
+    <div className="mx-auto max-w-lg px-4 py-6 space-y-8 md:max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Management Home</h1>
-        <p className="text-sm text-muted-foreground">
-          Quick access to grouped management functions.
+        <h1 className="text-2xl font-bold tracking-tight text-amber-950">
+          Management
+        </h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Quick access to all management tools.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="space-y-6 md:grid md:grid-cols-2 md:gap-6 md:space-y-0 lg:grid-cols-3">
         {groups.map((group) => (
-          <Card key={group.title}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{group.title}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {group.items.map(({ href, label, icon: Icon }) => (
-                <Link key={href} href={href}>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between px-2 text-sm"
-                  >
-                    <span className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" />
-                      {label}
-                    </span>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+          <section key={group.title}>
+            <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/80">
+              {group.title}
+            </h2>
+            <div className="rounded-2xl border border-amber-200/60 bg-white/70 shadow-sm backdrop-blur">
+              {group.items.map(({ href, label, desc, icon: Icon, color }, idx) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-amber-50/60 active:bg-amber-100/50 ${idx !== group.items.length - 1 ? "border-b border-amber-100/80" : ""} ${idx === 0 ? "rounded-t-2xl" : ""} ${idx === group.items.length - 1 ? "rounded-b-2xl" : ""}`}
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 ${color}`}>
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-foreground">{label}</span>
+                    <span className="block text-xs text-muted-foreground">{desc}</span>
+                  </span>
+                  <IoChevronForward className="h-4 w-4 shrink-0 text-muted-foreground/40" />
                 </Link>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         ))}
       </div>
     </div>
