@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { settlementAccount, settlementLedger, user } from "@/lib/db/schema";
+import { settlementAccount, settlementLedger } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
-import { createContact, createFundAccount, hasRazorpayPayoutCredentials } from "@/lib/razorpay-payout";
 import { encryptKeySecretForStorage } from "@/lib/razorpay";
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
@@ -92,19 +91,10 @@ export async function PUT(
       (Boolean(payload.bankAccountNumber) || normalizedIfsc !== existing.bankIfsc || normalizedHolder !== existing.bankAccountHolderName);
     const upiChanged = nextMethod === "UPI" && Boolean(payload.upiVpa && payload.upiVpa.trim() !== existing.upiVpa);
     const payoutDetailsChanged = bankDetailsChanged || upiChanged || nextMethod !== existing.method;
-    const canProvisionPayoutNow = hasRazorpayPayoutCredentials();
-    const pendingUpiNeedsRetry =
-      !payoutDetailsChanged &&
-      nextMethod === "UPI" &&
-      existing.status === "PENDING_VERIFICATION" &&
-      !existing.razorpayFundAccountId &&
-      canProvisionPayoutNow;
 
-    let razorpayContactId = existing.razorpayContactId;
-    let razorpayFundAccountId = existing.razorpayFundAccountId;
     let status = existing.status;
 
-    if (payoutDetailsChanged || pendingUpiNeedsRetry) {
+    if (payoutDetailsChanged) {
       if (
         nextMethod === "BANK_ACCOUNT" &&
         (!payload.bankAccountNumber?.trim() || !normalizedIfsc || !normalizedHolder)
@@ -119,39 +109,8 @@ export async function PUT(
         return NextResponse.json({ error: "UPI VPA is required" }, { status: 400 });
       }
 
+      // Payment details changed — require re-verification
       status = "PENDING_VERIFICATION";
-      razorpayFundAccountId = null;
-
-      if (canProvisionPayoutNow) {
-        if (!razorpayContactId) {
-          const [actor] = await db
-            .select({ name: user.name, email: user.email, phone: user.phone })
-            .from(user)
-            .where(eq(user.id, actorUserId))
-            .limit(1);
-
-          razorpayContactId = await createContact({
-            name: actor?.name || payload.label || existing.label,
-            email: actor?.email,
-            phone: actor?.phone,
-          });
-        }
-
-        razorpayFundAccountId =
-          nextMethod === "BANK_ACCOUNT"
-            ? await createFundAccount(razorpayContactId, {
-                bankDetails: {
-                  bankAccountNumber: payload.bankAccountNumber?.trim() || "",
-                  bankIfsc: normalizedIfsc || "",
-                  bankAccountHolderName: normalizedHolder || "",
-                },
-              })
-            : await createFundAccount(razorpayContactId, {
-                upiVpa: normalizedVpa || "",
-              });
-
-        status = "ACTIVE";
-      }
     }
 
     const [updated] = await db
@@ -168,8 +127,6 @@ export async function PUT(
         bankIfsc: nextMethod === "BANK_ACCOUNT" ? normalizedIfsc : null,
         bankAccountHolderName: nextMethod === "BANK_ACCOUNT" ? normalizedHolder : null,
         upiVpa: nextMethod === "UPI" ? normalizedVpa : null,
-        razorpayContactId,
-        razorpayFundAccountId,
         status,
         updatedAt: new Date(),
       })

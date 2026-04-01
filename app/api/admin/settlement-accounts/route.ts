@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { canteen, canteenPaymentRouting, settlementAccount, user } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { encryptKeySecretForStorage } from "@/lib/razorpay";
-import { createContact, createFundAccount, hasRazorpayPayoutCredentials } from "@/lib/razorpay-payout";
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
@@ -194,33 +193,6 @@ export async function POST(request: NextRequest) {
       .where(eq(user.id, actorUserId))
       .limit(1);
 
-    let razorpayContactId: string | null = null;
-    let razorpayFundAccountId: string | null = null;
-    let status: "ACTIVE" | "PENDING_VERIFICATION" = "PENDING_VERIFICATION";
-
-    if (hasRazorpayPayoutCredentials()) {
-      razorpayContactId = await createContact({
-        name: actor?.name || payload.label,
-        email: actor?.email,
-        phone: actor?.phone,
-      });
-
-      razorpayFundAccountId =
-        payload.method === "BANK_ACCOUNT"
-          ? await createFundAccount(razorpayContactId, {
-              bankDetails: {
-                bankAccountNumber: normalizedAccount!,
-                bankIfsc: normalizedIfsc!,
-                bankAccountHolderName: normalizedHolder!,
-              },
-            })
-          : await createFundAccount(razorpayContactId, {
-              upiVpa: normalizedVpa!,
-            });
-
-      status = "ACTIVE";
-    }
-
     const [created] = await db
       .insert(settlementAccount)
       .values({
@@ -233,19 +205,14 @@ export async function POST(request: NextRequest) {
         bankIfsc: payload.method === "BANK_ACCOUNT" ? normalizedIfsc : null,
         bankAccountHolderName: payload.method === "BANK_ACCOUNT" ? normalizedHolder : null,
         upiVpa: payload.method === "UPI" ? normalizedVpa : null,
-        razorpayContactId,
-        razorpayFundAccountId,
-        status,
+        status: "PENDING_VERIFICATION",
       })
       .returning({
         id: settlementAccount.id,
         status: settlementAccount.status,
       });
 
-    return NextResponse.json({
-      account: created,
-      payoutProvisioned: Boolean(razorpayContactId && razorpayFundAccountId),
-    });
+    return NextResponse.json({ account: created });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
