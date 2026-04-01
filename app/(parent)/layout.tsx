@@ -5,19 +5,18 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { IndianRupee } from "lucide-react";
 import {
-  UtensilsCrossed,
-  ShoppingCart,
-  BookOpen,
-  BookOpenText,
-  Wallet,
-  ClipboardList,
-  Shield,
-  IndianRupee,
-  Sparkles,
-  MessageSquareText,
-  Bell,
-} from "lucide-react";
+  IoRestaurant,
+  IoCart,
+  IoBook,
+  IoWallet,
+  IoReceipt,
+  IoShieldCheckmark,
+  IoSparkles,
+  IoChatbubbleEllipses,
+  IoNotifications,
+} from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
@@ -341,7 +340,7 @@ function ParentLayoutContent({
         </div>
       ) : notifItems.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-          <Bell className="mx-auto h-6 w-6 text-muted-foreground/30" />
+          <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
           <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
         </div>
       ) : (
@@ -380,18 +379,17 @@ function ParentLayoutContent({
   const tabs: TabItem[] = useMemo(() => {
     if (parentMode === "canteen") {
       return [
-        { key: "home" as const, href: "/menu", icon: UtensilsCrossed, label: "Menu", locked: false },
-        { key: "orders" as const, href: "/orders", icon: ClipboardList, label: "Orders", locked: false },
-        { key: "cart" as const, href: "/cart", icon: ShoppingCart, label: "Cart", locked: false },
-        { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
+        { key: "home" as const, href: "/menu", icon: IoRestaurant, label: "Menu", locked: false },
+        { key: "orders" as const, href: "/orders", icon: IoReceipt, label: "Orders", locked: false },
+        { key: "cart" as const, href: "/cart", icon: IoCart, label: "Cart", locked: false },
+        { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
         { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
       ];
     }
     return [
-      { key: "showcase" as const, href: "/library-showcase", icon: Sparkles, label: "Showcase", locked: false },
-      { key: "reader" as const, href: "/library-reader", icon: BookOpenText, label: "Reader", locked: !certePlusActive },
-      { key: "home" as const, href: "/library-history", icon: BookOpen, label: "History", locked: false },
-      { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
+      { key: "showcase" as const, href: "/library-showcase", icon: IoSparkles, label: "Showcase", locked: false },
+      { key: "home" as const, href: "/library-history", icon: IoBook, label: "History", locked: false },
+      { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
       { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
     ];
   }, [certePlusActive, parentMode, withParentMode]);
@@ -446,7 +444,7 @@ function ParentLayoutContent({
                     : "bg-[#d4891a] text-white hover:bg-[#b87314]",
                 )}
               >
-                <MessageSquareText className="h-5 w-5" />
+                <IoChatbubbleEllipses className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -463,7 +461,7 @@ function ParentLayoutContent({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <UtensilsCrossed className={cn("h-3.5 w-3.5 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
+                <IoRestaurant className={cn("h-3.5 w-3.5 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
                 <span>Canteen</span>
               </Link>
 
@@ -476,7 +474,7 @@ function ParentLayoutContent({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <BookOpen className={cn("h-3.5 w-3.5 transition-colors", parentMode === "library" ? "text-primary" : "")} />
+                <IoBook className={cn("h-3.5 w-3.5 transition-colors", parentMode === "library" ? "text-primary" : "")} />
                 <span>Library</span>
                 {overdueCount > 0 && (
                   <span className="absolute -right-1 -top-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
@@ -571,8 +569,6 @@ function ParentLayoutContent({
                           isActive ? "text-primary" : "text-muted-foreground/70",
                           tab.key === "cart" && cartBounce && "animate-bounce",
                         )}
-                        strokeWidth={isActive ? 2.5 : 1.8}
-                        fill={isActive ? "currentColor" : "none"}
                       />
                     ) : null}
                     <span className={cn(
@@ -650,7 +646,7 @@ function ParentLayoutContent({
             <div className="flex h-full flex-col">
               <div className="space-y-1 border-b border-border/60 px-5 py-3">
                 <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <ShoppingCart className="h-4 w-4 text-primary" />
+                  <IoCart className="h-4 w-4 text-primary" />
                   Cart
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -727,7 +723,7 @@ function ParentLayoutContent({
             <div className="flex h-full flex-col">
               <div className="space-y-1 border-b border-border/60 px-5 py-3">
                 <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <Wallet className="h-4 w-4 text-primary" />
+                  <IoWallet className="h-4 w-4 text-primary" />
                   Family Wallet
                 </h3>
                 <p className="text-sm text-muted-foreground">
@@ -796,7 +792,7 @@ function ParentLayoutContent({
                     void router.push(withParentMode("/wallet"));
                   }}
                 >
-                  <Sparkles className="h-4 w-4" />
+                  <IoSparkles className="h-4 w-4" />
                   Open Wallet
                 </Button>
               </div>
@@ -814,7 +810,7 @@ function ParentLayoutContent({
               <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
                 <div className="space-y-0.5">
                   <h3 className="flex items-center gap-2 text-base font-semibold">
-                    <Bell className="h-4 w-4 text-orange-500" />
+                    <IoNotifications className="h-4 w-4 text-orange-500" />
                     Notifications
                   </h3>
                   <p className="text-xs text-muted-foreground">{notifUnreadCount} unread</p>
@@ -866,7 +862,7 @@ function ParentLayoutContent({
               <div className="flex h-full flex-col">
                 <SheetHeader className="space-y-1 border-b border-border/60">
                   <SheetTitle className="flex items-center gap-2 text-base">
-                    <ShoppingCart className="h-4 w-4 text-primary" />
+                    <IoCart className="h-4 w-4 text-primary" />
                     Cart
                   </SheetTitle>
                   <SheetDescription>
@@ -951,7 +947,7 @@ function ParentLayoutContent({
               <div className="flex h-full flex-col">
                 <SheetHeader className="space-y-1 border-b border-border/60">
                   <SheetTitle className="flex items-center gap-2 text-base">
-                    <Wallet className="h-4 w-4 text-primary" />
+                    <IoWallet className="h-4 w-4 text-primary" />
                     Family Wallet
                   </SheetTitle>
                   <SheetDescription>
@@ -1020,7 +1016,7 @@ function ParentLayoutContent({
                       void router.push(withParentMode("/wallet"));
                     }}
                   >
-                    <Sparkles className="h-4 w-4" />
+                    <IoSparkles className="h-4 w-4" />
                     Open Wallet
                   </Button>
                 </SheetFooter>
@@ -1043,7 +1039,7 @@ function ParentLayoutContent({
               <div className="flex h-full flex-col">
                 <SheetHeader className="space-y-1 border-b border-border/60">
                   <SheetTitle className="flex items-center gap-2 text-base">
-                    <Bell className="h-4 w-4 text-orange-500" />
+                    <IoNotifications className="h-4 w-4 text-orange-500" />
                     Notifications
                   </SheetTitle>
                   <SheetDescription>
@@ -1090,7 +1086,7 @@ function ParentLayoutContent({
       >
         <div className="flex flex-col items-center gap-4 py-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <Shield className="h-7 w-7 text-primary" />
+            <IoShieldCheckmark className="h-7 w-7 text-primary" />
           </div>
           <div className="text-center">
             <h3 className="text-lg font-bold">Unlock Controls</h3>
