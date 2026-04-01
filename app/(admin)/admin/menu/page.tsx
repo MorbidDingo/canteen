@@ -274,6 +274,21 @@ export default function AdminMenuPage() {
     }
   }, [selectedCanteen]);
 
+  // Silent background refresh (no loading spinner)
+  const refreshItems = useCallback(async () => {
+    try {
+      const query = selectedCanteen
+        ? `?canteenId=${encodeURIComponent(selectedCanteen)}`
+        : "";
+      const res = await fetch(`/api/admin/menu${query}`);
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      setItems(data.items);
+    } catch {
+      // Silently fail on background refresh
+    }
+  }, [selectedCanteen]);
+
   const fetchCanteens = useCallback(async () => {
     try {
       setCanteensLoading(true);
@@ -295,7 +310,7 @@ export default function AdminMenuPage() {
   }, [fetchItems, fetchCanteens, canteenScopeHydrated]);
 
   // Instant refresh via SSE when any menu event occurs
-  useRealtimeData(fetchItems, "menu-updated");
+  useRealtimeData(refreshItems, "menu-updated");
 
   const openCreate = () => {
     setEditingItem(null);
@@ -378,7 +393,7 @@ export default function AdminMenuPage() {
 
       toast.success(editingItem ? "Item updated" : "Item created");
       setDialogOpen(false);
-      fetchItems();
+      refreshItems();
       emitEvent("menu-updated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save");
@@ -395,7 +410,7 @@ export default function AdminMenuPage() {
       const res = await fetch(`/api/admin/menu/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Item deleted");
-      fetchItems();
+      refreshItems();
       emitEvent("menu-updated");
     } catch {
       toast.error("Failed to delete item");
@@ -415,7 +430,7 @@ export default function AdminMenuPage() {
       toast.success(
         item.available ? "Item marked unavailable" : "Item marked available",
       );
-      fetchItems();
+      refreshItems();
       emitEvent("menu-updated");
     } catch {
       toast.error("Failed to toggle availability");
