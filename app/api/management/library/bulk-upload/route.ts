@@ -6,6 +6,7 @@ import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 import { runParallelForEach, type RowProgressLog } from "@/lib/bulk-upload-engine";
 import type { BookCopyCondition } from "@/lib/constants";
+import { searchBookImage } from "@/lib/book-search";
 import * as XLSX from "xlsx";
 
 type RowData = {
@@ -266,6 +267,17 @@ async function processUpload(
       }
 
       if (!bookId) {
+        let coverImageUrl: string | null = null;
+        try {
+          const imageResult = await searchBookImage(row.title, row.author, row.isbn);
+          if (imageResult?.imageUrl) {
+            coverImageUrl = imageResult.imageUrl;
+          }
+        } catch (err) {
+          // Silently skip image search on error; continue with book creation
+          console.warn(`searchBookImage failed for "${row.title}" during bulk upload:`, err);
+        }
+
         const [newBook] = await db
           .insert(book)
           .values({
@@ -277,6 +289,7 @@ async function processUpload(
             publisher: row.publisher,
             edition: row.edition,
             category: row.category,
+            coverImageUrl,
             totalCopies: 0,
             availableCopies: 0,
           })
