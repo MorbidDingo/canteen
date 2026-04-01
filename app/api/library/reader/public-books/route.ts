@@ -14,6 +14,8 @@ import {
 } from "@/lib/gutenberg";
 import { searchBookImage } from "@/lib/book-search";
 
+const MAX_BOOK_TITLE_LENGTH = 200;
+
 /**
  * GET /api/library/reader/public-books
  *
@@ -133,7 +135,7 @@ export async function GET(request: NextRequest) {
         .insert(readableBook)
         .values({
           organizationId,
-          title: gb.title.length > 200 ? gb.title.slice(0, 200) : gb.title,
+          title: gb.title.length > MAX_BOOK_TITLE_LENGTH ? gb.title.slice(0, MAX_BOOK_TITLE_LENGTH) : gb.title,
           author,
           category,
           description,

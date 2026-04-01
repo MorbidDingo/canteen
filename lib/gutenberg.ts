@@ -6,7 +6,7 @@
  * Book text: https://www.gutenberg.org/files/{id}/{id}-0.txt (UTF-8 plain text)
  */
 
-// ─── Types ──────────────────────────────────────────────────
+// ─── Types (match Gutendex API response format) ─────────
 
 export interface GutenbergBook {
   id: number;

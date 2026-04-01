@@ -12,7 +12,7 @@ const vector = customType<{ data: number[]; driverParam: string }>({
   },
   fromDriver(value: unknown): number[] {
     if (typeof value === "string") {
-      return JSON.parse(value.replace(/^\[/, "[").replace(/\]$/, "]"));
+      return JSON.parse(value);
     }
     return value as number[];
   },
