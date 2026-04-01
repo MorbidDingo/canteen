@@ -9,6 +9,7 @@ import {
   UtensilsCrossed,
   ShoppingCart,
   BookOpen,
+  BookOpenText,
   Wallet,
   ClipboardList,
   Shield,
@@ -388,6 +389,7 @@ function ParentLayoutContent({
     }
     return [
       { key: "showcase" as const, href: "/library-showcase", icon: Sparkles, label: "Showcase", locked: false },
+      { key: "reader" as const, href: "/library-reader", icon: BookOpenText, label: "Reader", locked: !certePlusActive },
       { key: "home" as const, href: "/library-history", icon: BookOpen, label: "History", locked: false },
       { key: "controls" as const, href: withParentMode("/controls"), icon: Shield, label: "Controls", locked: !certePlusActive },
       { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },

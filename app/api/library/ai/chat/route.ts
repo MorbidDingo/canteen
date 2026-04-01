@@ -3,7 +3,7 @@ import { and, count, desc, eq, gte, or, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { db } from "@/lib/db";
-import { appSetting, book, bookCopy, bookIssuance, child } from "@/lib/db/schema";
+import { appSetting, book, bookChapter, bookCopy, bookContentEmbedding, bookIssuance, child, readableBook } from "@/lib/db/schema";
 
 const DAILY_SUMMARY_LIMIT = 5;
 const SUMMARY_KEY_PREFIX = "library_ai_summary_usage";
@@ -107,6 +107,29 @@ const LIBRARY_TOOL_DEFINITIONS: Anthropic.Tool[] = [
         query: {
           type: "string",
           description: "Book title or book ID to check",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_book_content",
+    description:
+      "Search within the content of digital readable books. Use this to answer questions about what happens in a book, find quotes, or look up specific passages. Searches book chapters and content embeddings.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Text to search for within book content",
+        },
+        bookTitle: {
+          type: "string",
+          description: "Optional: restrict search to a specific book title",
+        },
+        limit: {
+          type: "number",
+          description: "Max results (default 5, max 10)",
         },
       },
       required: ["query"],
@@ -486,6 +509,86 @@ async function executeLibraryTool(
         });
       } catch (err) {
         return JSON.stringify({ error: "Failed to check availability", details: String(err) });
+      }
+    }
+
+    case "search_book_content": {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      if (!query) return JSON.stringify({ error: "Query is required" });
+
+      const bookTitle = typeof input.bookTitle === "string" ? input.bookTitle.trim() : "";
+      const limit = typeof input.limit === "number" ? Math.min(Math.max(1, input.limit), 10) : 5;
+
+      try {
+        // Search content embeddings first (stored chunks)
+        const embeddingResults = await db
+          .select({
+            content: bookContentEmbedding.content,
+            chapterNumber: bookContentEmbedding.chapterNumber,
+            bookTitle: readableBook.title,
+            bookAuthor: readableBook.author,
+          })
+          .from(bookContentEmbedding)
+          .innerJoin(readableBook, eq(readableBook.id, bookContentEmbedding.readableBookId))
+          .where(
+            and(
+              eq(readableBook.organizationId, ctx.orgId),
+              sql`LOWER(${bookContentEmbedding.content}) LIKE LOWER(${"%" + query + "%"})`,
+              bookTitle
+                ? sql`LOWER(${readableBook.title}) LIKE LOWER(${"%" + bookTitle + "%"})`
+                : undefined,
+            ),
+          )
+          .limit(limit);
+
+        // Fallback: search chapter content directly
+        if (embeddingResults.length === 0) {
+          const chapterResults = await db
+            .select({
+              content: bookChapter.content,
+              chapterNumber: bookChapter.chapterNumber,
+              chapterTitle: bookChapter.title,
+              bookTitle: readableBook.title,
+              bookAuthor: readableBook.author,
+            })
+            .from(bookChapter)
+            .innerJoin(readableBook, eq(readableBook.id, bookChapter.readableBookId))
+            .where(
+              and(
+                eq(readableBook.organizationId, ctx.orgId),
+                sql`LOWER(${bookChapter.content}) LIKE LOWER(${"%" + query + "%"})`,
+                bookTitle
+                  ? sql`LOWER(${readableBook.title}) LIKE LOWER(${"%" + bookTitle + "%"})`
+                  : undefined,
+              ),
+            )
+            .limit(limit);
+
+          return JSON.stringify({
+            source: "chapters",
+            results: chapterResults.map((r) => ({
+              bookTitle: r.bookTitle,
+              bookAuthor: r.bookAuthor,
+              chapter: r.chapterNumber,
+              chapterTitle: r.chapterTitle,
+              excerpt: compactText(r.content, 500),
+            })),
+            count: chapterResults.length,
+          });
+        }
+
+        return JSON.stringify({
+          source: "embeddings",
+          results: embeddingResults.map((r) => ({
+            bookTitle: r.bookTitle,
+            bookAuthor: r.bookAuthor,
+            chapter: r.chapterNumber,
+            excerpt: compactText(r.content, 500),
+          })),
+          count: embeddingResults.length,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to search book content", details: String(err) });
       }
     }
 
