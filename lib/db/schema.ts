@@ -1750,3 +1750,125 @@ export const orderCancellationReasonRelations = relations(orderCancellationReaso
   order: one(order, { fields: [orderCancellationReason.orderId], references: [order.id] }),
   user: one(user, { fields: [orderCancellationReason.userId], references: [user.id] }),
 }));
+
+// ─── Book Reader (Digital Reading) ──────────────────────
+
+export const readableBook = pgTable("readable_book", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  bookId: text("book_id").references(() => book.id, { onDelete: "set null" }),
+  organizationId: text("organization_id").references(() => organization.id, { onDelete: "cascade" }),
+  libraryId: text("library_id").references(() => library.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  author: text("author").notNull(),
+  category: text("category").notNull().default("GENERAL"),
+  description: text("description"),
+  coverImageUrl: text("cover_image_url"),
+  language: text("language").notNull().default("en"),
+  totalPages: integer("total_pages").notNull().default(0),
+  totalChapters: integer("total_chapters").notNull().default(0),
+  isAudioEnabled: boolean("is_audio_enabled").notNull().default(false),
+  status: text("status", { enum: ["ACTIVE", "DRAFT", "ARCHIVED"] }).notNull().default("ACTIVE"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const bookChapter = pgTable("book_chapter", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  readableBookId: text("readable_book_id").notNull().references(() => readableBook.id, { onDelete: "cascade" }),
+  chapterNumber: integer("chapter_number").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  pageStart: integer("page_start").notNull().default(1),
+  pageEnd: integer("page_end").notNull().default(1),
+  audioUrl: text("audio_url"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const readingSession = pgTable("reading_session", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  readableBookId: text("readable_book_id").notNull().references(() => readableBook.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  currentChapter: integer("current_chapter").notNull().default(1),
+  currentPage: integer("current_page").notNull().default(1),
+  scrollPosition: doublePrecision("scroll_position").notNull().default(0),
+  readingMode: text("reading_mode", {
+    enum: ["LIGHT", "DARK", "BLUE_LIGHT", "GREY"],
+  }).notNull().default("LIGHT"),
+  fontSize: integer("font_size").notNull().default(16),
+  startedAt: timestamp("started_at").notNull().$defaultFn(() => new Date()),
+  lastReadAt: timestamp("last_read_at").notNull().$defaultFn(() => new Date()),
+}, (table) => [
+  unique("reading_session_user_book_unique").on(table.userId, table.readableBookId),
+]);
+
+export const readingBookmark = pgTable("reading_bookmark", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  readableBookId: text("readable_book_id").notNull().references(() => readableBook.id, { onDelete: "cascade" }),
+  chapterNumber: integer("chapter_number").notNull(),
+  page: integer("page").notNull(),
+  label: text("label"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const readingHighlight = pgTable("reading_highlight", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  readableBookId: text("readable_book_id").notNull().references(() => readableBook.id, { onDelete: "cascade" }),
+  chapterNumber: integer("chapter_number").notNull(),
+  page: integer("page").notNull(),
+  startOffset: integer("start_offset").notNull(),
+  endOffset: integer("end_offset").notNull(),
+  highlightedText: text("highlighted_text").notNull(),
+  color: text("color").notNull().default("#fbbf24"),
+  note: text("note"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const bookContentEmbedding = pgTable("book_content_embedding", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  readableBookId: text("readable_book_id").notNull().references(() => readableBook.id, { onDelete: "cascade" }),
+  chapterNumber: integer("chapter_number").notNull(),
+  chunkIndex: integer("chunk_index").notNull().default(0),
+  content: text("content").notNull(),
+  embedding: text("embedding"), // JSON array of floats (pgvector-ready; switch to vector type when extension enabled)
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Book Reader Relations ──────────────────────────────
+
+export const readableBookRelations = relations(readableBook, ({ one, many }) => ({
+  book: one(book, { fields: [readableBook.bookId], references: [book.id] }),
+  organization: one(organization, { fields: [readableBook.organizationId], references: [organization.id] }),
+  library: one(library, { fields: [readableBook.libraryId], references: [library.id] }),
+  chapters: many(bookChapter),
+  sessions: many(readingSession),
+  bookmarks: many(readingBookmark),
+  highlights: many(readingHighlight),
+  embeddings: many(bookContentEmbedding),
+}));
+
+export const bookChapterRelations = relations(bookChapter, ({ one }) => ({
+  readableBook: one(readableBook, { fields: [bookChapter.readableBookId], references: [readableBook.id] }),
+}));
+
+export const readingSessionRelations = relations(readingSession, ({ one }) => ({
+  user: one(user, { fields: [readingSession.userId], references: [user.id] }),
+  readableBook: one(readableBook, { fields: [readingSession.readableBookId], references: [readableBook.id] }),
+  organization: one(organization, { fields: [readingSession.organizationId], references: [organization.id] }),
+}));
+
+export const readingBookmarkRelations = relations(readingBookmark, ({ one }) => ({
+  user: one(user, { fields: [readingBookmark.userId], references: [user.id] }),
+  readableBook: one(readableBook, { fields: [readingBookmark.readableBookId], references: [readableBook.id] }),
+}));
+
+export const readingHighlightRelations = relations(readingHighlight, ({ one }) => ({
+  user: one(user, { fields: [readingHighlight.userId], references: [user.id] }),
+  readableBook: one(readableBook, { fields: [readingHighlight.readableBookId], references: [readableBook.id] }),
+}));
+
+export const bookContentEmbeddingRelations = relations(bookContentEmbedding, ({ one }) => ({
+  readableBook: one(readableBook, { fields: [bookContentEmbedding.readableBookId], references: [readableBook.id] }),
+}));
