@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import {
   IoShieldCheckmark,
   IoDesktop,
@@ -70,9 +71,14 @@ export default function ManagementHomePage() {
                 <Link
                   key={href}
                   href={href}
-                  className={`flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-amber-50/60 active:bg-amber-100/50 ${idx !== group.items.length - 1 ? "border-b border-amber-100/80" : ""} ${idx === 0 ? "rounded-t-2xl" : ""} ${idx === group.items.length - 1 ? "rounded-b-2xl" : ""}`}
+                  className={cn(
+                    "flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-amber-50/60 active:bg-amber-100/50",
+                    idx !== group.items.length - 1 && "border-b border-amber-100/80",
+                    idx === 0 && "rounded-t-2xl",
+                    idx === group.items.length - 1 && "rounded-b-2xl",
+                  )}
                 >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50 ${color}`}>
+                  <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-50", color)}>
                     <Icon className="h-[18px] w-[18px]" />
                   </span>
                   <span className="min-w-0 flex-1">
