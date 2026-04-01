@@ -1,8 +1,5 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check, customType, pgExtension } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check, customType } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-
-// ─── pgvector Extension ───────────────────────────────────
-export const vectorExtension = pgExtension("vector");
 
 // ─── pgvector Custom Type ─────────────────────────────────
 const vector = customType<{ data: number[]; driverParam: string }>({
