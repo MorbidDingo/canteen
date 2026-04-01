@@ -54,6 +54,8 @@ export async function GET() {
       totalPages: readableBook.totalPages,
       totalChapters: readableBook.totalChapters,
       isAudioEnabled: readableBook.isAudioEnabled,
+      isPublicDomain: readableBook.isPublicDomain,
+      contentType: readableBook.contentType,
     })
     .from(readableBook)
     .where(
