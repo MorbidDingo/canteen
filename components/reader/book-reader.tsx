@@ -48,6 +48,7 @@ interface BookInfo {
   totalChapters: number;
   isAudioEnabled: boolean;
   coverImageUrl: string | null;
+  contentType?: string;
 }
 
 interface BookmarkItem {

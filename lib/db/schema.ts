@@ -1,5 +1,22 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check, customType } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+
+// ─── pgvector Custom Type ─────────────────────────────────
+const vector = customType<{ data: number[]; driverParam: string }>({
+  dataType(config) {
+    const dimensions = (config as { dimensions?: number })?.dimensions ?? 1536;
+    return `vector(${dimensions})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === "string") {
+      return JSON.parse(value.replace(/^\[/, "[").replace(/\]$/, "]"));
+    }
+    return value as number[];
+  },
+});
 
 // ─── Better Auth Core Tables ─────────────────────────────
 
@@ -1814,6 +1831,7 @@ export const readingBookmark = pgTable("reading_bookmark", {
   chapterNumber: integer("chapter_number").notNull(),
   page: integer("page").notNull(),
   label: text("label"),
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -1828,6 +1846,7 @@ export const readingHighlight = pgTable("reading_highlight", {
   highlightedText: text("highlighted_text").notNull(),
   color: text("color").notNull().default("#fbbf24"),
   note: text("note"),
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -1837,7 +1856,7 @@ export const bookContentEmbedding = pgTable("book_content_embedding", {
   chapterNumber: integer("chapter_number").notNull(),
   chunkIndex: integer("chunk_index").notNull().default(0),
   content: text("content").notNull(),
-  embedding: text("embedding"), // JSON array of floats (pgvector-ready; switch to vector type when extension enabled)
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 

@@ -469,7 +469,7 @@ function ParentLayoutContent({
               </Link>
 
               <Link
-                href="/library-history"
+                href="/library-reader"
                 className={cn(
                   "relative inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
                   parentMode === "library"
