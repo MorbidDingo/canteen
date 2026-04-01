@@ -108,7 +108,7 @@ const bookOpenVariants = {
     scaleX: 1,
     opacity: 1,
     transformOrigin: "left center",
-    transition: { type: "spring", stiffness: 200, damping: 25, mass: 1 },
+    transition: { type: "spring" as const, stiffness: 200, damping: 25, mass: 1 },
   },
 };
 
@@ -797,7 +797,11 @@ export function BookReader({ bookId }: { bookId: string }) {
                     <button
                       key={bm.id}
                       onClick={() => {
-                        setDirection(bm.chapterNumber > currentChapter ? 1 : bm.chapterNumber < currentChapter ? -1 : bm.page > currentPage ? 1 : -1);
+                        const navDir =
+                          bm.chapterNumber !== currentChapter
+                            ? (bm.chapterNumber > currentChapter ? 1 : -1)
+                            : (bm.page > currentPage ? 1 : -1);
+                        setDirection(navDir);
                         setCurrentChapter(bm.chapterNumber);
                         setCurrentPage(bm.page);
                         setShowBookmarks(false);

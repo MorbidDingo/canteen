@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { readableBook, readingSession, certeSubscription } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, gte, desc, count } from "drizzle-orm";
+import { and, eq, gte, count } from "drizzle-orm";
+import { READER_MAX_ACTIVE_BOOKS } from "@/lib/constants";
 
 export async function GET() {
   let access;
@@ -79,6 +80,6 @@ export async function GET() {
   return NextResponse.json({
     books: books.map((b) => ({ ...b, isActive: activeBookIds.has(b.id) })),
     activeSessionCount: sessionCount,
-    maxActiveSessions: 3,
+    maxActiveSessions: READER_MAX_ACTIVE_BOOKS,
   });
 }
