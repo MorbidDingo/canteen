@@ -408,4 +408,25 @@ export const GATE_DIRECTION_LABELS: Record<GateDirection, string> = {
 
 /** Cooldown in milliseconds between consecutive taps for the same card */
 export const GATE_TAP_COOLDOWN_MS = 3000;
+
+// ─── Book Reader ────────────────────────────────────────
+
+export const READER_MAX_ACTIVE_BOOKS = 3;
+
+export const READING_MODES = {
+  LIGHT: "LIGHT",
+  DARK: "DARK",
+  BLUE_LIGHT: "BLUE_LIGHT",
+  GREY: "GREY",
+} as const;
+
+export type ReadingMode = (typeof READING_MODES)[keyof typeof READING_MODES];
+
+export const READING_MODE_LABELS: Record<ReadingMode, string> = {
+  LIGHT: "Light",
+  DARK: "Dark",
+  BLUE_LIGHT: "Blue Light Filter",
+  GREY: "Grey",
+};
+
 import { DEFAULT_BREAK_SLOTS } from "@/lib/break-slots";
