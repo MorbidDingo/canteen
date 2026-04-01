@@ -44,6 +44,7 @@ const canteenLinks = [
 ];
 
 const libraryLinks = [
+  { href: "/library-reader", label: "Reader", icon: BookOpen },
   { href: "/library-history", label: "History", icon: BookOpen },
 ];
 
@@ -98,6 +99,7 @@ export function Navbar() {
     "/cart",
     "/orders",
     "/pre-orders",
+    "/library-reader",
     "/library-history",
     "/settings",
     "/children",
@@ -177,7 +179,7 @@ export function Navbar() {
                   <span className="hidden sm:inline text-sm">Canteen</span>
                 </Button>
               </Link>
-              <Link href="/library-history">
+              <Link href="/library-reader">
                 <Button
                   variant={parentMode === "library" ? "default" : "ghost"}
                   size="sm"
@@ -517,9 +519,9 @@ export function Navbar() {
                 </>
               ) : (
                 <>
-                  {/* Library: History */}
+                  {/* Library: Reader */}
                   <Link
-                    href="/library-history"
+                    href="/library-reader"
                     className={cn(
                       "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
                       !isSettingsPage

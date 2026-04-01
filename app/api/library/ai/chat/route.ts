@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { db } from "@/lib/db";
 import { appSetting, book, bookChapter, bookCopy, bookContentEmbedding, bookIssuance, child, readableBook } from "@/lib/db/schema";
+import { searchGutenbergBooks, formatAuthorName } from "@/lib/gutenberg";
 
 const DAILY_SUMMARY_LIMIT = 5;
 const SUMMARY_KEY_PREFIX = "library_ai_summary_usage";
@@ -115,7 +116,7 @@ const LIBRARY_TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: "search_book_content",
     description:
-      "Search within the content of digital readable books. Use this to answer questions about what happens in a book, find quotes, or look up specific passages. Searches book chapters and content embeddings.",
+      "Search within the content of digital readable books, including public domain books from Project Gutenberg. Use this to answer questions about what happens in a book, find quotes, or look up specific passages. Searches book chapters, content embeddings, and can fetch content from Gutenberg for public domain books.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -130,6 +131,21 @@ const LIBRARY_TOOL_DEFINITIONS: Anthropic.Tool[] = [
         limit: {
           type: "number",
           description: "Max results (default 5, max 10)",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "search_public_domain_books",
+    description:
+      "Search for public domain books available on Project Gutenberg. Use this when a user asks about classic literature, public domain works, or wants to find freely available books to read.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "Search query — book title, author name, or topic",
         },
       },
       required: ["query"],
@@ -589,6 +605,34 @@ async function executeLibraryTool(
         });
       } catch (err) {
         return JSON.stringify({ error: "Failed to search book content", details: String(err) });
+      }
+    }
+
+    case "search_public_domain_books": {
+      const query = typeof input.query === "string" ? input.query.trim() : "";
+      if (!query) return JSON.stringify({ error: "Query is required" });
+
+      try {
+        const { books: gutenbergBooks, count: totalCount } = await searchGutenbergBooks({
+          search: query,
+          languages: "en",
+        });
+
+        return JSON.stringify({
+          source: "gutenberg",
+          results: gutenbergBooks.slice(0, 10).map((gb) => ({
+            gutenbergId: gb.id,
+            title: gb.title,
+            author: formatAuthorName(gb),
+            subjects: gb.subjects.slice(0, 5),
+            languages: gb.languages,
+            downloadCount: gb.download_count,
+            url: `https://www.gutenberg.org/ebooks/${gb.id}`,
+          })),
+          totalAvailable: totalCount,
+        });
+      } catch (err) {
+        return JSON.stringify({ error: "Failed to search Gutenberg", details: String(err) });
       }
     }
 

@@ -16,6 +16,7 @@ import {
   IoSparkles,
   IoChatbubbleEllipses,
   IoNotifications,
+  IoReader,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -76,6 +77,7 @@ function getParentMode(pathname: string, requestedMode: string | null): ParentMo
 
 function getActiveTab(pathname: string): string {
   if (pathname === "/library-showcase") return "showcase";
+  if (pathname.startsWith("/library-reader")) return "reader";
   if (["/settings", "/children", "/wallet", "/notifications", "/messaging-settings"].includes(pathname)) {
     return "settings";
   }
@@ -388,6 +390,7 @@ function ParentLayoutContent({
     }
     return [
       { key: "showcase" as const, href: "/library-showcase", icon: IoSparkles, label: "Showcase", locked: false },
+      { key: "reader" as const, href: "/library-reader", icon: IoReader, label: "Reader", locked: false },
       { key: "home" as const, href: "/library-history", icon: IoBook, label: "History", locked: false },
       { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
       { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
@@ -466,7 +469,7 @@ function ParentLayoutContent({
               </Link>
 
               <Link
-                href="/library-history"
+                href="/library-reader"
                 className={cn(
                   "relative inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
                   parentMode === "library"

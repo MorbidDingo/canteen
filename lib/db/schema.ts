@@ -1,5 +1,22 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check, customType } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
+
+// ─── pgvector Custom Type ─────────────────────────────────
+const vector = customType<{ data: number[]; driverParam: string }>({
+  dataType(config) {
+    const dimensions = (config as { dimensions?: number })?.dimensions ?? 1536;
+    return `vector(${dimensions})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: unknown): number[] {
+    if (typeof value === "string") {
+      return JSON.parse(value);
+    }
+    return value as number[];
+  },
+});
 
 // ─── Better Auth Core Tables ─────────────────────────────
 
@@ -1767,6 +1784,11 @@ export const readableBook = pgTable("readable_book", {
   totalPages: integer("total_pages").notNull().default(0),
   totalChapters: integer("total_chapters").notNull().default(0),
   isAudioEnabled: boolean("is_audio_enabled").notNull().default(false),
+  isPublicDomain: boolean("is_public_domain").notNull().default(false),
+  gutenbergId: text("gutenberg_id"),
+  sourceUrl: text("source_url"),
+  contentType: text("content_type", { enum: ["TEXT", "PDF", "SCANNED"] }).notNull().default("TEXT"),
+  isbn: text("isbn"),
   status: text("status", { enum: ["ACTIVE", "DRAFT", "ARCHIVED"] }).notNull().default("ACTIVE"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
@@ -1809,6 +1831,7 @@ export const readingBookmark = pgTable("reading_bookmark", {
   chapterNumber: integer("chapter_number").notNull(),
   page: integer("page").notNull(),
   label: text("label"),
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -1823,6 +1846,7 @@ export const readingHighlight = pgTable("reading_highlight", {
   highlightedText: text("highlighted_text").notNull(),
   color: text("color").notNull().default("#fbbf24"),
   note: text("note"),
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
@@ -1832,7 +1856,7 @@ export const bookContentEmbedding = pgTable("book_content_embedding", {
   chapterNumber: integer("chapter_number").notNull(),
   chunkIndex: integer("chunk_index").notNull().default(0),
   content: text("content").notNull(),
-  embedding: text("embedding"), // JSON array of floats (pgvector-ready; switch to vector type when extension enabled)
+  embedding: vector("embedding", { dimensions: 1536 }),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
