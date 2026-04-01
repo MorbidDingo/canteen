@@ -1,23 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { readableBook, bookChapter, certeSubscription } from "@/lib/db/schema";
+import { readableBook, bookChapter, certeSubscription, gutenbergCatalog } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, desc, sql } from "drizzle-orm";
 import {
-  searchGutenbergBooks,
-  getCoverImageUrl,
-  formatAuthorName,
-  mapCategory,
   fetchBookContent,
   parseIntoChapters,
   estimatePages,
-  type GutenbergBook,
 } from "@/lib/gutenberg";
-import { searchBookImage } from "@/lib/book-search";
 
 const MAX_BOOK_TITLE_LENGTH = 200;
-// Matches ISBN-13 (978/979 prefix + 10 digits) and ISBN-10 (9 digits + digit/X)
-const ISBN_REGEX = /\b97[89]\d{10}\b|\b\d{9}[\dX]\b/;
 
 /**
  * GET /api/library/reader/public-books
@@ -86,36 +78,30 @@ export async function GET(request: NextRequest) {
       ),
     );
 
-  if (existingPublicBooks.length > 0) {
+  // Check catalog size to see if we need to seed more books
+  const [{ total: catalogCount }] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(gutenbergCatalog);
+
+  // If org already has all catalog books seeded, just return them
+  if (existingPublicBooks.length > 0 && existingPublicBooks.length >= Number(catalogCount)) {
     return NextResponse.json({ books: existingPublicBooks, seeded: false });
   }
 
-  // Seed popular public domain books from Gutenberg
-  const { search, topic } = Object.fromEntries(new URL(request.url).searchParams);
+  // Seed from the gutenberg_catalog table (pre-seeded via seed script)
   try {
-    // Fetch up to 3 pages (~96 books) of popular English public domain books
-    const MAX_PAGES = 3;
-    const allGutenbergBooks: GutenbergBook[] = [];
+    const catalogBooks = await db
+      .select()
+      .from(gutenbergCatalog)
+      .orderBy(desc(gutenbergCatalog.downloadCount));
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      try {
-        const { books } = await searchGutenbergBooks({
-          search: search || undefined,
-          topic: topic || undefined,
-          languages: "en",
-          page,
-        });
-        if (books.length === 0) break;
-        allGutenbergBooks.push(...books);
-      } catch {
-        // If a page fails, stop paginating but continue with what we have
-        break;
-      }
+    if (catalogBooks.length === 0) {
+      return NextResponse.json({ books: [], seeded: false, message: "No books in catalog. Run db:seed:gutenberg first." });
     }
 
     const seededBooks = [];
 
-    for (const gb of allGutenbergBooks) {
+    for (const cb of catalogBooks) {
       // Check if this Gutenberg book already exists for the org
       const [existing] = await db
         .select({ id: readableBook.id })
@@ -123,51 +109,35 @@ export async function GET(request: NextRequest) {
         .where(
           and(
             eq(readableBook.organizationId, organizationId),
-            eq(readableBook.gutenbergId, String(gb.id)),
+            eq(readableBook.gutenbergId, String(cb.gutenbergId)),
           ),
         )
         .limit(1);
 
       if (existing) continue;
 
-      // Get cover image — try Gutenberg's own, then Open Library
-      let coverUrl = getCoverImageUrl(gb);
-      if (!coverUrl) {
-        try {
-          const imageResult = await searchBookImage(gb.title, formatAuthorName(gb));
-          coverUrl = imageResult?.imageUrl ?? null;
-        } catch {
-          // Silently skip cover search failures
-        }
-      }
-
-      const author = formatAuthorName(gb);
-      const category = mapCategory(gb.subjects);
-      const description = gb.subjects.slice(0, 3).join(", ") || null;
-      const language = gb.languages[0] || "en";
-
-      // Extract ISBN from Gutenberg formats if available (e.g. from Open Library links)
-      const isbnMatch = Object.values(gb.formats).join(" ").match(ISBN_REGEX);
-      const isbn = isbnMatch ? isbnMatch[0] : null;
+      const authors = typeof cb.authors === "string" ? cb.authors : Array.isArray(cb.authors) ? (cb.authors as string[]).join(", ") : "Unknown";
+      const subjects = Array.isArray(cb.subjects) ? (cb.subjects as string[]) : [];
+      const languages = Array.isArray(cb.languages) ? (cb.languages as string[]) : [];
+      const description = subjects.slice(0, 3).join(", ") || null;
 
       const [inserted] = await db
         .insert(readableBook)
         .values({
           organizationId,
-          title: gb.title.length > MAX_BOOK_TITLE_LENGTH ? gb.title.slice(0, MAX_BOOK_TITLE_LENGTH) : gb.title,
-          author,
-          category,
+          title: cb.title.length > MAX_BOOK_TITLE_LENGTH ? cb.title.slice(0, MAX_BOOK_TITLE_LENGTH) : cb.title,
+          author: authors,
+          category: cb.category || "GENERAL",
           description,
-          coverImageUrl: coverUrl,
-          language,
-          totalPages: 0, // Updated when content is fetched
+          coverImageUrl: cb.coverImageUrl,
+          language: languages[0] || "en",
+          totalPages: 0,
           totalChapters: 0,
           isPublicDomain: true,
-          gutenbergId: String(gb.id),
-          sourceUrl: `https://www.gutenberg.org/ebooks/${gb.id}`,
+          gutenbergId: String(cb.gutenbergId),
+          sourceUrl: `https://www.gutenberg.org/ebooks/${cb.gutenbergId}`,
           contentType: "TEXT",
           status: "ACTIVE",
-          isbn,
         })
         .returning();
 
@@ -202,10 +172,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ books: allPublicBooks, seeded: true, seededCount: seededBooks.length });
   } catch (error) {
-    console.error("Failed to seed public domain books:", error);
+    console.error("Failed to seed public domain books from catalog:", error);
     return NextResponse.json(
-      { error: "Failed to fetch public domain books from Gutenberg" },
-      { status: 502 },
+      { error: "Failed to seed public domain books from catalog" },
+      { status: 500 },
     );
   }
 }

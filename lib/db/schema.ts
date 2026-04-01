@@ -1879,3 +1879,25 @@ export const readingHighlightRelations = relations(readingHighlight, ({ one }) =
 export const bookContentEmbeddingRelations = relations(bookContentEmbedding, ({ one }) => ({
   readableBook: one(readableBook, { fields: [bookContentEmbedding.readableBookId], references: [readableBook.id] }),
 }));
+
+// ─── Gutenberg Catalog (seeded from Gutendex API) ───────
+
+export const gutenbergCatalog = pgTable("gutenberg_catalog", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  gutenbergId: integer("gutenberg_id").notNull().unique(),
+  title: text("title").notNull(),
+  authors: text("authors").notNull().default("[]"),           // JSON array of { name, birth_year, death_year }
+  subjects: text("subjects").notNull().default("[]"),         // JSON string[]
+  bookshelves: text("bookshelves").notNull().default("[]"),   // JSON string[]
+  languages: text("languages").notNull().default("[]"),       // JSON string[]
+  formats: text("formats").notNull().default("{}"),           // JSON Record<string, string>
+  downloadCount: integer("download_count").notNull().default(0),
+  mediaType: text("media_type").notNull().default("Text"),
+  coverImageUrl: text("cover_image_url"),
+  category: text("category").notNull().default("GENERAL"),
+  s3Key: text("s3_key"),                                      // set once content is downloaded to S3
+  s3ContentType: text("s3_content_type"),                     // "text/plain", "text/html", etc.
+  isDownloaded: boolean("is_downloaded").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});

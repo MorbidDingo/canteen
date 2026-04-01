@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "@/components/ui/motion";
 import { MotionPage, MotionList, MotionItem, spring } from "@/components/ui/motion";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Loader2, Sparkles, X, Play, Lock, TrendingUp, Bookmark, BarChart3, Globe } from "lucide-react";
+import { BookOpen, Loader2, Sparkles, X, Play, Lock, TrendingUp, Bookmark, BarChart3, Globe, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { READER_MAX_ACTIVE_BOOKS } from "@/lib/constants";
+import { Input } from "@/components/ui/input";
 
 interface ReaderBook {
   id: string;
@@ -25,6 +26,7 @@ interface ReaderBook {
   isActive: boolean;
   isPublicDomain?: boolean;
   contentType?: string;
+  gutenbergId?: string;
 }
 
 interface ReadingSessionInfo {
@@ -63,6 +65,100 @@ export default function LibraryReaderPage() {
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
   const [seedingPublicBooks, setSeedingPublicBooks] = useState(false);
   const seedingRef = useRef(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    gutenbergId: number;
+    title: string;
+    authors: string;
+    category: string;
+    coverImageUrl: string | null;
+    downloadCount: number;
+  }>>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (!query.trim() || query.trim().length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/library/gutenberg/search?q=${encodeURIComponent(query.trim())}&limit=12`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.hits || []);
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  const openSearchResult = useCallback(async (gutenbergId: number) => {
+    // Check if this book already exists in the org's readableBook list
+    const match = books.find((b) => b.isPublicDomain && (b as ReaderBook & { gutenbergId?: string }).gutenbergId === String(gutenbergId));
+    if (match) {
+      setSearchQuery("");
+      setSearchResults([]);
+      if (match.isActive) {
+        router.push(`/library-reader/${match.id}`);
+      } else {
+        // Start reading session inline
+        setStartingBookId(match.id);
+        try {
+          const res = await fetch("/api/library/reader/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ readableBookId: match.id }),
+          });
+          if (res.status === 409 || res.ok) {
+            router.push(`/library-reader/${match.id}`);
+          } else if (res.status === 429) {
+            toast.error(`Maximum ${READER_MAX_ACTIVE_BOOKS} books at a time.`);
+          }
+        } catch {
+          toast.error("Failed to start reading");
+        } finally {
+          setStartingBookId(null);
+        }
+      }
+      return;
+    }
+
+    // Book not yet in org — trigger a public-books refresh, then navigate
+    toast.info("Adding book to your library…");
+    try {
+      await fetch("/api/library/reader/public-books");
+      const refreshRes = await fetch("/api/library/reader/books");
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        const refreshedBooks: (ReaderBook & { gutenbergId?: string })[] = refreshData.books || [];
+        setBooks(refreshedBooks);
+        const found = refreshedBooks.find((b) => b.isPublicDomain && b.gutenbergId === String(gutenbergId));
+        if (found) {
+          router.push(`/library-reader/${found.id}`);
+        } else {
+          toast.error("Book not available yet. Try again.");
+        }
+      }
+    } catch {
+      toast.error("Failed to add book");
+    }
+    setSearchQuery("");
+    setSearchResults([]);
+  }, [books, router]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -229,6 +325,79 @@ export default function LibraryReaderPage() {
             </div>
           </section>
         )}
+
+        {/* Search Books (Meilisearch-powered) */}
+        <section className="relative">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search books by title, author, genre…"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* Search Results Dropdown */}
+          <AnimatePresence>
+            {(searchResults.length > 0 || searching) && searchQuery.trim().length >= 2 && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={spring.snappy}
+                className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl bg-card border border-border shadow-lg overflow-hidden max-h-[60vh] overflow-y-auto"
+              >
+                {searching && searchResults.length === 0 ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : searchResults.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    No books found for &ldquo;{searchQuery}&rdquo;
+                  </div>
+                ) : (
+                  searchResults.map((hit) => {
+                    const existsInLib = books.some((b) => b.gutenbergId === String(hit.gutenbergId));
+                    return (
+                      <button
+                        key={hit.id}
+                        onClick={() => openSearchResult(hit.gutenbergId)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left border-b border-border last:border-b-0"
+                      >
+                        <div className="w-10 h-14 rounded-md bg-gradient-to-br from-indigo-500/20 to-purple-600/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                          {hit.coverImageUrl ? (
+                            <img src={hit.coverImageUrl} alt="" className="w-full h-full object-cover rounded-md" />
+                          ) : (
+                            <BookOpen className="h-4 w-4 text-muted-foreground/40" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{hit.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{hit.authors}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-full">{hit.category}</span>
+                            {existsInLib && (
+                              <span className="text-[9px] text-emerald-600 font-medium">In Library</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
 
         {/* Currently Reading */}
         {sessions.length > 0 && (

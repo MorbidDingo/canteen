@@ -142,9 +142,6 @@ export function BookReader({ bookId }: { bookId: string }) {
   // Audio (browser TTS)
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // Saved position for "go back" after navigating to bookmark/highlight
-  const [savedPosition, setSavedPosition] = useState<{ chapter: number; page: number } | null>(null);
-
   const activeChapter = useMemo(
     () => chapters.find((c) => c.chapterNumber === currentChapter),
     [chapters, currentChapter],
@@ -287,27 +284,6 @@ export function BookReader({ bookId }: { bookId: string }) {
     },
     [chapters, currentChapter, readingMode, fontSize, saveProgress],
   );
-
-  const navigateToAnnotation = useCallback(
-    (chapterNum: number, page: number) => {
-      // Save current position before jumping
-      setSavedPosition({ chapter: currentChapter, page: currentPage });
-      setDirection(chapterNum > currentChapter ? 1 : chapterNum < currentChapter ? -1 : (page > currentPage ? 1 : -1));
-      setCurrentChapter(chapterNum);
-      setCurrentPage(page);
-      setShowBookmarks(false);
-    },
-    [currentChapter, currentPage],
-  );
-
-  const returnToSavedPosition = useCallback(() => {
-    if (!savedPosition) return;
-    setDirection(savedPosition.chapter > currentChapter ? 1 : savedPosition.chapter < currentChapter ? -1 : (savedPosition.page > currentPage ? 1 : -1));
-    setCurrentChapter(savedPosition.chapter);
-    setCurrentPage(savedPosition.page);
-    saveProgress(savedPosition.chapter, savedPosition.page, readingMode, fontSize);
-    setSavedPosition(null);
-  }, [savedPosition, currentChapter, currentPage, readingMode, fontSize, saveProgress]);
 
   // ─── Bookmark Toggle ──────────────────────────────────
 
@@ -810,91 +786,43 @@ export function BookReader({ bookId }: { bookId: string }) {
           >
             <div className="p-4">
               <h3 className={cn("text-sm font-bold mb-3", modeStyle.text)}>
-                Bookmarks & Highlights
+                Bookmarks ({bookmarks.length})
               </h3>
-
-              {/* Bookmarks */}
-              {bookmarks.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Bookmarks ({bookmarks.length})
-                  </p>
-                  <div className="space-y-1">
-                    {bookmarks.map((bm) => (
-                      <button
-                        key={bm.id}
-                        onClick={() => navigateToAnnotation(bm.chapterNumber, bm.page)}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors",
-                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
-                        )}
-                      >
-                        <Bookmark className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                        <span className={modeStyle.text}>
-                          {bm.label || `Ch ${bm.chapterNumber}, Page ${bm.page}`}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Highlights */}
-              {highlights.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Highlights ({highlights.length})
-                  </p>
-                  <div className="space-y-1">
-                    {highlights.map((hl) => (
-                      <button
-                        key={hl.id}
-                        onClick={() => navigateToAnnotation(hl.chapterNumber, hl.page)}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors border-l-2",
-                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
-                        )}
-                        style={{ borderLeftColor: hl.color, backgroundColor: `${hl.color}08` }}
-                      >
-                        <p className="italic line-clamp-2">&ldquo;{hl.highlightedText}&rdquo;</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Ch {hl.chapterNumber}, Page {hl.page}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {bookmarks.length === 0 && highlights.length === 0 && (
+              {bookmarks.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">
-                  No bookmarks or highlights yet.
+                  No bookmarks yet. Tap the bookmark icon to add one.
                 </p>
+              ) : (
+                <div className="space-y-2">
+                  {bookmarks.map((bm) => (
+                    <button
+                      key={bm.id}
+                      onClick={() => {
+                        const navDir =
+                          bm.chapterNumber !== currentChapter
+                            ? (bm.chapterNumber > currentChapter ? 1 : -1)
+                            : (bm.page > currentPage ? 1 : -1);
+                        setDirection(navDir);
+                        setCurrentChapter(bm.chapterNumber);
+                        setCurrentPage(bm.page);
+                        setShowBookmarks(false);
+                        saveProgress(bm.chapterNumber, bm.page, readingMode, fontSize);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors",
+                        readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
+                      )}
+                    >
+                      <Bookmark className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                      <span className={modeStyle.text}>
+                        {bm.label || `Ch ${bm.chapterNumber}, Page ${bm.page}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* "Return to reading" floating button */}
-      <AnimatePresence>
-        {savedPosition && (
-          <motion.button
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 60, opacity: 0 }}
-            transition={spring.snappy}
-            onClick={returnToSavedPosition}
-            className={cn(
-              "fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-xs font-medium",
-              readingMode === "DARK"
-                ? "bg-indigo-600 text-white"
-                : "bg-indigo-500 text-white",
-            )}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Return to Ch {savedPosition.chapter}, Pg {savedPosition.page}
-          </motion.button>
         )}
       </AnimatePresence>
     </motion.div>

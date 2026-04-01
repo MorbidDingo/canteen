@@ -56,6 +56,7 @@ export async function GET() {
       isAudioEnabled: readableBook.isAudioEnabled,
       isPublicDomain: readableBook.isPublicDomain,
       contentType: readableBook.contentType,
+      gutenbergId: readableBook.gutenbergId,
     })
     .from(readableBook)
     .where(

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BookOpen,
+  FileText,
   LayoutDashboard,
   Upload,
   Settings,
@@ -27,6 +28,7 @@ import { OrgSwitcher } from "@/components/org-switcher";
 const links = [
   { href: "/lib-operator/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/lib-operator/books", label: "Books", icon: BookOpen },
+  { href: "/lib-operator/digital-books", label: "Digital Books", icon: FileText },
   { href: "/lib-operator/bulk-upload", label: "Bulk Upload", icon: Upload },
   { href: "/lib-operator/settings", label: "Settings", icon: Settings },
 ];

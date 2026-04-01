@@ -101,7 +101,8 @@ export async function PATCH(
           .limit(1);
 
         if (walletRow) {
-          const newBalance = walletRow.balance + existingOrder.totalAmount;
+          const refundAmount = Math.round((existingOrder.totalAmount + (existingOrder.platformFee ?? 0)) * 100) / 100;
+          const newBalance = walletRow.balance + refundAmount;
 
           await tx
             .update(wallet)
@@ -111,7 +112,7 @@ export async function PATCH(
           await tx.insert(walletTransaction).values({
             walletId: walletRow.id,
             type: "REFUND",
-            amount: existingOrder.totalAmount,
+            amount: refundAmount,
             balanceAfter: newBalance,
             description: `Refund for cancelled order #${existingOrder.tokenCode || existingOrder.id.slice(0, 6)}`,
             orderId: id,
