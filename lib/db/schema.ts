@@ -1901,3 +1901,47 @@ export const gutenbergCatalog = pgTable("gutenberg_catalog", {
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
+
+// ─── Management Notices ──────────────────────────────────
+
+export const managementNotice = pgTable("management_notice", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  // ALL_PARENTS, ALL_GENERAL, ALL_USERS, SPECIFIC_CLASS, SPECIFIC_USERS
+  targetType: text("target_type").notNull(),
+  targetClass: text("target_class"),                        // set when targetType = SPECIFIC_CLASS
+  targetUserIds: text("target_user_ids"),                   // JSON string[] when targetType = SPECIFIC_USERS
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const noticeAcknowledgment = pgTable("notice_acknowledgment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  noticeId: text("notice_id")
+    .notNull()
+    .references(() => managementNotice.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  acknowledgedAt: timestamp("acknowledged_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueNoticeUser: unique("notice_ack_notice_user_unique").on(table.noticeId, table.userId),
+}));
+
+export const managementNoticeRelations = relations(managementNotice, ({ one, many }) => ({
+  organization: one(organization, { fields: [managementNotice.organizationId], references: [organization.id] }),
+  createdByUser: one(user, { fields: [managementNotice.createdBy], references: [user.id] }),
+  acknowledgments: many(noticeAcknowledgment),
+}));
+
+export const noticeAcknowledgmentRelations = relations(noticeAcknowledgment, ({ one }) => ({
+  notice: one(managementNotice, { fields: [noticeAcknowledgment.noticeId], references: [managementNotice.id] }),
+  user: one(user, { fields: [noticeAcknowledgment.userId], references: [user.id] }),
+}));

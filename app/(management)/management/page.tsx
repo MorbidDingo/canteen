@@ -15,6 +15,7 @@ import {
   IoBook,
   IoChevronForward,
   IoFingerPrint,
+  IoNotifications,
 } from "react-icons/io5";
 
 const groups = [
@@ -27,6 +28,7 @@ const groups = [
       { href: "/management/students", label: "Students", desc: "Student records", icon: IoSchool, color: "text-emerald-600" },
       { href: "/management/bulk-upload", label: "Bulk Uploads", desc: "Import data", icon: IoCloudUpload, color: "text-violet-600" },
       { href: "/management/cards", label: "RFID Cards", desc: "Card management", icon: IoCard, color: "text-orange-600" },
+      { href: "/management/notifications", label: "Notifications", desc: "Send notices & reminders", icon: IoNotifications, color: "text-pink-600" },
     ],
   },
   {

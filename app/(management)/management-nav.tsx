@@ -32,6 +32,7 @@ import {
   Landmark,
   Route,
   HandCoins,
+  Bell,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrgSwitcher } from "@/components/org-switcher";
@@ -50,6 +51,7 @@ const links = [
   { href: "/management/payment-routing", label: "Payment Routing", icon: Route },
   { href: "/management/settlements", label: "Settlements", icon: HandCoins },
   { href: "/management/audit", label: "Audit Log", icon: ScrollText },
+  { href: "/management/notifications", label: "Notifications", icon: Bell },
   { href: "/management/library/books", label: "Library", icon: BookOpen },
 ];
 
