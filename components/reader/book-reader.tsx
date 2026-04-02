@@ -150,6 +150,16 @@ const MODE_LABELS: Record<ReadingMode, string> = {
   GREY: "Grey",
 };
 
+// ─── Highlight Colors ────────────────────────────────────
+
+const HIGHLIGHT_COLORS = [
+  { color: "#fbbf24", label: "Amber" },
+  { color: "#34d399", label: "Green" },
+  { color: "#60a5fa", label: "Blue" },
+  { color: "#f87171", label: "Red" },
+  { color: "#c084fc", label: "Purple" },
+];
+
 // ─── Width Options ───────────────────────────────────────
 
 const WIDTH_OPTIONS = [
@@ -360,6 +370,14 @@ export function BookReader({ bookId }: { bookId: string }) {
   const [annotationTab, setAnnotationTab] = useState<"bookmarks" | "highlights">("bookmarks");
   const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
 
+  // ── Pending highlight (shown when user selects text — awaiting color pick)
+  const [pendingHighlight, setPendingHighlight] = useState<{
+    text: string;
+    startOffset: number;
+    endOffset: number;
+    bookPage: number;
+  } | null>(null);
+
   // ── Audio
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -432,7 +450,7 @@ export function BookReader({ bookId }: { bookId: string }) {
     const ro = new ResizeObserver(measure);
     if (contentAreaRef.current) ro.observe(contentAreaRef.current);
     return () => ro.disconnect();
-  }, [isFullscreen]);
+  }, [isFullscreen, loading]);
 
   // ── Compute page slices when chapter or settings change
   useEffect(() => {
@@ -535,14 +553,16 @@ export function BookReader({ bookId }: { bookId: string }) {
     fetchBookData();
   }, [fetchBookData]);
 
-  // ── Auto-hide controls
+  // ── Auto-hide controls (only in fullscreen)
   const resetHideTimer = useCallback(() => {
     if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
     setShowControls(true);
-    hideControlsTimer.current = setTimeout(() => {
-      if (activePanel === "none") setShowControls(false);
-    }, 4000);
-  }, [activePanel]);
+    if (isFullscreen) {
+      hideControlsTimer.current = setTimeout(() => {
+        if (activePanel === "none") setShowControls(false);
+      }, 4000);
+    }
+  }, [activePanel, isFullscreen]);
 
   useEffect(() => {
     resetHideTimer();
@@ -550,6 +570,14 @@ export function BookReader({ bookId }: { bookId: string }) {
       if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
     };
   }, [resetHideTimer]);
+
+  // Always show controls when not in fullscreen
+  useEffect(() => {
+    if (!isFullscreen) {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      setShowControls(true);
+    }
+  }, [isFullscreen]);
 
   // Keep controls visible while a panel is open
   useEffect(() => {
@@ -585,6 +613,10 @@ export function BookReader({ bookId }: { bookId: string }) {
   const goToPageIndex = useCallback(
     (newPageIdx: number) => {
       if (!activeChapter) return;
+
+      // Dismiss any pending highlight when navigating
+      setPendingHighlight(null);
+      window.getSelection()?.removeAllRanges();
 
       if (newPageIdx >= pageSlices.length) {
         // Advance to next chapter
@@ -716,7 +748,7 @@ export function BookReader({ bookId }: { bookId: string }) {
   }, [bookId, bookmarks, currentChapter, pageIndex, pageSlices, activeChapter]);
 
   // ── Highlight
-  const handleTextSelection = useCallback(async () => {
+  const handleTextSelection = useCallback(() => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !contentInnerRef.current) return;
     const text = sel.toString().trim();
@@ -736,30 +768,42 @@ export function BookReader({ bookId }: { bookId: string }) {
 
     // Adjust by page slice offset to get chapter-level offset
     const pageStart = currentPageSlice?.startOffset ?? 0;
-    const chapterStart = pageStart + startOffset;
-    const chapterEnd = pageStart + endOffset;
     const bookPage = currentPageToBookPage();
 
-    const res = await fetch(`/api/library/reader/${bookId}/highlights`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chapterNumber: currentChapter,
-        page: bookPage,
-        startOffset: chapterStart,
-        endOffset: chapterEnd,
-        highlightedText: text,
-      }),
+    setPendingHighlight({
+      text,
+      startOffset: pageStart + startOffset,
+      endOffset: pageStart + endOffset,
+      bookPage,
     });
+  }, [currentChapter, currentPageSlice, pageIndex, pageSlices, activeChapter]);
 
-    if (res.ok) {
-      const data = await res.json();
-      setHighlights((prev) => [...prev, data.highlight]);
-      sel.removeAllRanges();
-      toast.success("Highlighted");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId, currentChapter, currentPageSlice, pageIndex, pageSlices, activeChapter]);
+  const confirmHighlight = useCallback(
+    async (color: string) => {
+      if (!pendingHighlight) return;
+      const res = await fetch(`/api/library/reader/${bookId}/highlights`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapterNumber: currentChapter,
+          page: pendingHighlight.bookPage,
+          startOffset: pendingHighlight.startOffset,
+          endOffset: pendingHighlight.endOffset,
+          highlightedText: pendingHighlight.text,
+          color,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setHighlights((prev) => [...prev, data.highlight]);
+        window.getSelection()?.removeAllRanges();
+        toast.success("Highlighted");
+      }
+      setPendingHighlight(null);
+    },
+    [bookId, currentChapter, pendingHighlight],
+  );
 
   const removeHighlight = useCallback(
     async (hlId: string) => {
@@ -822,12 +866,18 @@ export function BookReader({ bookId }: { bookId: string }) {
 
       const dx = e.changedTouches[0].clientX - touchStartX.current;
       const dy = e.changedTouches[0].clientY - touchStartY.current;
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      const isSwipe = Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50;
+
+      if (isSwipe) {
+        // Navigate pages but do NOT show controls (swipe should not reveal UI)
         if (dx < 0) goToPageIndex(pageIndex + 1);
         else goToPageIndex(pageIndex - 1);
+      } else {
+        // Tap — show controls
+        resetHideTimer();
       }
     },
-    [goToPageIndex, pageIndex],
+    [goToPageIndex, pageIndex, resetHideTimer],
   );
 
   // ── Fullscreen API
@@ -921,10 +971,7 @@ export function BookReader({ bookId }: { bookId: string }) {
       )}
       style={{ filter: mode.filter || undefined }}
       onClick={resetHideTimer}
-      onTouchStart={(e) => {
-        handleTouchStart(e);
-        resetHideTimer();
-      }}
+      onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
       {/* ── Top bar ── */}
@@ -1628,6 +1675,68 @@ export function BookReader({ bookId }: { bookId: string }) {
               </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Highlight color toolbar (shown when text is selected) ── */}
+      <AnimatePresence>
+        {pendingHighlight && (
+          <>
+            <motion.div
+              key="hl-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.01 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50"
+              onClick={() => {
+                setPendingHighlight(null);
+                window.getSelection()?.removeAllRanges();
+              }}
+            />
+            <motion.div
+              key="hl-toolbar"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ duration: 0.18 }}
+              className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 bg-white dark:bg-neutral-900 rounded-full shadow-2xl border border-black/10 px-3 py-2"
+            >
+              {/* Color swatches — tap to highlight with that color */}
+              {HIGHLIGHT_COLORS.map(({ color, label }) => (
+                <button
+                  key={color}
+                  aria-label={`Highlight ${label}`}
+                  onClick={() => confirmHighlight(color)}
+                  className="w-7 h-7 rounded-full border-[2.5px] border-white shadow-md transition-transform active:scale-95 hover:scale-110"
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+
+              {/* Divider */}
+              <div className="w-px h-5 bg-black/10 mx-0.5" />
+
+              {/* Cancel */}
+              <button
+                onClick={() => {
+                  setPendingHighlight(null);
+                  window.getSelection()?.removeAllRanges();
+                }}
+                className="h-7 px-2.5 rounded-full text-[11px] font-medium text-neutral-500 hover:bg-black/5 transition-colors"
+              >
+                Cancel
+              </button>
+            </motion.div>
+            {/* Helper text */}
+            <motion.p
+              key="hl-hint"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed bottom-[116px] left-1/2 -translate-x-1/2 z-50 text-[10px] text-white/80 whitespace-nowrap bg-black/40 rounded-full px-2.5 py-0.5"
+            >
+              Pick a color to highlight
+            </motion.p>
+          </>
         )}
       </AnimatePresence>
 

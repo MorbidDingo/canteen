@@ -1,9 +1,21 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 
 const REGION = process.env.AWS_REGION || "ap-south-1";
-const BUCKET = process.env.AWS_S3_BUCKET!;
+const BUCKET = process.env.AWS_S3_BUCKET;
 
 let _client: S3Client | null = null;
+
+/**
+ * Returns true only when all required S3 environment variables are present.
+ * Use this to guard S3 operations and avoid cryptic errors when S3 is not configured.
+ */
+export function isS3Configured(): boolean {
+  return !!(
+    process.env.AWS_S3_BUCKET &&
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY
+  );
+}
 
 function getS3Client(): S3Client {
   if (!_client) {

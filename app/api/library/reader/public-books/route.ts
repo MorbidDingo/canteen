@@ -93,7 +93,8 @@ export async function GET(request: NextRequest) {
     const catalogBooks = await db
       .select()
       .from(gutenbergCatalog)
-      .orderBy(desc(gutenbergCatalog.downloadCount));
+      .orderBy(desc(gutenbergCatalog.downloadCount))
+      .limit(30);
 
     if (catalogBooks.length === 0) {
       return NextResponse.json({ books: [], seeded: false, message: "No books in catalog. Run db:seed:gutenberg first." });
