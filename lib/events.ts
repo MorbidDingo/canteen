@@ -9,7 +9,8 @@ export type AppEvent =
   | "library-updated"
   | "gate-tap"
   | "parent-notification"
-  | "notice-updated";
+  | "notice-updated"
+  | "payment-event";
 
 // ─── Client-side event emitter (fires server broadcast) ──
 /**

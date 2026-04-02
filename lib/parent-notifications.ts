@@ -20,7 +20,10 @@ export type ParentNotificationType =
   | "ANOMALY_SPENDING_SPIKE"
   | "ANOMALY_SKIPPED_MEAL"
   | "ANOMALY_RESTRICTED_ATTEMPT"
-  | "ANOMALY_TIMING_ANOMALY";
+  | "ANOMALY_TIMING_ANOMALY"
+  | "PAYMENT_EVENT_CREATED"
+  | "PAYMENT_EVENT_REMINDER"
+  | "PAYMENT_COMPLETED";
 
 export type ParentNotificationMetadata = Record<string, unknown>;
 

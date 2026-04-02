@@ -16,6 +16,7 @@ import {
   IoChevronForward,
   IoFingerPrint,
   IoNotifications,
+  IoCalendar,
 } from "react-icons/io5";
 
 const groups = [
@@ -35,6 +36,7 @@ const groups = [
     title: "Canteen",
     items: [
       { href: "/admin/orders", label: "Admin Orders", desc: "Live order queue", icon: IoRestaurant, color: "text-rose-600" },
+      { href: "/management/payment-events", label: "Payment Events", desc: "Approve accounts & view events", icon: IoCalendar, color: "text-green-600" },
       { href: "/management/statistics", label: "Statistics", desc: "Management metrics", icon: IoBarChart, color: "text-cyan-600" },
       { href: "/management/attendance", label: "Attendance", desc: "Attendance data", icon: IoFingerPrint, color: "text-teal-600" },
       { href: "/management/audit", label: "Audit Log", desc: "Activity trail", icon: IoReader, color: "text-stone-600" },
