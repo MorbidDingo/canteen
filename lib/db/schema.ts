@@ -1945,3 +1945,107 @@ export const noticeAcknowledgmentRelations = relations(noticeAcknowledgment, ({ 
   notice: one(managementNotice, { fields: [noticeAcknowledgment.noticeId], references: [managementNotice.id] }),
   user: one(user, { fields: [noticeAcknowledgment.userId], references: [user.id] }),
 }));
+
+// ─── Payment Events ──────────────────────────────────────
+
+/**
+ * Payment accounts (UPI / Bank) created by operators for receiving event payments.
+ * These must be approved by management before an event can go live.
+ */
+export const paymentEventAccount = pgTable("payment_event_account", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  createdByOperatorId: text("created_by_operator_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),                              // e.g. "School Trip Account"
+  method: text("method", { enum: ["UPI", "BANK_ACCOUNT"] }).notNull(),
+  upiId: text("upi_id"),                                       // set when method = UPI
+  accountHolderName: text("account_holder_name"),              // set when method = BANK_ACCOUNT
+  accountNumber: text("account_number"),
+  ifscCode: text("ifsc_code"),
+  bankName: text("bank_name"),
+  status: text("status", { enum: ["PENDING_APPROVAL", "APPROVED", "REJECTED"] })
+    .notNull()
+    .default("PENDING_APPROVAL"),
+  approvedById: text("approved_by_id").references(() => user.id, { onDelete: "set null" }),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+/**
+ * A payment event created by an operator (e.g. Math Olympiad fee, School Trip fee).
+ * Fixed amount per event.  Can be sent to parents/general accounts class-wise,
+ * to selected accounts, or opened in kiosk tap mode.
+ */
+export const paymentEvent = pgTable("payment_event", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  createdByOperatorId: text("created_by_operator_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  paymentAccountId: text("payment_account_id")
+    .references(() => paymentEventAccount.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  amount: doublePrecision("amount").notNull(),
+  // ALL_PARENTS, ALL_GENERAL, BOTH, CLASS, SELECTED, KIOSK
+  targetType: text("target_type").notNull().default("BOTH"),
+  targetClass: text("target_class"),                          // JSON string[] – class names/ids
+  targetAccountIds: text("target_account_ids"),               // JSON string[] – specific user ids
+  dueDate: timestamp("due_date"),
+  status: text("status", { enum: ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"] })
+    .notNull()
+    .default("DRAFT"),
+  kioskMode: boolean("kiosk_mode").notNull().default(false),  // open on operator's device for tap-to-pay
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+/**
+ * Receipt stored when a student/account completes a payment for an event.
+ */
+export const paymentEventReceipt = pgTable("payment_event_receipt", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => paymentEvent.id, { onDelete: "cascade" }),
+  paidByUserId: text("paid_by_user_id")
+    .references(() => user.id, { onDelete: "set null" }),
+  childId: text("child_id")
+    .references(() => child.id, { onDelete: "set null" }),
+  // KIOSK_TAP = operator's device tap, SENT = push-sent to parent account
+  paymentMode: text("payment_mode", { enum: ["KIOSK_TAP", "SENT"] }).notNull(),
+  amount: doublePrecision("amount").notNull(),
+  receiptNumber: text("receipt_number").notNull().$defaultFn(() => `RCP-${Date.now()}`),
+  notes: text("notes"),
+  paidAt: timestamp("paid_at").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ─── Payment Event Relations ─────────────────────────────
+
+export const paymentEventAccountRelations = relations(paymentEventAccount, ({ one, many }) => ({
+  organization: one(organization, { fields: [paymentEventAccount.organizationId], references: [organization.id] }),
+  createdByOperator: one(user, { fields: [paymentEventAccount.createdByOperatorId], references: [user.id] }),
+  approvedBy: one(user, { fields: [paymentEventAccount.approvedById], references: [user.id] }),
+  events: many(paymentEvent),
+}));
+
+export const paymentEventRelations = relations(paymentEvent, ({ one, many }) => ({
+  organization: one(organization, { fields: [paymentEvent.organizationId], references: [organization.id] }),
+  createdByOperator: one(user, { fields: [paymentEvent.createdByOperatorId], references: [user.id] }),
+  paymentAccount: one(paymentEventAccount, { fields: [paymentEvent.paymentAccountId], references: [paymentEventAccount.id] }),
+  receipts: many(paymentEventReceipt),
+}));
+
+export const paymentEventReceiptRelations = relations(paymentEventReceipt, ({ one }) => ({
+  event: one(paymentEvent, { fields: [paymentEventReceipt.eventId], references: [paymentEvent.id] }),
+  paidByUser: one(user, { fields: [paymentEventReceipt.paidByUserId], references: [user.id] }),
+  child: one(child, { fields: [paymentEventReceipt.childId], references: [child.id] }),
+}));

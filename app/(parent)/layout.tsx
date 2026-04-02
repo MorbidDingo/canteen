@@ -17,6 +17,7 @@ import {
   IoChatbubbleEllipses,
   IoNotifications,
   IoReader,
+  IoCalendar,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -139,6 +140,7 @@ function ParentLayoutContent({
   const [notifLoading, setNotifLoading] = useState(false);
   const [noticeItems, setNoticeItems] = useState<NoticeItem[]>([]);
   const [activeNotice, setActiveNotice] = useState<NoticeItem | null>(null);
+  const [pendingEventsCount, setPendingEventsCount] = useState(0);
   const { value: selectedCanteen, setValue: setSelectedCanteen } = usePersistedSelection(
     "certe:selected-canteen-id",
   );
@@ -229,6 +231,20 @@ function ParentLayoutContent({
       if (!res.ok) return;
       const data = (await res.json()) as { notices: NoticeItem[] };
       setNoticeItems(data.notices ?? []);
+    } catch {
+      // silently ignore
+    }
+  }, []);
+
+  const fetchPaymentEventsCount = useCallback(async () => {
+    try {
+      const res = await fetch("/api/parent/payment-events", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json() as { events: Array<{ status: string; children: Array<{ paid: boolean }> }> };
+      const pending = (data.events ?? []).filter(
+        (e) => e.status === "ACTIVE" && e.children.some((c: { paid: boolean }) => !c.paid),
+      ).length;
+      setPendingEventsCount(pending);
     } catch {
       // silently ignore
     }
@@ -337,6 +353,14 @@ function ParentLayoutContent({
 
   // Refresh notices when management sends a new one
   useRealtimeData(fetchNotices, "notice-updated");
+
+  // Fetch pending payment events count on mount
+  useEffect(() => {
+    void fetchPaymentEventsCount();
+  }, [fetchPaymentEventsCount]);
+
+  // Refresh payment events count via SSE
+  useRealtimeData(fetchPaymentEventsCount, "payment-event");
 
   // Keep header balance chip populated even when wallet icon is removed
   useEffect(() => {
@@ -511,7 +535,7 @@ function ParentLayoutContent({
             </Link>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* Notification bubble */}
+              {/* Notification + Events pill */}
               <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
                 <ParentNotificationBell
                   parentId={session?.user?.id}
@@ -519,6 +543,18 @@ function ParentLayoutContent({
                   onClick={() => void openNotificationDrawer()}
                   className="h-10 w-10 rounded-lg"
                 />
+                <Link
+                  href="/events"
+                  aria-label="Payment Events"
+                  className="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-accent"
+                >
+                  <IoCalendar className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+                  {pendingEventsCount > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-300">
+                      {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
+                    </span>
+                  )}
+                </Link>
               </div>
 
               {/* AI Chat button — orange, always visible, mode-aware */}

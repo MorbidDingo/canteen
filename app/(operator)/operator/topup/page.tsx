@@ -372,23 +372,30 @@ export default function OperatorTopupPage() {
               </p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    window.location.href = "/login";
+          <div className="flex items-center gap-2">
+            <Link href="/operator/payment-events">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <span>Events</span>
+              </Button>
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                signOut({
+                  fetchOptions: {
+                    onSuccess: () => {
+                      window.location.href = "/login";
+                    },
                   },
-                },
-              })
-            }
-            className="gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </Button>
+                })
+              }
+              className="gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          </div>
         </div>
       </header>
 

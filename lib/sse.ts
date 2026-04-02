@@ -13,7 +13,8 @@ export type AppEvent =
   | "library-updated"
   | "gate-tap"
   | "parent-notification"
-  | "notice-updated";
+  | "notice-updated"
+  | "payment-event";
 
 export type AppEventMessage = {
   type: AppEvent;
