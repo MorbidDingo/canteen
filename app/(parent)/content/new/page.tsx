@@ -518,7 +518,7 @@ export default function NewPostPage() {
       <BottomSheet
         open={audienceSheetOpen}
         onClose={() => setAudienceSheetOpen(false)}
-        snapPoints={[0.6]}
+        snapPoints={[60]}
       >
         <div className="px-4 py-3 border-b">
           <h3 className="text-sm font-semibold">Add Audience</h3>
