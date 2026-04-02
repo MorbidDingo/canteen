@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/lib/auth-client";
+import { signOut, useSession } from "@/lib/auth-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +35,8 @@ import {
   Bell,
   ClipboardList,
   Receipt,
+  Sun,
+  FileCheck2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrgSwitcher } from "@/components/org-switcher";
@@ -47,6 +49,9 @@ const links = [
   { href: "/management/students", label: "Students", icon: GraduationCap },
   { href: "/management/cards", label: "Cards", icon: CreditCard },
   { href: "/management/bulk-upload", label: "Bulk Upload", icon: Upload },
+  { href: "/management/notifications", label: "Notices", icon: Bell },
+  { href: "/management/exams", label: "Exams", icon: FileCheck2 },
+  { href: "/management/holidays", label: "Holidays", icon: Sun },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/management/settlement-accounts", label: "Settlement Accounts", icon: Landmark },
@@ -54,7 +59,6 @@ const links = [
   { href: "/management/settlements", label: "Settlements", icon: HandCoins },
   { href: "/management/payment-events", label: "Payment Events", icon: Receipt },
   { href: "/management/audit", label: "Audit Log", icon: ScrollText },
-  { href: "/management/notifications", label: "Notifications", icon: Bell },
   { href: "/management/content/permissions", label: "Content Permissions", icon: ClipboardList },
   { href: "/management/content/groups", label: "Content Groups", icon: Users },
   { href: "/management/library/books", label: "Library", icon: BookOpen },
@@ -73,6 +77,11 @@ function doSignOut() {
 export function ManagementNav() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { data: session } = useSession();
+  const userName = session?.user?.name;
+  const initials = userName
+    ? userName.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
+    : "M";
 
   useEffect(() => {
     const stored = window.localStorage.getItem("management-nav-collapsed");
@@ -96,13 +105,23 @@ export function ManagementNav() {
   return (
     <>
       <header className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 border-b border-amber-200/70 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 backdrop-blur">
-        <div className="h-full px-3 flex items-center justify-between">
-          <p className="font-semibold text-amber-900">Management</p>
+        <div className="h-full px-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-amber-600 font-medium leading-none">Management</p>
+              {userName && (
+                <p className="text-sm font-semibold text-amber-950 leading-tight truncate">{userName}</p>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <OrgSwitcher />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="border-amber-200">
+                <Button variant="outline" size="icon" className="border-amber-200 h-8 w-8">
                   <Menu className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -137,12 +156,29 @@ export function ManagementNav() {
       >
         <div className="flex h-full w-full flex-col p-3">
           <div className="mb-3 flex items-center justify-between rounded-xl border border-amber-200/70 bg-white/60 px-2 py-2">
-            <span className={cn("text-sm font-semibold text-amber-900", collapsed && "sr-only")}>Management</span>
+            {!collapsed && (
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm">
+                  {initials}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-amber-500 font-semibold uppercase tracking-wide leading-none">Management</p>
+                  {userName && (
+                    <p className="text-sm font-semibold text-amber-950 leading-tight truncate">{userName}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {collapsed && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white text-xs font-bold shadow-sm mx-auto">
+                {initials}
+              </div>
+            )}
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-amber-800 hover:text-amber-900 hover:bg-amber-100"
+              className={cn("h-8 w-8 shrink-0 text-amber-800 hover:text-amber-900 hover:bg-amber-100", collapsed && "ml-0")}
               onClick={toggleCollapsed}
             >
               {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}

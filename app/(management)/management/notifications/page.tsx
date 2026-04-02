@@ -30,14 +30,17 @@ import {
 } from "lucide-react";
 
 type TargetType = "ALL_PARENTS" | "ALL_GENERAL" | "ALL_USERS" | "SPECIFIC_CLASS" | "SPECIFIC_USERS";
+type NoticeCategory = "GENERAL" | "EXAM" | "EVENT" | "HOLIDAY_ANNOUNCEMENT";
 
 interface NoticeItem {
   id: string;
   title: string;
   message: string;
+  category: string;
   targetType: TargetType;
   targetClass: string | null;
   targetUserIds: string | null;
+  eventDate: string | null;
   expiresAt: string | null;
   createdAt: string;
   createdByName: string | null;
@@ -69,6 +72,9 @@ export default function ManagementNotificationsPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [category, setCategory] = useState<NoticeCategory>("GENERAL");
+  const [eventDate, setEventDate] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
   const [targetType, setTargetType] = useState<TargetType>("ALL_PARENTS");
   const [targetClass, setTargetClass] = useState("");
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
@@ -130,6 +136,9 @@ export default function ManagementNotificationsPage() {
   const resetForm = () => {
     setTitle("");
     setMessage("");
+    setCategory("GENERAL");
+    setEventDate("");
+    setExpiresAt("");
     setTargetType("ALL_PARENTS");
     setTargetClass("");
     setTargetUserIds([]);
@@ -163,9 +172,12 @@ export default function ManagementNotificationsPage() {
         body: JSON.stringify({
           title: title.trim(),
           message: message.trim(),
+          category,
           targetType,
           targetClass: targetType === "SPECIFIC_CLASS" ? targetClass.trim() : undefined,
           targetUserIds: targetType === "SPECIFIC_USERS" ? targetUserIds : undefined,
+          eventDate: eventDate ? new Date(eventDate).toISOString() : undefined,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
         }),
       });
 
@@ -250,6 +262,43 @@ export default function ManagementNotificationsPage() {
                 className="resize-none"
               />
               <p className="text-[11px] text-muted-foreground text-right">{message.length}/5000</p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={category} onValueChange={(v) => setCategory(v as NoticeCategory)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="GENERAL">General</SelectItem>
+                    <SelectItem value="EVENT">Event</SelectItem>
+                    <SelectItem value="EXAM">Exam</SelectItem>
+                    <SelectItem value="HOLIDAY_ANNOUNCEMENT">Holiday Announcement</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="event-date">Event Date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Input
+                  id="event-date"
+                  type="datetime-local"
+                  value={eventDate}
+                  onChange={(e) => setEventDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="expires-at">Expires At <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="expires-at"
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -375,11 +424,22 @@ export default function ManagementNotificationsPage() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-sm leading-tight">{n.title}</p>
+                      {n.category && n.category !== "GENERAL" && (
+                        <Badge variant="outline" className="text-[10px] border-pink-200 text-pink-700 bg-pink-50">
+                          {n.category === "EXAM" ? "Exam" : n.category === "EVENT" ? "Event" : "Holiday"}
+                        </Badge>
+                      )}
                       <Badge variant="outline" className="text-[10px] border-amber-200 text-amber-700 bg-amber-50">
                         {TARGET_TYPE_LABELS[n.targetType] ?? n.targetType}
                         {n.targetType === "SPECIFIC_CLASS" && n.targetClass ? `: ${n.targetClass}` : ""}
                       </Badge>
                     </div>
+                    {n.eventDate && (
+                      <p className="flex items-center gap-1 text-[11px] font-medium text-indigo-700">
+                        <Clock className="h-3 w-3" />
+                        {new Date(n.eventDate).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
                     <div className="flex flex-wrap items-center gap-3 pt-1">
                       <span className="flex items-center gap-1 text-[11px] text-muted-foreground">

@@ -184,7 +184,7 @@ export function BottomSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md"
+            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-md"
             onClick={onClose}
           />
           {/* Sheet */}
@@ -203,14 +203,14 @@ export function BottomSheet({
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
             className={cn(
-              "fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-y rounded-t-[20px]",
+              "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-[20px]",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",
               "dark:bg-background/90 dark:border-white/[0.08]",
               className,
             )}
-            style={{ maxHeight: `${maxSnap}dvh` }}
+            style={{ height: `${maxSnap}dvh` }}
           >
             {/* Drag handle — iOS pill */}
             <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing shrink-0">
