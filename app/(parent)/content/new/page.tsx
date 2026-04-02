@@ -1,0 +1,616 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  ArrowLeft,
+  Loader2,
+  Plus,
+  X,
+  Upload,
+  Paperclip,
+  Globe,
+  GraduationCap,
+  User,
+  Users,
+} from "lucide-react";
+
+type Tag = { id: string; name: string; color: string | null };
+type Group = { id: string; name: string; memberCount: number };
+type ClassInfo = { className: string; sections: string[] };
+
+type AudienceRow = {
+  audienceType: "ALL_ORG" | "CLASS" | "SECTION" | "USER" | "GROUP";
+  className?: string;
+  section?: string;
+  userId?: string;
+  groupId?: string;
+  label: string;
+};
+
+type OrgMember = { userId: string; name: string; email: string; role: string };
+
+export default function NewPostPage() {
+  const router = useRouter();
+
+  const [type, setType] = useState<"ASSIGNMENT" | "NOTE">("ASSIGNMENT");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [audiences, setAudiences] = useState<AudienceRow[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Lookups
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [classes, setClasses] = useState<ClassInfo[]>([]);
+
+  // Inline tag creation
+  const [newTagName, setNewTagName] = useState("");
+  const [creatingTag, setCreatingTag] = useState(false);
+
+  // Audience builder
+  const [audienceDialogOpen, setAudienceDialogOpen] = useState(false);
+  const [audienceMode, setAudienceMode] = useState<"ALL_ORG" | "CLASS" | "SECTION" | "USER" | "GROUP">("ALL_ORG");
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [userResults, setUserResults] = useState<OrgMember[]>([]);
+  const [userSearching, setUserSearching] = useState(false);
+
+  const fetchLookups = useCallback(async () => {
+    const [tagsRes, groupsRes, classesRes] = await Promise.all([
+      fetch("/api/content/tags"),
+      fetch("/api/content/groups"),
+      fetch("/api/content/classes"),
+    ]);
+    if (tagsRes.ok) setTags((await tagsRes.json()).tags);
+    if (groupsRes.ok) setGroups((await groupsRes.json()).groups);
+    if (classesRes.ok) setClasses((await classesRes.json()).classes);
+  }, []);
+
+  useEffect(() => {
+    fetchLookups();
+  }, [fetchLookups]);
+
+  // User search debounce
+  useEffect(() => {
+    if (userSearch.length < 2) {
+      setUserResults([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setUserSearching(true);
+      try {
+        const res = await fetch(
+          `/api/management/content/permissions/members?q=${encodeURIComponent(userSearch)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setUserResults(data.members || []);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setUserSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [userSearch]);
+
+  function addAudience() {
+    if (audienceMode === "ALL_ORG") {
+      if (audiences.some((a) => a.audienceType === "ALL_ORG")) return;
+      setAudiences([{ audienceType: "ALL_ORG", label: "Entire Organization" }]);
+      setAudienceDialogOpen(false);
+      return;
+    }
+    if (audienceMode === "CLASS" && selectedClass) {
+      if (audiences.some((a) => a.audienceType === "CLASS" && a.className === selectedClass)) return;
+      // Remove ALL_ORG if adding specific targets
+      setAudiences((prev) => [
+        ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
+        { audienceType: "CLASS", className: selectedClass, label: `Class: ${selectedClass}` },
+      ]);
+      setSelectedClass("");
+      setAudienceDialogOpen(false);
+      return;
+    }
+    if (audienceMode === "SECTION" && selectedClass && selectedSection) {
+      if (audiences.some((a) => a.audienceType === "SECTION" && a.className === selectedClass && a.section === selectedSection)) return;
+      setAudiences((prev) => [
+        ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
+        { audienceType: "SECTION", className: selectedClass, section: selectedSection, label: `${selectedClass} - ${selectedSection}` },
+      ]);
+      setSelectedSection("");
+      setAudienceDialogOpen(false);
+      return;
+    }
+    if (audienceMode === "GROUP" && selectedGroup) {
+      const group = groups.find((g) => g.id === selectedGroup);
+      if (!group || audiences.some((a) => a.groupId === selectedGroup)) return;
+      setAudiences((prev) => [
+        ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
+        { audienceType: "GROUP", groupId: selectedGroup, label: `Group: ${group.name}` },
+      ]);
+      setSelectedGroup("");
+      setAudienceDialogOpen(false);
+    }
+  }
+
+  function addUserAudience(member: OrgMember) {
+    if (audiences.some((a) => a.userId === member.userId)) return;
+    setAudiences((prev) => [
+      ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
+      { audienceType: "USER", userId: member.userId, label: `User: ${member.name}` },
+    ]);
+    setUserSearch("");
+    setUserResults([]);
+    setAudienceDialogOpen(false);
+  }
+
+  function removeAudience(index: number) {
+    setAudiences((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleCreateTag() {
+    if (!newTagName.trim()) return;
+    setCreatingTag(true);
+    try {
+      const res = await fetch("/api/content/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newTagName.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create tag");
+      }
+      const data = await res.json();
+      setTags((prev) => [...prev, data.tag]);
+      setSelectedTagIds((prev) => [...prev, data.tag.id]);
+      setNewTagName("");
+      toast.success("Tag created");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create tag");
+    } finally {
+      setCreatingTag(false);
+    }
+  }
+
+  function toggleTag(tagId: string) {
+    setSelectedTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId],
+    );
+  }
+
+  async function handleSubmit(asDraft: boolean) {
+    if (!title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    if (!body.trim()) {
+      toast.error("Body is required");
+      return;
+    }
+    if (audiences.length === 0) {
+      toast.error("At least one audience target is required");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // 1. Create the post
+      const postRes = await fetch("/api/content/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          title: title.trim(),
+          body: body.trim(),
+          dueAt: dueAt || null,
+          audience: audiences.map((a) => ({
+            audienceType: a.audienceType,
+            className: a.className,
+            section: a.section,
+            userId: a.userId,
+            groupId: a.groupId,
+          })),
+          tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+        }),
+      });
+
+      if (!postRes.ok) {
+        const data = await postRes.json();
+        throw new Error(data.error || "Failed to create post");
+      }
+
+      const { post } = await postRes.json();
+
+      // 2. Upload attachments
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const attRes = await fetch(`/api/content/posts/${post.id}/attachments`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!attRes.ok) {
+          toast.error(`Failed to upload ${file.name}`);
+        }
+      }
+
+      // 3. Publish if not draft
+      if (!asDraft) {
+        await fetch(`/api/content/posts/${post.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "PUBLISHED" }),
+        });
+      }
+
+      toast.success(asDraft ? "Draft saved" : "Post published");
+      router.push("/content");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to create post");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const sectionsForSelectedClass = classes.find(
+    (c) => c.className === selectedClass,
+  )?.sections || [];
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-5 px-4 py-4 pb-28">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon" onClick={() => router.push("/content")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-lg font-bold">New Post</h1>
+      </div>
+
+      {/* Type selector */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Type</Label>
+        <Select value={type} onValueChange={(v) => setType(v as "ASSIGNMENT" | "NOTE")}>
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
+            <SelectItem value="NOTE">Note</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Title */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Title</Label>
+        <Input
+          placeholder="e.g. Math Homework Chapter 5"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+
+      {/* Body */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Body</Label>
+        <Textarea
+          placeholder="Write the content or instructions..."
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={6}
+        />
+      </div>
+
+      {/* Due date (assignments only) */}
+      {type === "ASSIGNMENT" && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Due Date (optional)</Label>
+          <Input
+            type="datetime-local"
+            value={dueAt}
+            onChange={(e) => setDueAt(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* Tags */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Tags</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              type="button"
+              onClick={() => toggleTag(tag.id)}
+              className="transition-transform active:scale-95"
+            >
+              <Badge
+                variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
+                className="cursor-pointer text-xs"
+                style={
+                  tag.color && selectedTagIds.includes(tag.id)
+                    ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
+                    : tag.color
+                    ? { borderColor: tag.color, color: tag.color }
+                    : undefined
+                }
+              >
+                {tag.name}
+              </Badge>
+            </button>
+          ))}
+          <div className="flex items-center gap-1">
+            <Input
+              placeholder="New tag..."
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              className="h-6 w-24 text-xs"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleCreateTag();
+                }
+              }}
+            />
+            {newTagName.trim() && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-1.5"
+                onClick={handleCreateTag}
+                disabled={creatingTag}
+              >
+                {creatingTag ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Audience */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-medium">Audience</Label>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => setAudienceDialogOpen(true)}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Add Target
+          </Button>
+        </div>
+        {audiences.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No audience selected. Add at least one target.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {audiences.map((a, i) => (
+              <Badge key={i} variant="secondary" className="gap-1 text-xs">
+                {a.audienceType === "ALL_ORG" && <Globe className="h-3 w-3" />}
+                {(a.audienceType === "CLASS" || a.audienceType === "SECTION") && <GraduationCap className="h-3 w-3" />}
+                {a.audienceType === "USER" && <User className="h-3 w-3" />}
+                {a.audienceType === "GROUP" && <Users className="h-3 w-3" />}
+                {a.label}
+                <button type="button" onClick={() => removeAudience(i)}>
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Audience Dialog */}
+      <Dialog open={audienceDialogOpen} onOpenChange={setAudienceDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Audience Target</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Select value={audienceMode} onValueChange={(v) => setAudienceMode(v as typeof audienceMode)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL_ORG">Entire Organization</SelectItem>
+                <SelectItem value="CLASS">Class</SelectItem>
+                <SelectItem value="SECTION">Class + Section</SelectItem>
+                <SelectItem value="GROUP">Group</SelectItem>
+                <SelectItem value="USER">Specific User</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {audienceMode === "ALL_ORG" && (
+              <Button className="w-full" onClick={addAudience}>
+                <Globe className="mr-2 h-4 w-4" />
+                Target Entire Organization
+              </Button>
+            )}
+
+            {(audienceMode === "CLASS" || audienceMode === "SECTION") && (
+              <>
+                <Select value={selectedClass} onValueChange={setSelectedClass}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select class..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => (
+                      <SelectItem key={c.className} value={c.className}>
+                        {c.className}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {audienceMode === "SECTION" && selectedClass && (
+                  <Select value={selectedSection} onValueChange={setSelectedSection}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Select section..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sectionsForSelectedClass.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Button
+                  className="w-full"
+                  onClick={addAudience}
+                  disabled={!selectedClass || (audienceMode === "SECTION" && !selectedSection)}
+                >
+                  Add {audienceMode === "CLASS" ? "Class" : "Section"}
+                </Button>
+              </>
+            )}
+
+            {audienceMode === "GROUP" && (
+              <>
+                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select group..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name} ({g.memberCount} members)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  className="w-full"
+                  onClick={addAudience}
+                  disabled={!selectedGroup}
+                >
+                  Add Group
+                </Button>
+              </>
+            )}
+
+            {audienceMode === "USER" && (
+              <>
+                <Input
+                  placeholder="Search by name or email..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                />
+                {userSearching && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Searching...
+                  </p>
+                )}
+                {userResults.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto rounded-md border">
+                    {userResults.map((m) => (
+                      <button
+                        key={m.userId}
+                        type="button"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
+                        onClick={() => addUserAudience(m)}
+                      >
+                        <div>
+                          <div className="font-medium">{m.name}</div>
+                          <div className="text-xs text-muted-foreground">{m.email}</div>
+                        </div>
+                        <Badge variant="outline" className="text-[10px]">{m.role}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* File attachments */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Attachments</Label>
+        <div className="space-y-2">
+          {files.map((file, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
+              <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 truncate flex-1">{file.name}</span>
+              <span className="shrink-0 text-muted-foreground">
+                {(file.size / 1024).toFixed(0)}KB
+              </span>
+              <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
+                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+              </button>
+            </div>
+          ))}
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted/30">
+            <Upload className="h-4 w-4" />
+            <span>Click to add files (images, PDFs, documents)</span>
+            <input
+              type="file"
+              className="hidden"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) {
+                  setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                }
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* Submit buttons */}
+      <div className="flex gap-2 pt-2">
+        <Button
+          variant="outline"
+          className="flex-1"
+          disabled={submitting}
+          onClick={() => handleSubmit(true)}
+        >
+          {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          Save as Draft
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={submitting}
+          onClick={() => handleSubmit(false)}
+        >
+          {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+          Publish
+        </Button>
+      </div>
+    </div>
+  );
+}

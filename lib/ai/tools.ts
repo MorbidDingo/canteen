@@ -14,8 +14,16 @@ import {
   certeSubscription,
   parentNotification,
   appSetting,
+  contentPermission,
+  contentPost,
+  contentPostAudience,
+  contentPostAttachment,
+  contentPostTag,
+  contentTag,
+  contentSubmission,
+  contentSubmissionAttachment,
 } from "@/lib/db/schema";
-import { eq, and, gte, desc, ne, inArray, asc, ilike } from "drizzle-orm";
+import { eq, and, gte, desc, ne, inArray, asc, ilike, sql } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS, MAX_ACTIVE_PREORDERS_PER_CHILD } from "@/lib/constants";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
@@ -24,6 +32,7 @@ import { getRecommendations } from "@/lib/ml/recommendation-engine";
 import { getWalletForecast } from "@/lib/ml/predictive-wallet";
 import { runBatchAnomalyDetection, type AnomalyAlert } from "@/lib/ml/anomaly-detection";
 import { getParentControls, getWalletHistory } from "@/lib/ml/data-collector";
+import { queryContentChunks, getAccessiblePostIds } from "@/lib/ai/content-search";
 import type Anthropic from "@anthropic-ai/sdk";
 
 // ─── Context passed to every tool handler ────────────────
@@ -253,6 +262,132 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ["orderId"],
     },
   },
+
+  // ─── Content / Assignments Tools ───────────────────────
+  {
+    name: "search_content",
+    description:
+      "Search assignments, notes, and their attached documents. Returns relevant content chunks from documents the user has access to. Use when user asks about assignment material, notes, uploaded documents, or subject-specific questions.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: {
+          type: "string",
+          description: "The search query describing what information the user is looking for",
+        },
+        type: {
+          type: "string",
+          enum: ["ASSIGNMENT", "NOTE"],
+          description: "Optional: filter by content type",
+        },
+        topK: {
+          type: "number",
+          description: "Maximum number of results to return. Default: 5",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "get_assignments_feed",
+    description:
+      "Get the user's assignment and note feed. Returns recent assignments and notes targeted to the user with due dates and submission status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        type: {
+          type: "string",
+          enum: ["ASSIGNMENT", "NOTE"],
+          description: "Optional: filter by content type",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of results. Default: 10",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "get_assignment_detail",
+    description:
+      "Get full details of a specific assignment or note including body, attachments, due date, and the user's submission status.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        postId: {
+          type: "string",
+          description: "The post ID to fetch details for",
+        },
+      },
+      required: ["postId"],
+    },
+  },
+  {
+    name: "create_assignment",
+    description:
+      "Create a new assignment or note on behalf of the user. Only works if the user has content posting permission. Cannot attach files — user must add those manually. Sets status to DRAFT so user can review before publishing.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        title: {
+          type: "string",
+          description: "Title of the assignment or note",
+        },
+        body: {
+          type: "string",
+          description: "Body text (markdown supported)",
+        },
+        type: {
+          type: "string",
+          enum: ["ASSIGNMENT", "NOTE"],
+          description: "Content type",
+        },
+        dueAt: {
+          type: "string",
+          description: "Due date in ISO 8601 format. Only for assignments.",
+        },
+        audienceType: {
+          type: "string",
+          enum: ["ALL_ORG", "CLASS", "SECTION"],
+          description: "Target audience type",
+        },
+        className: {
+          type: "string",
+          description: "Class name (required for CLASS or SECTION audience)",
+        },
+        section: {
+          type: "string",
+          description: "Section (required for SECTION audience)",
+        },
+        tagIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional tag IDs to attach",
+        },
+      },
+      required: ["title", "body", "type", "audienceType"],
+    },
+  },
+  {
+    name: "submit_assignment",
+    description:
+      "Submit text-only work for an assignment. Cannot submit files through AI — user must use the submission form for file uploads.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        postId: {
+          type: "string",
+          description: "The assignment post ID to submit to",
+        },
+        textContent: {
+          type: "string",
+          description: "The text content of the submission",
+        },
+      },
+      required: ["postId", "textContent"],
+    },
+  },
 ];
 
 // ─── Tool Handlers ───────────────────────────────────────
@@ -287,6 +422,16 @@ export async function executeTool(
       return handleScheduleOrder(ctx, toolInput);
     case "cancel_order":
       return handleCancelOrder(ctx, toolInput);
+    case "search_content":
+      return handleSearchContent(ctx, toolInput);
+    case "get_assignments_feed":
+      return handleGetAssignmentsFeed(ctx, toolInput);
+    case "get_assignment_detail":
+      return handleGetAssignmentDetail(ctx, toolInput);
+    case "create_assignment":
+      return handleCreateAssignment(ctx, toolInput);
+    case "submit_assignment":
+      return handleSubmitAssignment(ctx, toolInput);
     default:
       return JSON.stringify({ error: `Unknown tool: ${toolName}` });
   }
@@ -1169,4 +1314,363 @@ function resolveChildId(ctx: ToolContext, inputChildId?: string): string {
     return inputChildId;
   }
   return ctx.childIds[0] ?? "";
+}
+
+// ─── Content / Assignments Tool Handlers ─────────────────
+
+async function handleSearchContent(
+  ctx: ToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const query = input.query as string;
+  if (!query) return JSON.stringify({ error: "query is required" });
+
+  const results = await queryContentChunks(ctx.orgId, ctx.userId, query, {
+    type: input.type as "ASSIGNMENT" | "NOTE" | undefined,
+    topK: (input.topK as number) || 5,
+  });
+
+  if (results.length === 0) {
+    return JSON.stringify({
+      results: [],
+      message: "No matching content found. The search only covers documents that have been processed for AI search.",
+    });
+  }
+
+  return JSON.stringify({
+    results: results.map((r) => ({
+      postTitle: r.postTitle,
+      postType: r.postType,
+      author: r.authorName,
+      excerpt: r.content.slice(0, 500),
+      similarity: Math.round(r.similarity * 100) / 100,
+      filename: r.metadata.filename,
+      postId: r.postId,
+    })),
+  });
+}
+
+async function handleGetAssignmentsFeed(
+  ctx: ToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const typeFilter = input.type as "ASSIGNMENT" | "NOTE" | undefined;
+  const limit = Math.min(20, (input.limit as number) || 10);
+
+  const postIds = await getAccessiblePostIds(ctx.orgId, ctx.userId, {
+    type: typeFilter,
+  });
+
+  if (postIds.length === 0) {
+    return JSON.stringify({ posts: [], message: "No assignments or notes found." });
+  }
+
+  const posts = await db
+    .select({
+      id: contentPost.id,
+      type: contentPost.type,
+      title: contentPost.title,
+      status: contentPost.status,
+      dueAt: contentPost.dueAt,
+      createdAt: contentPost.createdAt,
+    })
+    .from(contentPost)
+    .where(inArray(contentPost.id, postIds))
+    .orderBy(desc(contentPost.createdAt))
+    .limit(limit);
+
+  // Check submission status for assignments
+  const postIdsForSubmission = posts
+    .filter((p) => p.type === "ASSIGNMENT")
+    .map((p) => p.id);
+
+  let submissions: { postId: string; status: string }[] = [];
+  if (postIdsForSubmission.length > 0) {
+    submissions = await db
+      .select({
+        postId: contentSubmission.postId,
+        status: contentSubmission.status,
+      })
+      .from(contentSubmission)
+      .where(
+        and(
+          inArray(contentSubmission.postId, postIdsForSubmission),
+          eq(contentSubmission.submittedByUserId, ctx.userId),
+        ),
+      );
+  }
+
+  const submissionMap = new Map(submissions.map((s) => [s.postId, s.status]));
+
+  return JSON.stringify({
+    posts: posts.map((p) => ({
+      id: p.id,
+      type: p.type,
+      title: p.title,
+      dueAt: p.dueAt?.toISOString() ?? null,
+      createdAt: p.createdAt.toISOString(),
+      submissionStatus: p.type === "ASSIGNMENT" ? (submissionMap.get(p.id) ?? "NOT_SUBMITTED") : null,
+    })),
+  });
+}
+
+async function handleGetAssignmentDetail(
+  ctx: ToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const postId = input.postId as string;
+  if (!postId) return JSON.stringify({ error: "postId is required" });
+
+  const [post] = await db
+    .select({
+      id: contentPost.id,
+      type: contentPost.type,
+      title: contentPost.title,
+      body: contentPost.body,
+      status: contentPost.status,
+      dueAt: contentPost.dueAt,
+      createdAt: contentPost.createdAt,
+      authorUserId: contentPost.authorUserId,
+      organizationId: contentPost.organizationId,
+    })
+    .from(contentPost)
+    .where(eq(contentPost.id, postId))
+    .limit(1);
+
+  if (!post || post.organizationId !== ctx.orgId) {
+    return JSON.stringify({ error: "Post not found" });
+  }
+
+  // Verify access — author always has access, otherwise check audience
+  if (post.authorUserId !== ctx.userId) {
+    const accessible = await getAccessiblePostIds(ctx.orgId, ctx.userId);
+    if (!accessible.includes(postId)) {
+      return JSON.stringify({ error: "You do not have access to this post" });
+    }
+  }
+
+  const attachments = await db
+    .select({
+      id: contentPostAttachment.id,
+      mimeType: contentPostAttachment.mimeType,
+      size: contentPostAttachment.size,
+    })
+    .from(contentPostAttachment)
+    .where(eq(contentPostAttachment.postId, postId));
+
+  // Get submission status
+  const [submission] = await db
+    .select({
+      id: contentSubmission.id,
+      status: contentSubmission.status,
+      textContent: contentSubmission.textContent,
+      submittedAt: contentSubmission.createdAt,
+    })
+    .from(contentSubmission)
+    .where(
+      and(
+        eq(contentSubmission.postId, postId),
+        eq(contentSubmission.submittedByUserId, ctx.userId),
+      ),
+    )
+    .limit(1);
+
+  // Get tags
+  const tags = await db
+    .select({ name: contentTag.name })
+    .from(contentPostTag)
+    .innerJoin(contentTag, eq(contentPostTag.tagId, contentTag.id))
+    .where(eq(contentPostTag.postId, postId));
+
+  return JSON.stringify({
+    id: post.id,
+    type: post.type,
+    title: post.title,
+    body: post.body,
+    status: post.status,
+    dueAt: post.dueAt?.toISOString() ?? null,
+    createdAt: post.createdAt.toISOString(),
+    tags: tags.map((t) => t.name),
+    attachments: attachments.map((a) => ({
+      id: a.id,
+      mimeType: a.mimeType,
+      size: a.size,
+    })),
+    submission: submission
+      ? {
+          status: submission.status,
+          textContent: submission.textContent,
+          submittedAt: submission.submittedAt.toISOString(),
+        }
+      : null,
+  });
+}
+
+async function handleCreateAssignment(
+  ctx: ToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const title = input.title as string;
+  const body = input.body as string;
+  const type = input.type as "ASSIGNMENT" | "NOTE";
+  const audienceType = input.audienceType as "ALL_ORG" | "CLASS" | "SECTION";
+  const className = input.className as string | undefined;
+  const section = input.section as string | undefined;
+  const tagIds = input.tagIds as string[] | undefined;
+  const dueAtStr = input.dueAt as string | undefined;
+
+  if (!title || !body || !type || !audienceType) {
+    return JSON.stringify({ error: "title, body, type, and audienceType are required" });
+  }
+
+  // Verify content posting permission
+  const [perm] = await db
+    .select()
+    .from(contentPermission)
+    .where(
+      and(
+        eq(contentPermission.organizationId, ctx.orgId),
+        eq(contentPermission.userId, ctx.userId),
+      ),
+    )
+    .limit(1);
+
+  if (!perm) {
+    return JSON.stringify({
+      error: "You don't have content posting permission. Ask your management to grant you access.",
+    });
+  }
+
+  if (perm.scope !== "BOTH" && perm.scope !== type) {
+    return JSON.stringify({
+      error: `Your posting permission is limited to ${perm.scope} only.`,
+    });
+  }
+
+  // Validate audience
+  if ((audienceType === "CLASS" || audienceType === "SECTION") && !className) {
+    return JSON.stringify({ error: "className is required for CLASS or SECTION audience" });
+  }
+  if (audienceType === "SECTION" && !section) {
+    return JSON.stringify({ error: "section is required for SECTION audience" });
+  }
+
+  const dueAt = dueAtStr ? new Date(dueAtStr) : null;
+
+  // Create as DRAFT so user can review
+  const [post] = await db
+    .insert(contentPost)
+    .values({
+      type,
+      title,
+      body,
+      status: "DRAFT",
+      dueAt,
+      authorUserId: ctx.userId,
+      organizationId: ctx.orgId,
+    })
+    .returning();
+
+  // Create audience row
+  await db.insert(contentPostAudience).values({
+    postId: post.id,
+    audienceType,
+    className: audienceType !== "ALL_ORG" ? className : null,
+    section: audienceType === "SECTION" ? section : null,
+  });
+
+  // Attach tags if provided
+  if (tagIds && tagIds.length > 0) {
+    await db.insert(contentPostTag).values(
+      tagIds.map((tagId) => ({ postId: post.id, tagId })),
+    );
+  }
+
+  return JSON.stringify({
+    success: true,
+    postId: post.id,
+    status: "DRAFT",
+    message: `${type === "ASSIGNMENT" ? "Assignment" : "Note"} "${title}" created as DRAFT. Review and publish it from your Posts page.`,
+    editUrl: `/content/my-posts/${post.id}/edit`,
+  });
+}
+
+async function handleSubmitAssignment(
+  ctx: ToolContext,
+  input: Record<string, unknown>,
+): Promise<string> {
+  const postId = input.postId as string;
+  const textContent = input.textContent as string;
+
+  if (!postId || !textContent) {
+    return JSON.stringify({ error: "postId and textContent are required" });
+  }
+
+  // Verify the post exists and is a published assignment
+  const [post] = await db
+    .select({
+      id: contentPost.id,
+      type: contentPost.type,
+      status: contentPost.status,
+      organizationId: contentPost.organizationId,
+    })
+    .from(contentPost)
+    .where(eq(contentPost.id, postId))
+    .limit(1);
+
+  if (!post || post.organizationId !== ctx.orgId) {
+    return JSON.stringify({ error: "Assignment not found" });
+  }
+
+  if (post.type !== "ASSIGNMENT") {
+    return JSON.stringify({ error: "Submissions are only for assignments, not notes" });
+  }
+
+  if (post.status === "CLOSED") {
+    return JSON.stringify({ error: "This assignment is closed and no longer accepts submissions" });
+  }
+
+  // Check if already submitted
+  const [existing] = await db
+    .select({ id: contentSubmission.id })
+    .from(contentSubmission)
+    .where(
+      and(
+        eq(contentSubmission.postId, postId),
+        eq(contentSubmission.submittedByUserId, ctx.userId),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    // Resubmit
+    await db
+      .update(contentSubmission)
+      .set({
+        textContent,
+        status: "RESUBMITTED",
+        updatedAt: new Date(),
+      })
+      .where(eq(contentSubmission.id, existing.id));
+
+    return JSON.stringify({
+      success: true,
+      status: "RESUBMITTED",
+      message: "Your submission has been updated.",
+    });
+  }
+
+  // New submission
+  await db.insert(contentSubmission).values({
+    postId,
+    submittedByUserId: ctx.userId,
+    textContent,
+    status: "SUBMITTED",
+  });
+
+  return JSON.stringify({
+    success: true,
+    status: "SUBMITTED",
+    message: "Your submission has been recorded. Use the submission form to add file attachments.",
+  });
 }

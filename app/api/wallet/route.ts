@@ -21,7 +21,7 @@ export async function GET() {
 
   // Ensure general accounts have a self-profile + wallet provisioned
   if (session.user.role === "GENERAL") {
-    await ensureGeneralSelfProfile(session.user.id, session.user.name);
+    await ensureGeneralSelfProfile(session.user.id, session.user.name, db, access.activeOrganizationId);
   }
 
   const children = await db

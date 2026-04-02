@@ -1,32 +1,50 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  CreditCard,
+  Download,
+  Fingerprint,
+  IndianRupee,
+  Landmark,
+  Loader2,
+  Pencil,
+  Plus,
+  Receipt,
+  Search,
+  Send,
+  Smartphone,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Loader2, Plus, IndianRupee, CreditCard, Landmark, CheckCircle2,
-  ArrowLeft, Fingerprint, Users, Send, Receipt, Clock, CalendarDays,
-  Smartphone, ChevronRight, X, Search,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSSE } from "@/lib/events";
+
+type EventTargetType = "BOTH" | "ALL_PARENTS" | "ALL_GENERAL" | "CLASS" | "SELECTED" | "KIOSK";
 
 type PaymentAccount = {
   id: string;
@@ -41,6 +59,8 @@ type PaymentEvent = {
   description: string | null;
   amount: number;
   targetType: string;
+  targetClass: string | null;
+  targetAccountIds: string | null;
   dueDate: string | null;
   status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
   kioskMode: boolean;
@@ -48,7 +68,7 @@ type PaymentEvent = {
   createdAt: string;
   paymentAccountId: string | null;
   paymentAccountLabel: string | null;
-  paymentAccountMethod: string | null;
+  paymentAccountMethod: "UPI" | "BANK_ACCOUNT" | null;
 };
 
 type ChildInfo = {
@@ -56,65 +76,175 @@ type ChildInfo = {
   name: string;
   grNumber: string | null;
   className: string | null;
+  section: string | null;
+  parentId: string;
 };
 
 type ReceiptEntry = {
   id: string;
   childId: string | null;
-  paymentMode: string;
+  paymentMode: "KIOSK_TAP" | "CASH" | "SENT";
   amount: number;
   receiptNumber: string;
+  notes: string | null;
   paidAt: string;
 };
 
-function eventStatusColor(status: PaymentEvent["status"]) {
+type RecipientAccount = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: "PARENT" | "GENERAL";
+};
+
+type EventForm = {
+  title: string;
+  description: string;
+  amount: string;
+  paymentAccountId: string;
+  targetType: EventTargetType;
+  targetClass: string[];
+  dueDate: string;
+  kioskMode: boolean;
+};
+
+const EMPTY_FORM: EventForm = {
+  title: "",
+  description: "",
+  amount: "",
+  paymentAccountId: "",
+  targetType: "BOTH",
+  targetClass: [],
+  dueDate: "",
+  kioskMode: false,
+};
+
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function statusVariant(status: PaymentEvent["status"]) {
   if (status === "ACTIVE") return "default" as const;
   if (status === "COMPLETED") return "secondary" as const;
   if (status === "CANCELLED") return "destructive" as const;
   return "outline" as const;
 }
 
+function parseJsonArray(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function isDueCompleted(event: PaymentEvent) {
+  return Boolean(event.dueDate && new Date(event.dueDate).getTime() <= Date.now());
+}
+
+function matchesTarget(child: ChildInfo, event: PaymentEvent) {
+  const targetType = event.targetType;
+  const targetClasses = parseJsonArray(event.targetClass).map((c) => c.toLowerCase());
+  const targetAccountIds = new Set(parseJsonArray(event.targetAccountIds));
+
+  if (targetType === "KIOSK" || targetType === "ALL_PARENTS" || targetType === "BOTH" || targetType === "ALL_USERS") {
+    return true;
+  }
+  if (targetType === "CLASS") {
+    return Boolean(child.className && targetClasses.includes(child.className.toLowerCase()));
+  }
+  if (targetType === "SELECTED") {
+    return targetAccountIds.has(child.parentId);
+  }
+  if (targetType === "ALL_GENERAL") {
+    return false;
+  }
+  return true;
+}
+
+function targetSummary(event: PaymentEvent) {
+  if (event.targetType === "ALL_PARENTS") return "Parents";
+  if (event.targetType === "ALL_GENERAL") return "General users";
+  if (event.targetType === "BOTH" || event.targetType === "ALL_USERS") return "Parents + General";
+  if (event.targetType === "KIOSK") return "Kiosk only";
+  if (event.targetType === "CLASS") {
+    const classes = parseJsonArray(event.targetClass);
+    return classes.length > 0 ? `Classes: ${classes.join(", ")}` : "Class filtered";
+  }
+  if (event.targetType === "SELECTED") {
+    const ids = parseJsonArray(event.targetAccountIds);
+    return `Selected accounts (${ids.length})`;
+  }
+  return "Custom";
+}
+
+function toDateInput(raw: string | null) {
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
 export default function OperatorPaymentEventsPage() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<PaymentEvent[]>([]);
   const [approvedAccounts, setApprovedAccounts] = useState<PaymentAccount[]>([]);
+  const [classes, setClasses] = useState<string[]>([]);
 
-  // Create event dialog
-  const [createOpen, setCreateOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    amount: "",
-    paymentAccountId: "",
-    targetType: "BOTH",
-    dueDate: "",
-    kioskMode: false,
-    activate: false,
-  });
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<PaymentEvent | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState<EventForm>(EMPTY_FORM);
 
-  // Kiosk tap mode
+  const [selectedAccounts, setSelectedAccounts] = useState<RecipientAccount[]>([]);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [accountResults, setAccountResults] = useState<RecipientAccount[]>([]);
+  const [searchingAccounts, setSearchingAccounts] = useState(false);
+
   const [kioskEvent, setKioskEvent] = useState<PaymentEvent | null>(null);
+  const [kioskLoading, setKioskLoading] = useState(false);
   const [kioskSearch, setKioskSearch] = useState("");
   const [kioskChildren, setKioskChildren] = useState<ChildInfo[]>([]);
   const [kioskReceipts, setKioskReceipts] = useState<ReceiptEntry[]>([]);
-  const [kioskLoading, setKioskLoading] = useState(false);
-  const [tapping, setTapping] = useState<string | null>(null);
+  const [kioskCollectionMode, setKioskCollectionMode] = useState<"KIOSK_TAP" | "CASH">("KIOSK_TAP");
+  const [collectingChildId, setCollectingChildId] = useState<string | null>(null);
+  const [cashSelectedIds, setCashSelectedIds] = useState<string[]>([]);
+  const [cashNotes, setCashNotes] = useState("");
+  const [bulkCollecting, setBulkCollecting] = useState(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      const [eventsRes, accountsRes] = await Promise.all([
+      const [eventsRes, accountsRes, classesRes] = await Promise.all([
         fetch("/api/operator/payment-events", { cache: "no-store" }),
         fetch("/api/operator/payment-accounts", { cache: "no-store" }),
+        fetch("/api/operator/children?classesOnly=true", { cache: "no-store" }),
       ]);
-      if (!eventsRes.ok || !accountsRes.ok) throw new Error();
-      const [eventsData, accountsData] = await Promise.all([eventsRes.json(), accountsRes.json()]);
+
+      if (!eventsRes.ok || !accountsRes.ok || !classesRes.ok) {
+        throw new Error("Failed to load payment event data");
+      }
+
+      const [eventsData, accountsData, classesData] = await Promise.all([
+        eventsRes.json(),
+        accountsRes.json(),
+        classesRes.json(),
+      ]);
+
       setEvents(eventsData.events ?? []);
       setApprovedAccounts((accountsData.accounts ?? []).filter((a: PaymentAccount) => a.status === "APPROVED"));
+      setClasses((classesData.classes ?? []).filter((c: unknown): c is string => typeof c === "string"));
     } catch {
-      toast.error("Failed to load data");
+      if (!silent) toast.error("Failed to load payment events");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -122,326 +252,843 @@ export default function OperatorPaymentEventsPage() {
     void fetchData();
   }, [fetchData]);
 
-  // Real-time updates via SSE
-  useSSE("payment-event", () => void fetchData());
+  useSSE("payment-event", () => void fetchData(true));
 
-  // Load kiosk event details (children + receipts)
-  const openKioskMode = useCallback(async (event: PaymentEvent) => {
-    setKioskEvent(event);
-    setKioskLoading(true);
-    try {
-      const [eventRes, childrenRes] = await Promise.all([
-        fetch(`/api/operator/payment-events/${event.id}`, { cache: "no-store" }),
-        fetch(`/api/operator/children?limit=200`, { cache: "no-store" }),
-      ]);
-      if (eventRes.ok) {
-        const data = await eventRes.json();
-        setKioskReceipts(data.receipts ?? []);
-      }
-      if (childrenRes.ok) {
-        const d = await childrenRes.json();
-        setKioskChildren(d.results ?? []);
-      }
-    } finally {
-      setKioskLoading(false);
+  useEffect(() => {
+    if (!editorOpen || form.targetType !== "SELECTED") return;
+
+    const q = accountQuery.trim();
+    if (q.length < 2) {
+      setAccountResults([]);
+      return;
     }
-  }, []);
 
-  async function handleTap(childId: string) {
-    if (!kioskEvent || tapping) return;
-    setTapping(childId);
-    try {
-      const res = await fetch(`/api/operator/payment-events/${kioskEvent.id}/tap`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error ?? "Failed");
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearchingAccounts(true);
+      try {
+        const res = await fetch(`/api/operator/payment-events/accounts?q=${encodeURIComponent(q)}&limit=40`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (active) setAccountResults(data.accounts ?? []);
+      } catch {
+        if (active) setAccountResults([]);
+      } finally {
+        if (active) setSearchingAccounts(false);
       }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [editorOpen, form.targetType, accountQuery]);
+
+  const dueCompleteIds = useMemo(() => {
+    return new Set(events.filter((event) => isDueCompleted(event)).map((event) => event.id));
+  }, [events]);
+
+  const activeEvents = useMemo(
+    () => events.filter((event) => event.status === "ACTIVE" && !dueCompleteIds.has(event.id)),
+    [events, dueCompleteIds],
+  );
+
+  const draftEvents = useMemo(
+    () => events.filter((event) => event.status === "DRAFT" && !dueCompleteIds.has(event.id)),
+    [events, dueCompleteIds],
+  );
+
+  const historyEvents = useMemo(
+    () =>
+      events.filter(
+        (event) =>
+          event.status === "COMPLETED" ||
+          event.status === "CANCELLED" ||
+          dueCompleteIds.has(event.id),
+      ),
+    [events, dueCompleteIds],
+  );
+
+  const receiptByChildId = useMemo(() => {
+    const map = new Map<string, ReceiptEntry>();
+    for (const receipt of kioskReceipts) {
+      if (receipt.childId && !map.has(receipt.childId)) {
+        map.set(receipt.childId, receipt);
+      }
+    }
+    return map;
+  }, [kioskReceipts]);
+
+  const paidChildIds = useMemo(() => new Set(Array.from(receiptByChildId.keys())), [receiptByChildId]);
+
+  const filteredKioskChildren = useMemo(() => {
+    const q = kioskSearch.trim().toLowerCase();
+    return kioskChildren.filter((child) => {
+      if (!q) return true;
+      return (
+        child.name.toLowerCase().includes(q) ||
+        (child.grNumber ?? "").toLowerCase().includes(q) ||
+        (child.className ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [kioskChildren, kioskSearch]);
+
+  const unpaidVisibleIds = useMemo(
+    () => filteredKioskChildren.filter((child) => !paidChildIds.has(child.id)).map((child) => child.id),
+    [filteredKioskChildren, paidChildIds],
+  );
+
+  const allVisibleCashSelected = useMemo(
+    () => unpaidVisibleIds.length > 0 && unpaidVisibleIds.every((id) => cashSelectedIds.includes(id)),
+    [unpaidVisibleIds, cashSelectedIds],
+  );
+
+  const selectedAccountIds = useMemo(() => selectedAccounts.map((account) => account.id), [selectedAccounts]);
+
+  const visibleAccountResults = useMemo(
+    () => accountResults.filter((account) => !selectedAccountIds.includes(account.id)),
+    [accountResults, selectedAccountIds],
+  );
+
+  function resetEditor() {
+    setEditingEvent(null);
+    setForm(EMPTY_FORM);
+    setSelectedAccounts([]);
+    setAccountQuery("");
+    setAccountResults([]);
+  }
+
+  function openCreateEditor() {
+    resetEditor();
+    setEditorOpen(true);
+  }
+
+  async function openEditEditor(event: PaymentEvent) {
+    setEditingEvent(event);
+    setForm({
+      title: event.title,
+      description: event.description ?? "",
+      amount: String(event.amount),
+      paymentAccountId: event.paymentAccountId ?? "",
+      targetType: (["BOTH", "ALL_PARENTS", "ALL_GENERAL", "CLASS", "SELECTED", "KIOSK"] as const).includes(
+        event.targetType as EventTargetType,
+      )
+        ? (event.targetType as EventTargetType)
+        : "BOTH",
+      targetClass: parseJsonArray(event.targetClass),
+      dueDate: toDateInput(event.dueDate),
+      kioskMode: Boolean(event.kioskMode),
+    });
+    setSelectedAccounts([]);
+    setAccountQuery("");
+    setAccountResults([]);
+    setEditorOpen(true);
+
+    const targetIds = parseJsonArray(event.targetAccountIds);
+    if (targetIds.length === 0) return;
+
+    try {
+      const res = await fetch(
+        `/api/operator/payment-events/accounts?ids=${encodeURIComponent(targetIds.join(","))}&limit=200`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      setKioskReceipts((prev) => [data.receipt, ...prev]);
-      toast.success("Payment recorded! Receipt sent to parent.");
-      void fetchData();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to record payment");
-    } finally {
-      setTapping(null);
+      setSelectedAccounts(data.accounts ?? []);
+    } catch {
+      toast.error("Failed to load selected accounts");
     }
   }
 
-  async function handleCreate(activate: boolean) {
-    if (!form.title || !form.amount) return toast.error("Title and amount are required");
-    const amt = parseFloat(form.amount);
-    if (isNaN(amt) || amt <= 0) return toast.error("Enter a valid amount");
+  function setTargetType(targetType: EventTargetType) {
+    setForm((current) => ({
+      ...current,
+      targetType,
+      kioskMode: targetType === "KIOSK" ? true : current.kioskMode,
+      targetClass: targetType === "CLASS" ? current.targetClass : [],
+    }));
 
-    setSaving(true);
+    if (targetType !== "SELECTED") {
+      setSelectedAccounts([]);
+      setAccountQuery("");
+      setAccountResults([]);
+    }
+  }
+
+  function toggleClass(value: string) {
+    setForm((current) => {
+      const exists = current.targetClass.includes(value);
+      return {
+        ...current,
+        targetClass: exists
+          ? current.targetClass.filter((item) => item !== value)
+          : [...current.targetClass, value],
+      };
+    });
+  }
+
+  function addSelectedAccount(account: RecipientAccount) {
+    if (selectedAccounts.some((a) => a.id === account.id)) return;
+    setSelectedAccounts((current) => [...current, account]);
+    setAccountQuery("");
+    setAccountResults([]);
+  }
+
+  function removeSelectedAccount(accountId: string) {
+    setSelectedAccounts((current) => current.filter((account) => account.id !== accountId));
+  }
+
+  function buildEventPayload() {
+    const amount = Number(form.amount);
+    if (!form.title.trim()) {
+      toast.error("Event title is required");
+      return null;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid amount");
+      return null;
+    }
+    if (form.targetType === "CLASS" && form.targetClass.length === 0) {
+      toast.error("Select at least one class");
+      return null;
+    }
+    if (form.targetType === "SELECTED" && selectedAccounts.length === 0) {
+      toast.error("Select at least one account");
+      return null;
+    }
+
+    return {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      amount,
+      paymentAccountId: form.paymentAccountId || undefined,
+      targetType: form.targetType,
+      targetClass: form.targetType === "CLASS" ? form.targetClass : [],
+      targetAccountIds: form.targetType === "SELECTED" ? selectedAccounts.map((account) => account.id) : [],
+      dueDate: form.dueDate || undefined,
+      kioskMode: form.targetType === "KIOSK" ? true : form.kioskMode,
+    };
+  }
+
+  async function createEvent(activate: boolean) {
+    const payload = buildEventPayload();
+    if (!payload) return;
+
+    setSubmitting(true);
     try {
       const res = await fetch("/api/operator/payment-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          activate,
-          amount: amt,
-          paymentAccountId: form.paymentAccountId || undefined,
-          dueDate: form.dueDate || undefined,
-        }),
+        body: JSON.stringify({ ...payload, activate }),
       });
       if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error ?? "Failed");
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to create event");
       }
-      toast.success(activate ? "Event created and activated!" : "Event saved as draft");
-      setCreateOpen(false);
-      setForm({ title: "", description: "", amount: "", paymentAccountId: "", targetType: "BOTH", dueDate: "", kioskMode: false, activate: false });
-      void fetchData();
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Failed to create event");
+
+      toast.success(activate ? "Event created and activated" : "Draft saved");
+      setEditorOpen(false);
+      resetEditor();
+      void fetchData(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create event");
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   }
 
-  async function handleActivate(id: string) {
+  async function updateEvent() {
+    if (!editingEvent) return;
+    const payload = buildEventPayload();
+    if (!payload) return;
+
+    setSubmitting(true);
     try {
-      await fetch(`/api/operator/payment-events/${id}`, {
+      const res = await fetch(`/api/operator/payment-events/${editingEvent.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "ACTIVE" }),
+        body: JSON.stringify(payload),
       });
-      toast.success("Event activated");
-      void fetchData();
-    } catch {
-      toast.error("Failed to activate event");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to update event");
+      }
+
+      toast.success("Event updated");
+      setEditorOpen(false);
+      resetEditor();
+      void fetchData(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update event");
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  const paidChildIds = new Set(kioskReceipts.map((r) => r.childId).filter(Boolean));
-  const filteredChildren = kioskChildren.filter((c) => {
-    const q = kioskSearch.toLowerCase();
-    return !q || c.name.toLowerCase().includes(q) || (c.grNumber ?? "").toLowerCase().includes(q);
-  });
+  async function patchEvent(id: string, patch: Record<string, unknown>, successMessage: string) {
+    try {
+      const res = await fetch(`/api/operator/payment-events/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Action failed");
+      }
+      toast.success(successMessage);
+      void fetchData(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Action failed");
+    }
+  }
 
-  const activeEvents = events.filter((e) => e.status === "ACTIVE");
-  const draftEvents = events.filter((e) => e.status === "DRAFT");
-  const pastEvents = events.filter((e) => e.status === "COMPLETED" || e.status === "CANCELLED");
+  async function deleteEvent(id: string) {
+    const confirmed = window.confirm("Delete this payment event?");
+    if (!confirmed) return;
 
-  // ─── Kiosk Mode Overlay ─────────────────────────────────
+    try {
+      const res = await fetch(`/api/operator/payment-events/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Delete failed");
+      }
+      toast.success("Event deleted");
+      void fetchData(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Delete failed");
+    }
+  }
+
+  async function downloadReport(event: PaymentEvent) {
+    try {
+      const res = await fetch(`/api/operator/payment-events/${event.id}/report`, {
+        method: "GET",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "Failed to generate CSV");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeTitle = event.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      link.href = url;
+      link.download = `${safeTitle || "payment-event"}-${event.id.slice(0, 6)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to download CSV");
+    }
+  }
+
+  async function openKioskMode(event: PaymentEvent) {
+    setKioskEvent(event);
+    setKioskSearch("");
+    setKioskCollectionMode("KIOSK_TAP");
+    setCashSelectedIds([]);
+    setCashNotes("");
+    setKioskLoading(true);
+
+    try {
+      const [eventRes, childrenRes] = await Promise.all([
+        fetch(`/api/operator/payment-events/${event.id}`, { cache: "no-store" }),
+        fetch("/api/operator/children?limit=500", { cache: "no-store" }),
+      ]);
+
+      if (!eventRes.ok || !childrenRes.ok) {
+        throw new Error("Failed to load kiosk mode data");
+      }
+
+      const [eventData, childrenData] = await Promise.all([eventRes.json(), childrenRes.json()]);
+      const children = (childrenData.results ?? []) as ChildInfo[];
+      setKioskChildren(children.filter((child) => matchesTarget(child, event)));
+      setKioskReceipts(eventData.receipts ?? []);
+    } catch {
+      toast.error("Failed to open kiosk mode");
+      setKioskEvent(null);
+    } finally {
+      setKioskLoading(false);
+    }
+  }
+
+  async function recordPayment(
+    childId: string,
+    paymentMode: "KIOSK_TAP" | "CASH",
+    notes?: string,
+    silent = false,
+  ) {
+    if (!kioskEvent) return null;
+
+    const res = await fetch(`/api/operator/payment-events/${kioskEvent.id}/tap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ childId, paymentMode, notes: notes || undefined }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: "Payment failed" }));
+      if (!silent) toast.error(data.error ?? "Payment failed");
+      return null;
+    }
+
+    const data = await res.json();
+    const receipt = data.receipt as ReceiptEntry;
+    setKioskReceipts((current) => [receipt, ...current]);
+    return receipt;
+  }
+
+  async function collectSingleChild(childId: string, paymentMode: "KIOSK_TAP" | "CASH") {
+    setCollectingChildId(childId);
+    try {
+      const receipt = await recordPayment(
+        childId,
+        paymentMode,
+        paymentMode === "CASH" ? cashNotes.trim() || undefined : undefined,
+      );
+      if (receipt) {
+        toast.success(
+          paymentMode === "KIOSK_TAP"
+            ? "Tap payment collected"
+            : "Cash payment recorded",
+        );
+        void fetchData(true);
+      }
+    } finally {
+      setCollectingChildId(null);
+    }
+  }
+
+  async function collectBulkCash() {
+    if (cashSelectedIds.length === 0) {
+      toast.error("Select at least one account for cash collection");
+      return;
+    }
+
+    setBulkCollecting(true);
+    let success = 0;
+    let failed = 0;
+
+    try {
+      for (const childId of cashSelectedIds) {
+        const receipt = await recordPayment(childId, "CASH", cashNotes.trim() || undefined, true);
+        if (receipt) success += 1;
+        else failed += 1;
+      }
+
+      if (success > 0) {
+        toast.success(`${success} cash payment${success > 1 ? "s" : ""} recorded`);
+      }
+      if (failed > 0) {
+        toast.error(`${failed} payment${failed > 1 ? "s" : ""} could not be recorded`);
+      }
+      setCashSelectedIds([]);
+      setCashNotes("");
+      void fetchData(true);
+    } finally {
+      setBulkCollecting(false);
+    }
+  }
+
+  function toggleCashSelection(childId: string, checked: boolean) {
+    setCashSelectedIds((current) => {
+      if (checked) return current.includes(childId) ? current : [...current, childId];
+      return current.filter((id) => id !== childId);
+    });
+  }
+
+  function toggleSelectAllVisibleCash() {
+    if (allVisibleCashSelected) {
+      setCashSelectedIds((current) => current.filter((id) => !unpaidVisibleIds.includes(id)));
+      return;
+    }
+
+    setCashSelectedIds((current) => {
+      const merged = new Set([...current, ...unpaidVisibleIds]);
+      return Array.from(merged);
+    });
+  }
+
+  const targetOptions: Array<{
+    value: EventTargetType;
+    label: string;
+    hint: string;
+    icon: ReactNode;
+  }> = [
+    { value: "BOTH", label: "All", hint: "Parents + General", icon: <Users className="h-4 w-4" /> },
+    { value: "ALL_PARENTS", label: "Parents", hint: "Only parent accounts", icon: <Users className="h-4 w-4" /> },
+    { value: "ALL_GENERAL", label: "General", hint: "Only general accounts", icon: <Users className="h-4 w-4" /> },
+    { value: "CLASS", label: "Class", hint: "Specific classes", icon: <Users className="h-4 w-4" /> },
+    { value: "SELECTED", label: "Selected", hint: "Search and pick", icon: <Search className="h-4 w-4" /> },
+    { value: "KIOSK", label: "Kiosk", hint: "Tap and collect", icon: <Smartphone className="h-4 w-4" /> },
+  ];
+
   if (kioskEvent) {
     return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b px-4 py-3 bg-background/80 backdrop-blur-xl">
-          <button
-            type="button"
-            onClick={() => { setKioskEvent(null); setKioskSearch(""); }}
-            className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-accent transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold truncate">{kioskEvent.title}</h2>
-            <p className="text-xs text-muted-foreground">
-              ₹{kioskEvent.amount.toFixed(2)} · Tap to collect
-            </p>
-          </div>
-          <Badge variant="default" className="gap-1">
-            <Smartphone className="h-3 w-3" />
-            Kiosk
-          </Badge>
-        </div>
+      <div className="fixed inset-0 z-50 flex flex-col bg-slate-50">
+        <div className="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-xl"
+              onClick={() => {
+                setKioskEvent(null);
+                setKioskSearch("");
+                setCashSelectedIds([]);
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
 
-        {/* Stats bar */}
-        <div className="flex items-center gap-3 px-4 py-2 bg-muted/30 border-b text-sm">
-          <span className="font-medium">{kioskReceipts.length} collected</span>
-          <span className="text-muted-foreground">·</span>
-          <span className="font-semibold text-primary">₹{(kioskReceipts.length * kioskEvent.amount).toFixed(2)} total</span>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 py-3 border-b">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search students..."
-              value={kioskSearch}
-              onChange={(e) => setKioskSearch(e.target.value)}
-              className="pl-9 rounded-xl"
-              autoFocus
-            />
-          </div>
-        </div>
-
-        {/* Students list */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          {kioskLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-slate-900">{kioskEvent.title}</p>
+              <p className="text-xs text-slate-500">
+                {formatMoney(kioskEvent.amount)} per account
+                {kioskEvent.dueDate ? `  ·  Due ${new Date(kioskEvent.dueDate).toLocaleDateString()}` : ""}
+              </p>
             </div>
-          ) : filteredChildren.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-12">No students found</p>
-          ) : (
-            filteredChildren.map((child) => {
-              const paid = paidChildIds.has(child.id);
-              return (
-                <div
-                  key={child.id}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border px-4 py-3 transition-all",
-                    paid
-                      ? "border-green-200 bg-green-50/70 dark:border-green-800/40 dark:bg-green-950/20"
-                      : "border-border bg-card",
-                  )}
+
+            <Badge variant="outline" className="gap-1 border-slate-300 text-slate-700">
+              <Smartphone className="h-3 w-3" />
+              Kiosk Collection
+            </Badge>
+          </div>
+        </div>
+
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="border-slate-200 bg-white">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Collected</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{kioskReceipts.length}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 bg-white">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Pending</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">
+                  {Math.max(kioskChildren.length - kioskReceipts.length, 0)}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-slate-200 bg-white">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Total Collected</p>
+                <p className="mt-1 text-xl font-semibold text-emerald-700">
+                  {formatMoney(kioskReceipts.length * kioskEvent.amount)}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-slate-200 bg-white">
+            <CardContent className="space-y-4 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant={kioskCollectionMode === "KIOSK_TAP" ? "default" : "outline"}
+                  className="rounded-xl"
+                  onClick={() => setKioskCollectionMode("KIOSK_TAP")}
                 >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm truncate">{child.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {child.grNumber ? `GR: ${child.grNumber}` : ""}
-                      {child.className ? ` · ${child.className}` : ""}
+                  <Fingerprint className="mr-1.5 h-4 w-4" />
+                  Tap & Pay
+                </Button>
+                <Button
+                  type="button"
+                  variant={kioskCollectionMode === "CASH" ? "default" : "outline"}
+                  className="rounded-xl"
+                  onClick={() => setKioskCollectionMode("CASH")}
+                >
+                  <IndianRupee className="mr-1.5 h-4 w-4" />
+                  Cash Collection
+                </Button>
+              </div>
+
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={kioskSearch}
+                  onChange={(event) => setKioskSearch(event.target.value)}
+                  placeholder="Search by student name, GR number, class"
+                  className="rounded-xl border-slate-300 bg-white pl-9"
+                />
+              </div>
+
+              {kioskCollectionMode === "CASH" && (
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-800">
+                      Bulk cash collection for remaining accounts
                     </p>
-                  </div>
-                  {paid ? (
-                    <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                      <CheckCircle2 className="h-5 w-5" />
-                      <span className="text-xs font-semibold">Paid</span>
-                    </div>
-                  ) : (
                     <Button
-                      size="sm"
-                      onClick={() => handleTap(child.id)}
-                      disabled={tapping === child.id}
-                      className="rounded-xl min-w-24"
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-lg"
+                      onClick={toggleSelectAllVisibleCash}
+                      disabled={unpaidVisibleIds.length === 0}
                     >
-                      {tapping === child.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <IndianRupee className="h-3.5 w-3.5 mr-1" />
-                          Collect ₹{kioskEvent.amount.toFixed(0)}
-                        </>
-                      )}
+                      {allVisibleCashSelected ? "Clear Visible" : "Select Visible"}
                     </Button>
-                  )}
+                  </div>
+
+                  <Textarea
+                    placeholder="Optional notes for cash collection"
+                    value={cashNotes}
+                    onChange={(event) => setCashNotes(event.target.value)}
+                    className="min-h-20 rounded-xl border-slate-300 bg-white"
+                  />
+
+                  <Button
+                    type="button"
+                    className="w-full rounded-xl"
+                    onClick={() => void collectBulkCash()}
+                    disabled={bulkCollecting || cashSelectedIds.length === 0}
+                  >
+                    {bulkCollecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Record Cash for {cashSelectedIds.length} Selected
+                  </Button>
                 </div>
-              );
-            })
-          )}
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="flex-1 overflow-auto pb-2">
+            {kioskLoading ? (
+              <div className="flex h-40 items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
+              </div>
+            ) : filteredKioskChildren.length === 0 ? (
+              <Card className="border-dashed border-slate-300 bg-white">
+                <CardContent className="py-12 text-center text-sm text-slate-500">
+                  No accounts found for this payment event
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {filteredKioskChildren.map((child) => {
+                  const receipt = receiptByChildId.get(child.id);
+                  const isPaid = Boolean(receipt);
+                  const isSelected = cashSelectedIds.includes(child.id);
+
+                  return (
+                    <Card
+                      key={child.id}
+                      className={cn(
+                        "border transition-all",
+                        isPaid
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-slate-200 bg-white",
+                      )}
+                    >
+                      <CardContent className="flex items-center gap-3 p-3">
+                        {kioskCollectionMode === "CASH" && !isPaid ? (
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => toggleCashSelection(child.id, Boolean(checked))}
+                          />
+                        ) : null}
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">{child.name}</p>
+                          <p className="truncate text-xs text-slate-500">
+                            {child.grNumber ? `GR ${child.grNumber}` : ""}
+                            {child.className ? `  ·  ${child.className}` : ""}
+                            {child.section ? ` ${child.section}` : ""}
+                          </p>
+                        </div>
+
+                        {isPaid ? (
+                          <div className="text-right">
+                            <div className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-700">
+                              <CheckCircle2 className="h-3 w-3" />
+                              {receipt?.paymentMode === "CASH" ? "Cash" : "Tap"} Paid
+                            </div>
+                            <p className="mt-1 text-[11px] text-slate-500">{receipt?.receiptNumber}</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {kioskCollectionMode === "KIOSK_TAP" ? (
+                              <Button
+                                type="button"
+                                className="h-8 rounded-lg"
+                                onClick={() => void collectSingleChild(child.id, "KIOSK_TAP")}
+                                disabled={collectingChildId === child.id}
+                              >
+                                {collectingChildId === child.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Fingerprint className="mr-1 h-3.5 w-3.5" />
+                                    Tap & Pay
+                                  </>
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-8 rounded-lg border-slate-300"
+                                onClick={() => void collectSingleChild(child.id, "CASH")}
+                                disabled={collectingChildId === child.id}
+                              >
+                                {collectingChildId === child.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <>
+                                    <IndianRupee className="mr-1 h-3.5 w-3.5" />
+                                    Mark Cash
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  // ─── Main Page ───────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 p-4">
-      <div className="mx-auto max-w-2xl space-y-5">
-        {/* Header */}
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fafc_0%,_#eef2f7_55%,_#e2e8f0_100%)] p-4 md:p-6">
+      <div className="mx-auto w-full max-w-5xl space-y-5">
         <div className="flex items-center gap-3">
           <Link href="/operator/topup">
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-700 hover:bg-white/70">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold tracking-tight">Payment Events</h1>
-            <p className="text-sm text-muted-foreground">Manage fee collections</p>
-          </div>
-          <Button onClick={() => setCreateOpen(true)} size="sm" className="rounded-xl gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            New Event
-          </Button>
-        </div>
 
-        {/* Payment Accounts CTA */}
-        <Link href="/operator/payment-accounts">
-          <Card className="border-border/60 bg-gradient-to-r from-violet-50/80 to-background dark:from-violet-950/20 hover:shadow-md transition-shadow cursor-pointer">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/40">
-                <CreditCard className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">Payment Accounts</p>
-                <p className="text-xs text-muted-foreground">
-                  {approvedAccounts.length} approved · Manage UPI & bank details
+          <Card className="w-full border-slate-200/80 bg-white/85 shadow-sm backdrop-blur">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <p className="text-base font-semibold text-slate-900">Operator Payment Events</p>
+                <p className="text-sm text-slate-500">
+                  Premium, minimal workflow for event creation, collection, and reporting
                 </p>
               </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+
+              <Button onClick={openCreateEditor} className="rounded-xl bg-slate-900 text-white hover:bg-slate-800">
+                <Plus className="mr-1.5 h-4 w-4" />
+                New Event
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <StatsCard label="Active" value={String(activeEvents.length)} />
+          <StatsCard label="Drafts" value={String(draftEvents.length)} />
+          <StatsCard label="History" value={String(historyEvents.length)} />
+          <StatsCard
+            label="Total Collections"
+            value={formatMoney(events.reduce((sum, event) => sum + event.amount * event.receiptCount, 0))}
+          />
+        </div>
+
+        <Link href="/operator/payment-accounts">
+          <Card className="border-slate-200 bg-white hover:shadow-md">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-slate-900">Payment Accounts</p>
+                <p className="text-xs text-slate-500">
+                  {approvedAccounts.length} approved account{approvedAccounts.length === 1 ? "" : "s"} available
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-slate-400" />
             </CardContent>
           </Card>
         </Link>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="flex h-40 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
           </div>
         ) : (
           <Tabs defaultValue="active" className="space-y-4">
-            <TabsList className="w-full rounded-xl">
-              <TabsTrigger value="active" className="flex-1 rounded-lg">
-                Active {activeEvents.length > 0 && <span className="ml-1.5 text-xs">({activeEvents.length})</span>}
-              </TabsTrigger>
-              <TabsTrigger value="draft" className="flex-1 rounded-lg">
-                Drafts {draftEvents.length > 0 && <span className="ml-1.5 text-xs">({draftEvents.length})</span>}
-              </TabsTrigger>
+            <TabsList className="w-full rounded-xl bg-white">
+              <TabsTrigger value="active" className="flex-1 rounded-lg">Active</TabsTrigger>
+              <TabsTrigger value="draft" className="flex-1 rounded-lg">Draft</TabsTrigger>
               <TabsTrigger value="history" className="flex-1 rounded-lg">History</TabsTrigger>
             </TabsList>
 
-            {/* Active Events */}
-            <TabsContent value="active" className="space-y-3 mt-0">
+            <TabsContent value="active" className="space-y-3">
               {activeEvents.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="py-12 text-center">
-                    <Send className="mx-auto h-8 w-8 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-medium">No active events</p>
-                    <p className="text-xs text-muted-foreground mt-1">Create and activate an event to start collecting</p>
-                  </CardContent>
-                </Card>
+                <EmptyState icon={<Send className="h-7 w-7" />} title="No active payment events" />
               ) : (
                 activeEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
-                    onKioskOpen={openKioskMode}
+                    dueComplete={dueCompleteIds.has(event.id)}
+                    onOpenKiosk={openKioskMode}
+                    onActivate={(id) => void patchEvent(id, { status: "ACTIVE" }, "Event activated")}
+                    onComplete={(id) => void patchEvent(id, { status: "COMPLETED" }, "Event marked completed")}
+                    onCancel={(id) => void patchEvent(id, { status: "CANCELLED" }, "Event cancelled")}
+                    onEdit={openEditEditor}
+                    onDelete={deleteEvent}
+                    onDownload={downloadReport}
                   />
                 ))
               )}
             </TabsContent>
 
-            {/* Draft Events */}
-            <TabsContent value="draft" className="space-y-3 mt-0">
+            <TabsContent value="draft" className="space-y-3">
               {draftEvents.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="py-12 text-center">
-                    <Clock className="mx-auto h-8 w-8 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-medium">No drafts</p>
-                  </CardContent>
-                </Card>
+                <EmptyState icon={<Clock3 className="h-7 w-7" />} title="No draft payment events" />
               ) : (
                 draftEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
-                    onActivate={handleActivate}
-                    onKioskOpen={openKioskMode}
+                    dueComplete={dueCompleteIds.has(event.id)}
+                    onOpenKiosk={openKioskMode}
+                    onActivate={(id) => void patchEvent(id, { status: "ACTIVE" }, "Event activated")}
+                    onComplete={(id) => void patchEvent(id, { status: "COMPLETED" }, "Event marked completed")}
+                    onCancel={(id) => void patchEvent(id, { status: "CANCELLED" }, "Event cancelled")}
+                    onEdit={openEditEditor}
+                    onDelete={deleteEvent}
+                    onDownload={downloadReport}
                   />
                 ))
               )}
             </TabsContent>
 
-            {/* History */}
-            <TabsContent value="history" className="space-y-3 mt-0">
-              {pastEvents.length === 0 ? (
-                <Card className="border-dashed">
-                  <CardContent className="py-12 text-center">
-                    <Receipt className="mx-auto h-8 w-8 text-muted-foreground/30 mb-3" />
-                    <p className="text-sm font-medium">No history yet</p>
-                  </CardContent>
-                </Card>
+            <TabsContent value="history" className="space-y-3">
+              {historyEvents.length === 0 ? (
+                <EmptyState icon={<Receipt className="h-7 w-7" />} title="No completed history yet" />
               ) : (
-                pastEvents.map((event) => (
-                  <EventCard key={event.id} event={event} />
+                historyEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    dueComplete={dueCompleteIds.has(event.id)}
+                    onOpenKiosk={openKioskMode}
+                    onActivate={(id) => void patchEvent(id, { status: "ACTIVE" }, "Event activated")}
+                    onComplete={(id) => void patchEvent(id, { status: "COMPLETED" }, "Event marked completed")}
+                    onCancel={(id) => void patchEvent(id, { status: "CANCELLED" }, "Event cancelled")}
+                    onEdit={openEditEditor}
+                    onDelete={deleteEvent}
+                    onDownload={downloadReport}
+                  />
                 ))
               )}
             </TabsContent>
@@ -449,147 +1096,276 @@ export default function OperatorPaymentEventsPage() {
         )}
       </div>
 
-      {/* Create Event Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog
+        open={editorOpen}
+        onOpenChange={(open) => {
+          setEditorOpen(open);
+          if (!open) resetEditor();
+        }}
+      >
+        <DialogContent className="max-h-[92vh] overflow-y-auto rounded-2xl border-slate-200 sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Payment Event</DialogTitle>
-            <DialogDescription>Set up a fee collection for an event.</DialogDescription>
+            <DialogTitle>{editingEvent ? "Edit Payment Event" : "Create Payment Event"}</DialogTitle>
+            <DialogDescription>
+              Configure amount, due date, target filters, and optional kiosk collection flow.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-2">
-            <div className="space-y-1.5">
-              <Label>Event Title</Label>
-              <Input
-                placeholder="e.g. Math Olympiad Fee"
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                className="rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Description <span className="text-muted-foreground">(optional)</span></Label>
-              <Input
-                placeholder="Additional details"
-                value={form.description}
-                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Amount (₹)</Label>
-              <div className="relative">
-                <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Event Title</Label>
                 <Input
-                  type="number"
-                  placeholder="0.00"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                  className="pl-9 rounded-xl"
+                  value={form.title}
+                  onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                  placeholder="Annual Sports Fee"
+                  className="rounded-xl border-slate-300"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Amount</Label>
+                <div className="relative">
+                  <IndianRupee className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type="number"
+                    value={form.amount}
+                    onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
+                    placeholder="0.00"
+                    className="rounded-xl border-slate-300 pl-9"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
+                  className="rounded-xl border-slate-300"
+                />
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Description</Label>
+                <Textarea
+                  value={form.description}
+                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Optional event details"
+                  className="min-h-24 rounded-xl border-slate-300"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Payment Account <span className="text-muted-foreground">(optional)</span></Label>
+            <div className="space-y-2">
+              <Label>Payment Account (optional)</Label>
               <select
-                className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 value={form.paymentAccountId}
-                onChange={(e) => setForm((f) => ({ ...f, paymentAccountId: e.target.value }))}
+                onChange={(event) => setForm((current) => ({ ...current, paymentAccountId: event.target.value }))}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
               >
-                <option value="">None (Kiosk only)</option>
-                {approvedAccounts.map((a) => (
-                  <option key={a.id} value={a.id}>{a.label} ({a.method === "UPI" ? "UPI" : "Bank"})</option>
+                <option value="">None (collect manually)</option>
+                {approvedAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.label} ({account.method === "UPI" ? "UPI" : "Bank"})
+                  </option>
                 ))}
               </select>
-              {approvedAccounts.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No approved accounts yet.{" "}
-                  <Link href="/operator/payment-accounts" className="underline">Add one →</Link>
+              {approvedAccounts.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No approved payment account available. Add one in Payment Accounts.
                 </p>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Send To</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: "BOTH", label: "All", icon: <Users className="h-4 w-4" /> },
-                  { value: "ALL_PARENTS", label: "Parents", icon: <Users className="h-4 w-4" /> },
-                  { value: "KIOSK", label: "Kiosk only", icon: <Smartphone className="h-4 w-4" /> },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, targetType: opt.value, kioskMode: opt.value === "KIOSK" }))}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-all",
-                      form.targetType === opt.value
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border bg-card text-muted-foreground hover:border-primary/40",
-                    )}
-                  >
-                    {opt.icon}
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {form.targetType !== "KIOSK" && (
-              <div className="flex items-center gap-3 rounded-xl border p-3">
-                <Smartphone className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">Also enable kiosk tap mode</p>
-                  <p className="text-xs text-muted-foreground">Allow on-device tap collection too</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, kioskMode: !f.kioskMode }))}
-                  className={cn(
-                    "relative h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors",
-                    form.kioskMode ? "border-primary bg-primary" : "border-input bg-muted",
-                  )}
-                >
-                  <span className={cn(
-                    "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
-                    form.kioskMode ? "translate-x-5" : "translate-x-0.5",
-                  )} />
-                </button>
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <Label>Due Date <span className="text-muted-foreground">(optional)</span></Label>
-              <Input
-                type="date"
-                value={form.dueDate}
-                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
-                className="rounded-xl"
-              />
+              ) : null}
             </div>
 
             <Separator />
 
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => void handleCreate(false)}
-                disabled={saving}
-                className="rounded-xl"
-              >
-                Save as Draft
+            <div className="space-y-3">
+              <Label>Event Target Filters</Label>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {targetOptions.map((option) => {
+                  const selected = form.targetType === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTargetType(option.value)}
+                      className={cn(
+                        "rounded-xl border p-3 text-left transition",
+                        selected
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-300 bg-white text-slate-700 hover:border-slate-500",
+                      )}
+                    >
+                      <div className="mb-1 inline-flex items-center gap-1.5 text-sm font-semibold">
+                        {option.icon}
+                        {option.label}
+                      </div>
+                      <p
+                        className={cn(
+                          "text-xs",
+                          selected ? "text-slate-200" : "text-slate-500",
+                        )}
+                      >
+                        {option.hint}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {form.targetType === "CLASS" ? (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Select Classes
+                  </p>
+                  {classes.length === 0 ? (
+                    <p className="text-sm text-slate-500">No class records found.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {classes.map((className) => {
+                        const selected = form.targetClass.includes(className);
+                        return (
+                          <button
+                            key={className}
+                            type="button"
+                            onClick={() => toggleClass(className)}
+                            className={cn(
+                              "rounded-full border px-3 py-1 text-sm",
+                              selected
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-300 bg-white text-slate-700",
+                            )}
+                          >
+                            {className}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {form.targetType === "SELECTED" ? (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <Label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Search and Add Accounts
+                  </Label>
+
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      value={accountQuery}
+                      onChange={(event) => setAccountQuery(event.target.value)}
+                      placeholder="Search by name, email, or phone"
+                      className="rounded-xl border-slate-300 bg-white pl-9"
+                    />
+                  </div>
+
+                  {selectedAccounts.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedAccounts.map((account) => (
+                        <span
+                          key={account.id}
+                          className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-xs text-white"
+                        >
+                          {account.name}
+                          <button type="button" onClick={() => removeSelectedAccount(account.id)}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {searchingAccounts ? (
+                    <div className="flex items-center gap-2 py-2 text-sm text-slate-500">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Searching accounts...
+                    </div>
+                  ) : visibleAccountResults.length > 0 ? (
+                    <div className="max-h-44 space-y-1 overflow-auto rounded-lg border border-slate-200 bg-white p-1">
+                      {visibleAccountResults.map((account) => (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={() => addSelectedAccount(account)}
+                          className="w-full rounded-md px-2 py-2 text-left hover:bg-slate-100"
+                        >
+                          <p className="text-sm font-medium text-slate-800">{account.name}</p>
+                          <p className="text-xs text-slate-500">
+                            {account.email}  ·  {account.role}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : accountQuery.trim().length >= 2 ? (
+                    <p className="text-sm text-slate-500">No matching accounts found.</p>
+                  ) : (
+                    <p className="text-sm text-slate-500">Type at least 2 characters to search accounts.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {form.targetType !== "KIOSK" ? (
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Also enable kiosk tap mode</p>
+                  <p className="text-xs text-slate-500">Allow operator device collection in parallel</p>
+                </div>
+                <Button
+                  type="button"
+                  variant={form.kioskMode ? "default" : "outline"}
+                  className="rounded-lg"
+                  onClick={() => setForm((current) => ({ ...current, kioskMode: !current.kioskMode }))}
+                >
+                  {form.kioskMode ? "Enabled" : "Enable"}
+                </Button>
+              </div>
+            ) : null}
+
+            <Separator />
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => setEditorOpen(false)}>
+                Cancel
               </Button>
-              <Button
-                onClick={() => void handleCreate(true)}
-                disabled={saving}
-                className="rounded-xl"
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Create & Activate
-              </Button>
+
+              {editingEvent ? (
+                <Button
+                  type="button"
+                  className="rounded-xl"
+                  disabled={submitting}
+                  onClick={() => void updateEvent()}
+                >
+                  {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={submitting}
+                    onClick={() => void createEvent(false)}
+                  >
+                    {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Save Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-xl"
+                    disabled={submitting}
+                    onClick={() => void createEvent(true)}
+                  >
+                    {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Create & Activate
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -598,82 +1374,170 @@ export default function OperatorPaymentEventsPage() {
   );
 }
 
+function StatsCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card className="border-slate-200 bg-white">
+      <CardContent className="p-4">
+        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <Card className="border-dashed border-slate-300 bg-white">
+      <CardContent className="py-12 text-center">
+        <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+          {icon}
+        </div>
+        <p className="text-sm font-medium text-slate-700">{title}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function EventCard({
   event,
+  dueComplete,
+  onOpenKiosk,
   onActivate,
-  onKioskOpen,
+  onComplete,
+  onCancel,
+  onEdit,
+  onDelete,
+  onDownload,
 }: {
   event: PaymentEvent;
-  onActivate?: (id: string) => void;
-  onKioskOpen?: (event: PaymentEvent) => void;
+  dueComplete: boolean;
+  onOpenKiosk: (event: PaymentEvent) => void;
+  onActivate: (id: string) => void;
+  onComplete: (id: string) => void;
+  onCancel: (id: string) => void;
+  onEdit: (event: PaymentEvent) => void;
+  onDelete: (id: string) => void;
+  onDownload: (event: PaymentEvent) => void;
 }) {
+  const showDownload = dueComplete || event.status === "COMPLETED" || event.status === "CANCELLED";
+
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3 mb-3">
+    <Card className="border-slate-200 bg-white shadow-sm">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-0.5">
-              <p className="font-semibold text-sm truncate">{event.title}</p>
-              <Badge variant={eventStatusColor(event.status)} className="text-[10px] py-0 px-1.5 shrink-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <p className="truncate text-sm font-semibold text-slate-900">{event.title}</p>
+              <Badge variant={statusVariant(event.status)} className="text-[10px]">
                 {event.status}
               </Badge>
+              {dueComplete ? (
+                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] text-amber-700">
+                  Due Date Completed
+                </Badge>
+              ) : null}
             </div>
-            {event.description && (
-              <p className="text-xs text-muted-foreground line-clamp-1">{event.description}</p>
-            )}
+
+            {event.description ? (
+              <p className="line-clamp-2 text-xs text-slate-500">{event.description}</p>
+            ) : null}
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-lg font-bold text-primary">₹{event.amount.toFixed(0)}</p>
+
+          <div className="text-right">
+            <p className="text-lg font-semibold text-slate-900">{formatMoney(event.amount)}</p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mb-3">
-          <span className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1">
             <Receipt className="h-3 w-3" />
             {event.receiptCount} collected
           </span>
-          {event.dueDate && (
-            <span className="flex items-center gap-1">
+
+          <span className="inline-flex items-center gap-1">
+            <Users className="h-3 w-3" />
+            {targetSummary(event)}
+          </span>
+
+          {event.dueDate ? (
+            <span className="inline-flex items-center gap-1">
               <CalendarDays className="h-3 w-3" />
               Due {new Date(event.dueDate).toLocaleDateString()}
             </span>
-          )}
-          {event.kioskMode && (
-            <span className="flex items-center gap-1 text-primary">
+          ) : null}
+
+          {event.kioskMode ? (
+            <span className="inline-flex items-center gap-1 text-slate-700">
               <Smartphone className="h-3 w-3" />
-              Kiosk mode
+              Kiosk enabled
             </span>
-          )}
-          {event.paymentAccountLabel && (
-            <span className="flex items-center gap-1">
-              {event.paymentAccountMethod === "UPI" ? <CreditCard className="h-3 w-3" /> : <Landmark className="h-3 w-3" />}
+          ) : null}
+
+          {event.paymentAccountLabel ? (
+            <span className="inline-flex items-center gap-1">
+              {event.paymentAccountMethod === "UPI" ? (
+                <CreditCard className="h-3 w-3" />
+              ) : (
+                <Landmark className="h-3 w-3" />
+              )}
               {event.paymentAccountLabel}
             </span>
-          )}
+          ) : null}
         </div>
 
-        <div className="flex items-center gap-2">
-          {event.status === "DRAFT" && onActivate && (
+        <div className="flex flex-wrap gap-2">
+          {event.status === "DRAFT" ? (
+            <Button size="sm" className="h-8 rounded-lg" onClick={() => onActivate(event.id)}>
+              <Send className="mr-1 h-3.5 w-3.5" />
+              Activate
+            </Button>
+          ) : null}
+
+          {event.status === "ACTIVE" && event.kioskMode ? (
+            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onOpenKiosk(event)}>
+              <Fingerprint className="mr-1 h-3.5 w-3.5" />
+              Open Kiosk
+            </Button>
+          ) : null}
+
+          {(event.status === "DRAFT" || event.status === "ACTIVE") ? (
+            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onEdit(event)}>
+              <Pencil className="mr-1 h-3.5 w-3.5" />
+              Edit
+            </Button>
+          ) : null}
+
+          {event.status === "ACTIVE" ? (
+            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onComplete(event.id)}>
+              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+              Complete
+            </Button>
+          ) : null}
+
+          {event.status === "ACTIVE" ? (
+            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onCancel(event.id)}>
+              Cancel
+            </Button>
+          ) : null}
+
+          {event.receiptCount === 0 ? (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onActivate(event.id)}
-              className="rounded-lg h-8 gap-1"
+              className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => onDelete(event.id)}
             >
-              <Send className="h-3 w-3" />
-              Activate
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              Delete
             </Button>
-          )}
-          {event.status === "ACTIVE" && event.kioskMode && onKioskOpen && (
-            <Button
-              size="sm"
-              onClick={() => onKioskOpen(event)}
-              className="rounded-lg h-8 gap-1"
-            >
-              <Fingerprint className="h-3.5 w-3.5" />
-              Open Kiosk Mode
+          ) : null}
+
+          {showDownload ? (
+            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onDownload(event)}>
+              <Download className="mr-1 h-3.5 w-3.5" />
+              CSV Report
             </Button>
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>

@@ -193,6 +193,10 @@ export async function POST(request: NextRequest) {
           email: row.email,
           role: row.role as string,
         });
+
+        if (row.role === "GENERAL") {
+          await ensureGeneralSelfProfile(existingUserId, row.name, db, access.activeOrganizationId);
+        }
         continue;
       }
 
@@ -235,7 +239,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (row.role === "GENERAL") {
-        await ensureGeneralSelfProfile(userId, row.name);
+        await ensureGeneralSelfProfile(userId, row.name, db, access.activeOrganizationId);
       }
 
       existingUsersByEmail.set(row.email, userId);

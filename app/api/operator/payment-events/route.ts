@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
-import { paymentEvent, paymentEventAccount, paymentEventReceipt, child, user } from "@/lib/db/schema";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { paymentEvent, paymentEventAccount, paymentEventReceipt } from "@/lib/db/schema";
+import { desc, eq, inArray } from "drizzle-orm";
 import { broadcast } from "@/lib/sse";
-import { notifyParentForChild } from "@/lib/parent-notifications";
+import {
+  broadcastPaymentEventToTargets,
+  normalizeTargetType,
+  sanitizeStringArray,
+  validateSelectedAccountIds,
+} from "@/lib/payment-events";
 
 export async function GET() {
   let access;
@@ -77,8 +82,32 @@ export async function POST(req: NextRequest) {
     dueDate, kioskMode, activate,
   } = body;
 
-  if (!title || !amount || amount <= 0) {
+  const normalizedAmount = typeof amount === "number" ? amount : Number(amount);
+  if (!title || !Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
     return NextResponse.json({ error: "title and a positive amount are required" }, { status: 400 });
+  }
+
+  const normalizedTargetType = normalizeTargetType(targetType);
+  const normalizedTargetClass = sanitizeStringArray(targetClass);
+  const normalizedTargetAccountIds = sanitizeStringArray(targetAccountIds);
+
+  if (normalizedTargetType === "CLASS" && normalizedTargetClass.length === 0) {
+    return NextResponse.json({ error: "Select at least one class for class-targeted events" }, { status: 400 });
+  }
+
+  if (normalizedTargetType === "SELECTED") {
+    if (normalizedTargetAccountIds.length === 0) {
+      return NextResponse.json({ error: "Select at least one account" }, { status: 400 });
+    }
+    const isValid = await validateSelectedAccountIds(access.activeOrganizationId!, normalizedTargetAccountIds);
+    if (!isValid) {
+      return NextResponse.json({ error: "Some selected accounts are invalid or inactive" }, { status: 400 });
+    }
+  }
+
+  const parsedDueDate = dueDate ? new Date(dueDate) : null;
+  if (dueDate && parsedDueDate && Number.isNaN(parsedDueDate.getTime())) {
+    return NextResponse.json({ error: "Invalid due date" }, { status: 400 });
   }
 
   // Validate payment account belongs to org and is approved (unless kiosk-only)
@@ -98,6 +127,7 @@ export async function POST(req: NextRequest) {
   }
 
   const status = activate ? "ACTIVE" : "DRAFT";
+  const isKioskMode = normalizedTargetType === "KIOSK" ? true : Boolean(kioskMode);
 
   const [created] = await db
     .insert(paymentEvent)
@@ -107,44 +137,22 @@ export async function POST(req: NextRequest) {
       paymentAccountId: paymentAccountId ?? null,
       title,
       description: description ?? null,
-      amount,
-      targetType: targetType ?? "BOTH",
-      targetClass: targetClass ? JSON.stringify(targetClass) : null,
-      targetAccountIds: targetAccountIds ? JSON.stringify(targetAccountIds) : null,
-      dueDate: dueDate ? new Date(dueDate) : null,
+      amount: normalizedAmount,
+      targetType: normalizedTargetType,
+      targetClass: normalizedTargetClass.length > 0 ? JSON.stringify(normalizedTargetClass) : null,
+      targetAccountIds: normalizedTargetAccountIds.length > 0 ? JSON.stringify(normalizedTargetAccountIds) : null,
+      dueDate: parsedDueDate,
       status,
-      kioskMode: kioskMode ?? false,
+      kioskMode: isKioskMode,
     })
     .returning();
 
   // If activating and targeting parent/general accounts, send notifications
-  if (status === "ACTIVE" && !kioskMode) {
-    void broadcastPaymentEvent(created, access.activeOrganizationId!);
+  if (status === "ACTIVE" && !isKioskMode) {
+    void broadcastPaymentEventToTargets(access.activeOrganizationId!, created);
   }
 
   broadcast("payment-event", { action: "created", event: created });
 
   return NextResponse.json({ event: created }, { status: 201 });
-}
-
-async function broadcastPaymentEvent(event: typeof paymentEvent.$inferSelect, orgId: string) {
-  try {
-    // Find all children in the org whose parents should be notified
-    const children = await db
-      .select({ id: child.id, name: child.name })
-      .from(child)
-      .where(and(eq(child.organizationId, orgId)));
-
-    for (const c of children) {
-      await notifyParentForChild({
-        childId: c.id,
-        type: "PAYMENT_EVENT_CREATED",
-        title: `Payment Required: ${event.title}`,
-        message: `A payment of ₹${event.amount.toFixed(2)} is due${event.dueDate ? ` by ${new Date(event.dueDate).toLocaleDateString()}` : ""}.`,
-        metadata: { eventId: event.id, amount: event.amount, dueDate: event.dueDate },
-      });
-    }
-  } catch (err) {
-    console.error("[PaymentEvent] Failed to send notifications:", err);
-  }
 }

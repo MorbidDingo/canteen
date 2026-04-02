@@ -5,8 +5,13 @@ import {
   menuItem,
   certeSubscription,
   parentControl,
+  contentPermission,
+  contentPost,
+  contentPostAudience,
+  contentSubmission,
+  contentTag,
 } from "@/lib/db/schema";
-import { eq, and, gte, desc, inArray, asc } from "drizzle-orm";
+import { eq, and, gte, desc, inArray, asc, sql, ne, lt } from "drizzle-orm";
 import { MENU_CATEGORIES } from "@/lib/constants";
 import { getWalletForecast, type WalletForecast } from "@/lib/ml/predictive-wallet";
 import { getMenuPopularity, type MenuPopularityItem, getMenuFeedbackStats, type MenuItemFeedbackStats } from "@/lib/ml/data-collector";
@@ -72,6 +77,10 @@ interface SystemPromptContext {
   popularItems: PopularItem[];
   todaysPicks: RecommendedItem[];
   feedbackStats: FeedbackSummary[];
+  // Content system fields
+  contentPermissionScope: string | null; // null = no permission, "ASSIGNMENT" | "NOTE" | "BOTH"
+  pendingAssignmentsCount: number;
+  orgTagNames: string[];
 }
 
 // ─── Build Context ───────────────────────────────────────
@@ -223,7 +232,75 @@ export async function buildSystemPromptContext(
     popularItems,
     todaysPicks,
     feedbackStats,
+    ...(await buildContentContext(userId, orgId)),
   };
+}
+
+// ─── Content Context ─────────────────────────────────────
+
+async function buildContentContext(
+  userId: string,
+  orgId: string,
+): Promise<{
+  contentPermissionScope: string | null;
+  pendingAssignmentsCount: number;
+  orgTagNames: string[];
+}> {
+  let contentPermissionScope: string | null = null;
+  let pendingAssignmentsCount = 0;
+  let orgTagNames: string[] = [];
+
+  try {
+    // Check posting permission
+    const [perm] = await db
+      .select({ scope: contentPermission.scope })
+      .from(contentPermission)
+      .where(
+        and(
+          eq(contentPermission.organizationId, orgId),
+          eq(contentPermission.userId, userId),
+        ),
+      )
+      .limit(1);
+    contentPermissionScope = perm?.scope ?? null;
+  } catch {
+    // Non-critical
+  }
+
+  try {
+    // Count pending assignments (due in future, not yet submitted)
+    const now = new Date();
+    const result = await db.execute<{ count: string }>(sql`
+      SELECT COUNT(DISTINCT cp.id)::text AS count
+      FROM content_post cp
+      INNER JOIN content_post_audience cpa ON cpa.post_id = cp.id
+      WHERE cp.organization_id = ${orgId}
+        AND cp.type = 'ASSIGNMENT'
+        AND cp.status = 'PUBLISHED'
+        AND (cp.due_at IS NULL OR cp.due_at > ${now})
+        AND cp.id NOT IN (
+          SELECT cs.post_id FROM content_submission cs
+          WHERE cs.submitted_by_user_id = ${userId}
+        )
+    `);
+    pendingAssignmentsCount = parseInt(result.rows[0]?.count ?? "0", 10);
+  } catch {
+    // Non-critical
+  }
+
+  try {
+    // Fetch org tags
+    const tags = await db
+      .select({ name: contentTag.name })
+      .from(contentTag)
+      .where(eq(contentTag.organizationId, orgId))
+      .limit(20);
+    orgTagNames = tags.map((t) => t.name);
+  } catch {
+    // Non-critical
+  }
+
+  return { contentPermissionScope, pendingAssignmentsCount, orgTagNames };
 }
 
 // ─── System Prompt ───────────────────────────────────────
@@ -317,7 +394,14 @@ ${walletInsightsText}
 ${feedbackText}
 
 ## Categories
-${ctx.menuCategories.join(", ")}`;
+${ctx.menuCategories.join(", ")}
+
+## Content & Assignments
+- **Posting Permission**: ${ctx.contentPermissionScope ? `${ctx.contentPermissionScope} (can create ${ctx.contentPermissionScope === "BOTH" ? "assignments & notes" : ctx.contentPermissionScope.toLowerCase() + "s"})` : "None"}
+- **Pending Assignments**: ${ctx.pendingAssignmentsCount} unsubmitted${ctx.pendingAssignmentsCount > 0 ? " (use get_assignments_feed to list them)" : ""}
+${ctx.orgTagNames.length > 0 ? `- **Tags**: ${ctx.orgTagNames.join(", ")}` : "- No content tags configured"}
+
+You can help users find information in their assignments and notes, search through uploaded documents, check due dates, create draft assignments (if permitted), and submit text responses.`;
 }
 
 // ─── Helpers ─────────────────────────────────────────────

@@ -14,6 +14,7 @@ export async function ensureGeneralSelfProfile(
   userId: string,
   displayName?: string,
   database: typeof db = db,
+  organizationId?: string | null,
 ) {
   const [existingChild] = await database
     .select({ id: child.id })
@@ -29,6 +30,7 @@ export async function ensureGeneralSelfProfile(
       .insert(child)
       .values({
         parentId: userId,
+        organizationId: organizationId ?? null,
         name: displayName?.trim() || "Account Holder",
         grNumber: generatedGr,
         className: "GENERAL_ACCOUNT",

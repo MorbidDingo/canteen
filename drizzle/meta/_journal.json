@@ -99,6 +99,13 @@
       "when": 1774520026000,
       "tag": "0026_book_reader_system",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1743548400000,
+      "tag": "0032_assignments_notes",
+      "breakpoints": true
     }
   ]
 }

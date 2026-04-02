@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, doublePrecision, integer, timestamp, unique, check, jsonb } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 // ─── Better Auth Core Tables ─────────────────────────────
@@ -683,6 +683,15 @@ export const userRelations = relations(user, ({ many }) => ({
   overriddenCanteenPaymentRoutings: many(canteenPaymentRouting, {
     relationName: "canteen_payment_routing_overridden_by",
   }),
+  contentPermissions: many(contentPermission, { relationName: "content_permission_user" }),
+  grantedContentPermissions: many(contentPermission, { relationName: "content_permission_granted_by" }),
+  authoredContentPosts: many(contentPost, { relationName: "content_post_author" }),
+  targetedContentAudiences: many(contentPostAudience, { relationName: "content_post_audience_user" }),
+  contentSubmissions: many(contentSubmission, { relationName: "content_submission_user" }),
+  contentReads: many(contentRead, { relationName: "content_read_user" }),
+  createdContentTags: many(contentTag, { relationName: "content_tag_created_by" }),
+  createdContentGroups: many(contentGroup, { relationName: "content_group_created_by" }),
+  contentGroupMemberships: many(contentGroupMember, { relationName: "content_group_member_user" }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -725,6 +734,10 @@ export const organizationRelations = relations(organization, ({ one, many }) => 
   settlementAccounts: many(settlementAccount),
   settlementLedgers: many(settlementLedger),
   settlementBatches: many(settlementBatch),
+  contentPermissions: many(contentPermission),
+  contentPosts: many(contentPost),
+  contentTags: many(contentTag),
+  contentGroups: many(contentGroup),
 }));
 
 // ─── Canteen & Library Relations ─────────────────────────
@@ -1946,6 +1959,294 @@ export const noticeAcknowledgmentRelations = relations(noticeAcknowledgment, ({ 
   user: one(user, { fields: [noticeAcknowledgment.userId], references: [user.id] }),
 }));
 
+// ─── Assignments & Notes Content ────────────────────────
+
+export const contentPermission = pgTable("content_permission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  scope: text("scope", { enum: ["ASSIGNMENT", "NOTE", "BOTH"] }).notNull(),
+  grantedBy: text("granted_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  grantedAt: timestamp("granted_at").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueOrgUser: unique("content_permission_org_user_unique").on(table.organizationId, table.userId),
+}));
+
+export const contentPost = pgTable("content_post", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  authorUserId: text("author_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["ASSIGNMENT", "NOTE"] }).notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  dueAt: timestamp("due_at"),
+  status: text("status", { enum: ["DRAFT", "PUBLISHED", "CLOSED"] }).notNull().default("DRAFT"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const contentPostAttachment = pgTable("content_post_attachment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  storageBackend: text("storage_backend", { enum: ["S3", "CLOUDINARY"] }).notNull(),
+  storageKey: text("storage_key").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const contentPostAudience = pgTable("content_post_audience", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  audienceType: text("audience_type", { enum: ["ALL_ORG", "CLASS", "SECTION", "USER", "GROUP"] }).notNull(),
+  className: text("class_name"),
+  section: text("section"),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  groupId: text("group_id").references(() => contentGroup.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniquePostAudience: unique("content_post_audience_post_target_unique").on(
+    table.postId,
+    table.audienceType,
+    table.className,
+    table.section,
+    table.userId,
+    table.groupId,
+  ),
+  audienceShapeCheck: check(
+    "content_post_audience_shape_check",
+    sql`(
+      (${table.audienceType} = 'ALL_ORG' AND ${table.className} IS NULL AND ${table.section} IS NULL AND ${table.userId} IS NULL AND ${table.groupId} IS NULL)
+      OR (${table.audienceType} = 'CLASS' AND ${table.className} IS NOT NULL AND ${table.section} IS NULL AND ${table.userId} IS NULL AND ${table.groupId} IS NULL)
+      OR (${table.audienceType} = 'SECTION' AND ${table.className} IS NOT NULL AND ${table.section} IS NOT NULL AND ${table.userId} IS NULL AND ${table.groupId} IS NULL)
+      OR (${table.audienceType} = 'USER' AND ${table.className} IS NULL AND ${table.section} IS NULL AND ${table.userId} IS NOT NULL AND ${table.groupId} IS NULL)
+      OR (${table.audienceType} = 'GROUP' AND ${table.className} IS NULL AND ${table.section} IS NULL AND ${table.userId} IS NULL AND ${table.groupId} IS NOT NULL)
+    )`,
+  ),
+}));
+
+export const contentSubmission = pgTable("content_submission", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  submittedByUserId: text("submitted_by_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["SUBMITTED", "RESUBMITTED"] }).notNull().default("SUBMITTED"),
+  textContent: text("text_content"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniquePostSubmitter: unique("content_submission_post_submitter_unique").on(
+    table.postId,
+    table.submittedByUserId,
+  ),
+}));
+
+export const contentSubmissionAttachment = pgTable("content_submission_attachment", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  submissionId: text("submission_id")
+    .notNull()
+    .references(() => contentSubmission.id, { onDelete: "cascade" }),
+  storageBackend: text("storage_backend", { enum: ["S3", "CLOUDINARY"] }).notNull(),
+  storageKey: text("storage_key").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const contentTag = pgTable("content_tag", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: text("color"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueOrgTagName: unique("content_tag_org_name_unique").on(table.organizationId, table.name),
+}));
+
+export const contentPostTag = pgTable("content_post_tag", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  tagId: text("tag_id")
+    .notNull()
+    .references(() => contentTag.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniquePostTag: unique("content_post_tag_unique").on(table.postId, table.tagId),
+}));
+
+export const contentGroup = pgTable("content_group", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueOrgGroupName: unique("content_group_org_name_unique").on(table.organizationId, table.name),
+}));
+
+export const contentGroupMember = pgTable("content_group_member", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  groupId: text("group_id")
+    .notNull()
+    .references(() => contentGroup.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueGroupUser: unique("content_group_member_unique").on(table.groupId, table.userId),
+}));
+
+export const contentRead = pgTable("content_read", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniquePostUser: unique("content_read_post_user_unique").on(table.postId, table.userId),
+}));
+
+export const contentPermissionRelations = relations(contentPermission, ({ one }) => ({
+  organization: one(organization, { fields: [contentPermission.organizationId], references: [organization.id] }),
+  user: one(user, {
+    fields: [contentPermission.userId],
+    references: [user.id],
+    relationName: "content_permission_user",
+  }),
+  grantedByUser: one(user, {
+    fields: [contentPermission.grantedBy],
+    references: [user.id],
+    relationName: "content_permission_granted_by",
+  }),
+}));
+
+export const contentPostRelations = relations(contentPost, ({ one, many }) => ({
+  organization: one(organization, { fields: [contentPost.organizationId], references: [organization.id] }),
+  authorUser: one(user, {
+    fields: [contentPost.authorUserId],
+    references: [user.id],
+    relationName: "content_post_author",
+  }),
+  attachments: many(contentPostAttachment),
+  audiences: many(contentPostAudience),
+  submissions: many(contentSubmission),
+  reads: many(contentRead),
+  postTags: many(contentPostTag),
+}));
+
+export const contentPostAttachmentRelations = relations(contentPostAttachment, ({ one }) => ({
+  post: one(contentPost, { fields: [contentPostAttachment.postId], references: [contentPost.id] }),
+}));
+
+export const contentPostAudienceRelations = relations(contentPostAudience, ({ one }) => ({
+  post: one(contentPost, { fields: [contentPostAudience.postId], references: [contentPost.id] }),
+  user: one(user, {
+    fields: [contentPostAudience.userId],
+    references: [user.id],
+    relationName: "content_post_audience_user",
+  }),
+  group: one(contentGroup, { fields: [contentPostAudience.groupId], references: [contentGroup.id] }),
+}));
+
+export const contentSubmissionRelations = relations(contentSubmission, ({ one, many }) => ({
+  post: one(contentPost, { fields: [contentSubmission.postId], references: [contentPost.id] }),
+  submittedByUser: one(user, {
+    fields: [contentSubmission.submittedByUserId],
+    references: [user.id],
+    relationName: "content_submission_user",
+  }),
+  attachments: many(contentSubmissionAttachment),
+}));
+
+export const contentSubmissionAttachmentRelations = relations(contentSubmissionAttachment, ({ one }) => ({
+  submission: one(contentSubmission, {
+    fields: [contentSubmissionAttachment.submissionId],
+    references: [contentSubmission.id],
+  }),
+}));
+
+export const contentReadRelations = relations(contentRead, ({ one }) => ({
+  post: one(contentPost, { fields: [contentRead.postId], references: [contentPost.id] }),
+  user: one(user, {
+    fields: [contentRead.userId],
+    references: [user.id],
+    relationName: "content_read_user",
+  }),
+}));
+
+export const contentTagRelations = relations(contentTag, ({ one, many }) => ({
+  organization: one(organization, { fields: [contentTag.organizationId], references: [organization.id] }),
+  createdByUser: one(user, {
+    fields: [contentTag.createdBy],
+    references: [user.id],
+    relationName: "content_tag_created_by",
+  }),
+  postTags: many(contentPostTag),
+}));
+
+export const contentPostTagRelations = relations(contentPostTag, ({ one }) => ({
+  post: one(contentPost, { fields: [contentPostTag.postId], references: [contentPost.id] }),
+  tag: one(contentTag, { fields: [contentPostTag.tagId], references: [contentTag.id] }),
+}));
+
+export const contentGroupRelations = relations(contentGroup, ({ one, many }) => ({
+  organization: one(organization, { fields: [contentGroup.organizationId], references: [organization.id] }),
+  createdByUser: one(user, {
+    fields: [contentGroup.createdBy],
+    references: [user.id],
+    relationName: "content_group_created_by",
+  }),
+  members: many(contentGroupMember),
+  audiences: many(contentPostAudience),
+}));
+
+export const contentGroupMemberRelations = relations(contentGroupMember, ({ one }) => ({
+  group: one(contentGroup, { fields: [contentGroupMember.groupId], references: [contentGroup.id] }),
+  user: one(user, {
+    fields: [contentGroupMember.userId],
+    references: [user.id],
+    relationName: "content_group_member_user",
+  }),
+}));
+
 // ─── Payment Events ──────────────────────────────────────
 
 /**
@@ -2020,7 +2321,7 @@ export const paymentEventReceipt = pgTable("payment_event_receipt", {
   childId: text("child_id")
     .references(() => child.id, { onDelete: "set null" }),
   // KIOSK_TAP = operator's device tap, SENT = push-sent to parent account
-  paymentMode: text("payment_mode", { enum: ["KIOSK_TAP", "SENT"] }).notNull(),
+  paymentMode: text("payment_mode", { enum: ["KIOSK_TAP", "SENT", "CASH"] }).notNull(),
   amount: doublePrecision("amount").notNull(),
   receiptNumber: text("receipt_number").notNull().$defaultFn(() => `RCP-${Date.now()}`),
   notes: text("notes"),
@@ -2048,4 +2349,53 @@ export const paymentEventReceiptRelations = relations(paymentEventReceipt, ({ on
   event: one(paymentEvent, { fields: [paymentEventReceipt.eventId], references: [paymentEvent.id] }),
   paidByUser: one(user, { fields: [paymentEventReceipt.paidByUserId], references: [user.id] }),
   child: one(child, { fields: [paymentEventReceipt.childId], references: [child.id] }),
+}));
+
+// ─── Content Document Chunks (RAG / Vector Search) ───────
+
+export const contentDocumentChunk = pgTable("content_document_chunk", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  postId: text("post_id")
+    .notNull()
+    .references(() => contentPost.id, { onDelete: "cascade" }),
+  attachmentId: text("attachment_id")
+    .notNull()
+    .references(() => contentPostAttachment.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  chunkIndex: integer("chunk_index").notNull(),
+  content: text("content").notNull(),
+  // embedding stored as vector(1536) in PG, represented as text in Drizzle
+  // queried via raw SQL for vector operations
+  embedding: text("embedding"),
+  metadata: jsonb("metadata").$type<{ page?: number; section?: string; filename?: string }>().default({}),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const contentDocumentChunkRelations = relations(contentDocumentChunk, ({ one }) => ({
+  post: one(contentPost, { fields: [contentDocumentChunk.postId], references: [contentPost.id] }),
+  attachment: one(contentPostAttachment, { fields: [contentDocumentChunk.attachmentId], references: [contentPostAttachment.id] }),
+  organization: one(organization, { fields: [contentDocumentChunk.organizationId], references: [organization.id] }),
+}));
+
+// ─── AI Usage Log (cost tracking) ────────────────────────
+
+export const aiUsageLog = pgTable("ai_usage_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["CHAT", "EMBEDDING", "SEARCH"] }).notNull(),
+  tokens: integer("tokens").notNull().default(0),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const aiUsageLogRelations = relations(aiUsageLog, ({ one }) => ({
+  user: one(user, { fields: [aiUsageLog.userId], references: [user.id] }),
+  organization: one(organization, { fields: [aiUsageLog.organizationId], references: [organization.id] }),
 }));

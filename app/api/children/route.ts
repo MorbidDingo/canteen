@@ -22,7 +22,7 @@ export async function GET() {
   const session = access.session;
 
   if (session.user.role === "GENERAL") {
-    await ensureGeneralSelfProfile(session.user.id, session.user.name);
+    await ensureGeneralSelfProfile(session.user.id, session.user.name, db, access.activeOrganizationId);
   }
 
   const children = await db

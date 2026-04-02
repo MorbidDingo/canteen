@@ -18,6 +18,9 @@ import {
   IoNotifications,
   IoReader,
   IoCalendar,
+  IoDocumentText,
+  IoAdd,
+  IoList,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -49,7 +52,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-type ParentMode = "canteen" | "library";
+type ParentMode = "canteen" | "library" | "content";
 type WalletSnapshot = {
   childId: string;
   childName: string;
@@ -79,6 +82,7 @@ type NoticeItem = {
 
 function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
   if (pathname.startsWith("/library")) return "library";
+  if (pathname.startsWith("/content") || pathname.startsWith("/assignments")) return "content";
   if (
     pathname === "/menu" ||
     pathname.startsWith("/orders") ||
@@ -87,7 +91,7 @@ function getParentMode(pathname: string, requestedMode: string | null): ParentMo
   ) {
     return "canteen";
   }
-  if (requestedMode === "library" || requestedMode === "canteen") {
+  if (requestedMode === "library" || requestedMode === "canteen" || requestedMode === "content") {
     return requestedMode;
   }
   return "canteen";
@@ -102,6 +106,11 @@ function getActiveTab(pathname: string): string {
   if (pathname === "/controls") return "controls";
   if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
   if (pathname === "/cart") return "cart";
+  if (pathname === "/assignments" || pathname.startsWith("/assignments/")) return "feed";
+  if (pathname === "/content") return "home";
+  if (pathname === "/content/new") return "new";
+  if (pathname.startsWith("/content/") && pathname.endsWith("/submissions")) return "home";
+  if (pathname.startsWith("/content/")) return "home";
   if (pathname === "/library-history") return "home";
   return "home";
 }
@@ -499,6 +508,15 @@ function ParentLayoutContent({
   );
 
   const tabs: TabItem[] = useMemo(() => {
+    if (parentMode === "content") {
+      return [
+        { key: "feed" as const, href: "/assignments", icon: IoList, label: "Feed", locked: false },
+        { key: "home" as const, href: "/content", icon: IoDocumentText, label: "Posts", locked: false },
+        { key: "new" as const, href: "/content/new", icon: IoAdd, label: "Create", locked: false },
+        { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
+        { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
+      ];
+    }
     if (parentMode === "canteen") {
       return [
         { key: "home" as const, href: "/menu", icon: IoRestaurant, label: "Menu", locked: false },
@@ -586,36 +604,49 @@ function ParentLayoutContent({
 
           <div className="mt-2 flex items-center justify-between gap-3">
             {/* Mode switcher — premium pill design */}
-            <div className="flex items-center rounded-xl border border-border/60 bg-muted/55 p-1 shadow-sm">
+            <div className="flex items-center rounded-xl border border-border/60 bg-muted/55 p-0.5 shadow-sm">
               <Link
                 href="/menu"
                 className={cn(
-                  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
+                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
                   parentMode === "canteen"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-background text-foreground shadow-sm px-3"
+                    : "text-muted-foreground hover:text-foreground px-2",
                 )}
               >
-                <IoRestaurant className={cn("h-3.5 w-3.5 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
-                <span>Canteen</span>
+                <IoRestaurant className={cn("h-4 w-4 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
+                {parentMode === "canteen" && <span className="text-[11px] font-semibold">Canteen</span>}
               </Link>
 
               <Link
                 href="/library-reader"
                 className={cn(
-                  "relative inline-flex h-8 items-center justify-center gap-1.5 rounded-lg px-4 text-xs font-semibold transition-all duration-200",
+                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
                   parentMode === "library"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "bg-background text-foreground shadow-sm px-3"
+                    : "text-muted-foreground hover:text-foreground px-2",
                 )}
               >
-                <IoBook className={cn("h-3.5 w-3.5 transition-colors", parentMode === "library" ? "text-primary" : "")} />
-                <span>Library</span>
+                <IoBook className={cn("h-4 w-4 transition-colors", parentMode === "library" ? "text-primary" : "")} />
+                {parentMode === "library" && <span className="text-[11px] font-semibold">Library</span>}
                 {overdueCount > 0 && (
                   <span className="absolute -right-1 -top-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                     {overdueCount}
                   </span>
                 )}
+              </Link>
+
+              <Link
+                href="/content"
+                className={cn(
+                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
+                  parentMode === "content"
+                    ? "bg-background text-foreground shadow-sm px-3"
+                    : "text-muted-foreground hover:text-foreground px-2",
+                )}
+              >
+                <IoDocumentText className={cn("h-4 w-4 transition-colors", parentMode === "content" ? "text-primary" : "")} />
+                {parentMode === "content" && <span className="text-[11px] font-semibold">Notes</span>}
               </Link>
             </div>
 

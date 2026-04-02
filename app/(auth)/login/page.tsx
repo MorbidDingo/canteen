@@ -15,9 +15,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Eye, EyeOff, Loader2, Monitor, Smartphone, Globe, X } from "lucide-react";
 import { toast } from "sonner";
 import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+
+type DeviceSession = {
+  id: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,6 +39,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showDeviceDialog, setShowDeviceDialog] = useState(false);
+  const [deviceSessions, setDeviceSessions] = useState<DeviceSession[]>([]);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
 
   const getDefaultRouteForRole = useCallback((role?: string | null) => {
     switch (role) {
@@ -152,7 +169,23 @@ export default function LoginPage() {
       // Session limit reached — user is already logged in on max devices
       const msg = error.message?.toLowerCase() ?? "";
       if (msg.includes("session") || error.status === 403) {
-        toast.error("You are already logged in on the maximum number of devices. Please log out from another device first.");
+        // Fetch active sessions so user can choose which to revoke
+        try {
+          const res = await fetch("/api/auth/device-sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setDeviceSessions(data.sessions ?? []);
+            setShowDeviceDialog(true);
+          } else {
+            toast.error("You are already logged in on the maximum number of devices. Please log out from another device first.");
+          }
+        } catch {
+          toast.error("You are already logged in on the maximum number of devices. Please log out from another device first.");
+        }
       } else {
         toast.error(error.message || "Invalid email or password");
       }
@@ -173,6 +206,44 @@ export default function LoginPage() {
     router.push(nextRoute);
     router.refresh();
   };
+
+  async function handleRevokeSession(sessionId: string) {
+    setRevokingSessionId(sessionId);
+    try {
+      const res = await fetch("/api/auth/device-sessions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, sessionId }),
+      });
+      if (!res.ok) {
+        toast.error("Failed to revoke session");
+        return;
+      }
+      toast.success("Device logged out. Signing you in...");
+      setShowDeviceDialog(false);
+      setDeviceSessions([]);
+      // Retry login
+      await handleSubmit(new Event("submit") as unknown as React.FormEvent);
+    } catch {
+      toast.error("Failed to revoke session");
+    } finally {
+      setRevokingSessionId(null);
+    }
+  }
+
+  function parseDeviceName(ua: string | null): { icon: "mobile" | "desktop" | "unknown"; label: string } {
+    if (!ua) return { icon: "unknown", label: "Unknown device" };
+    const lower = ua.toLowerCase();
+    if (lower.includes("mobile") || lower.includes("android") || lower.includes("iphone")) {
+      return { icon: "mobile", label: "Mobile device" };
+    }
+    // Extract browser name
+    if (lower.includes("chrome")) return { icon: "desktop", label: "Chrome browser" };
+    if (lower.includes("firefox")) return { icon: "desktop", label: "Firefox browser" };
+    if (lower.includes("safari")) return { icon: "desktop", label: "Safari browser" };
+    if (lower.includes("edge")) return { icon: "desktop", label: "Edge browser" };
+    return { icon: "desktop", label: "Desktop device" };
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center px-4 py-12">
@@ -252,6 +323,60 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Device limit dialog */}
+      <Dialog open={showDeviceDialog} onOpenChange={setShowDeviceDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Device Limit Reached</DialogTitle>
+            <DialogDescription>
+              You&apos;re logged in on {deviceSessions.length} device{deviceSessions.length !== 1 ? "s" : ""}. Log out from one to continue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {deviceSessions.map((session) => {
+              const device = parseDeviceName(session.userAgent);
+              const loginDate = new Date(session.createdAt);
+              return (
+                <div
+                  key={session.id}
+                  className="flex items-center gap-3 rounded-lg border p-3"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                    {device.icon === "mobile" ? (
+                      <Smartphone className="h-4 w-4 text-muted-foreground" />
+                    ) : device.icon === "desktop" ? (
+                      <Monitor className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Globe className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">{device.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {session.ipAddress && `${session.ipAddress} · `}
+                      {loginDate.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                    disabled={revokingSessionId === session.id}
+                    onClick={() => handleRevokeSession(session.id)}
+                  >
+                    {revokingSessionId === session.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      "Log out"
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

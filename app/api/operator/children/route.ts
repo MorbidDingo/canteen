@@ -19,6 +19,16 @@ export async function GET(req: NextRequest) {
   const limitParam = req.nextUrl.searchParams.get("limit");
   const limit = limitParam ? Math.min(parseInt(limitParam, 10) || 50, 200) : 50;
 
+  // classesOnly mode: return distinct class names for filter UI
+  if (req.nextUrl.searchParams.get("classesOnly") === "true") {
+    const classRows = await db
+      .selectDistinct({ className: child.className })
+      .from(child)
+      .where(eq(child.organizationId, access.activeOrganizationId!));
+    const classes = classRows.map((r) => r.className).filter(Boolean).sort();
+    return NextResponse.json({ classes });
+  }
+
   const rows = await db
     .select({
       id: child.id,
@@ -26,6 +36,7 @@ export async function GET(req: NextRequest) {
       grNumber: child.grNumber,
       className: child.className,
       section: child.section,
+      parentId: child.parentId,
     })
     .from(child)
     .where(
