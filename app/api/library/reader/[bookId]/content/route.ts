@@ -86,54 +86,69 @@ export async function GET(
   // For public domain books, fetch content on-demand if no chapters exist
   if (chapters.length === 0 && bookInfo.isPublicDomain && bookInfo.gutenbergId) {
     const gutenbergId = parseInt(bookInfo.gutenbergId, 10);
-    const rawText = await fetchBookContent(gutenbergId);
+    let rawText: string | null = null;
 
-    if (rawText) {
-      const parsed = parseIntoChapters(rawText);
-      const totalPages = estimatePages(rawText);
+    try {
+      rawText = await fetchBookContent(gutenbergId);
+    } catch (error) {
+      console.error("[reader/content] fetchBookContent threw:", error instanceof Error ? error.message : error);
+      return NextResponse.json(
+        { error: "Failed to fetch book content. The source may be temporarily unavailable. Please try again later." },
+        { status: 503 },
+      );
+    }
 
-      if (parsed.length > 0) {
-        // Store fetched chapters
-        await db.insert(bookChapter).values(
-          parsed.map((ch) => ({
-            readableBookId: bookId,
-            chapterNumber: ch.chapterNumber,
-            title: ch.title,
-            content: ch.content,
-            pageStart: ch.pageStart,
-            pageEnd: ch.pageEnd,
-          })),
-        );
+    if (!rawText) {
+      return NextResponse.json(
+        { error: "Book content is not available right now. Please try again later." },
+        { status: 503 },
+      );
+    }
 
-        // Update book metadata
-        await db
-          .update(readableBook)
-          .set({
-            totalPages,
-            totalChapters: parsed.length,
-            updatedAt: new Date(),
-          })
-          .where(eq(readableBook.id, bookId));
+    const parsed = parseIntoChapters(rawText);
+    const totalPages = estimatePages(rawText);
 
-        // Re-fetch stored chapters
-        chapters = await db
-          .select({
-            id: bookChapter.id,
-            chapterNumber: bookChapter.chapterNumber,
-            title: bookChapter.title,
-            content: bookChapter.content,
-            pageStart: bookChapter.pageStart,
-            pageEnd: bookChapter.pageEnd,
-            audioUrl: bookChapter.audioUrl,
-          })
-          .from(bookChapter)
-          .where(eq(bookChapter.readableBookId, bookId))
-          .orderBy(asc(bookChapter.chapterNumber));
+    if (parsed.length > 0) {
+      // Store fetched chapters
+      await db.insert(bookChapter).values(
+        parsed.map((ch) => ({
+          readableBookId: bookId,
+          chapterNumber: ch.chapterNumber,
+          title: ch.title,
+          content: ch.content,
+          pageStart: ch.pageStart,
+          pageEnd: ch.pageEnd,
+        })),
+      );
 
-        // Update returned book info
-        bookInfo.totalPages = totalPages;
-        bookInfo.totalChapters = parsed.length;
-      }
+      // Update book metadata
+      await db
+        .update(readableBook)
+        .set({
+          totalPages,
+          totalChapters: parsed.length,
+          updatedAt: new Date(),
+        })
+        .where(eq(readableBook.id, bookId));
+
+      // Re-fetch stored chapters
+      chapters = await db
+        .select({
+          id: bookChapter.id,
+          chapterNumber: bookChapter.chapterNumber,
+          title: bookChapter.title,
+          content: bookChapter.content,
+          pageStart: bookChapter.pageStart,
+          pageEnd: bookChapter.pageEnd,
+          audioUrl: bookChapter.audioUrl,
+        })
+        .from(bookChapter)
+        .where(eq(bookChapter.readableBookId, bookId))
+        .orderBy(asc(bookChapter.chapterNumber));
+
+      // Update returned book info
+      bookInfo.totalPages = totalPages;
+      bookInfo.totalChapters = parsed.length;
     }
   }
 

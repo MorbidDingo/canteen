@@ -45,9 +45,9 @@ export interface ParsedChapter {
 
 const GUTENDEX_API = "https://gutendex.com/books";
 const GUTENBERG_FILES = "https://www.gutenberg.org";
-const FETCH_TIMEOUT = 30_000;
-const FETCH_CONTENT_TIMEOUT = 60_000;
-const FETCH_RETRIES = 3;
+const FETCH_TIMEOUT = 15_000;
+const FETCH_CONTENT_TIMEOUT = 20_000;
+const FETCH_RETRIES = 2;
 const CHARS_PER_PAGE = 2000; // approximate characters per "page"
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -136,7 +136,21 @@ export function getTextUrl(book: GutenbergBook): string | null {
 }
 
 /**
+ * Get multiple text URL candidates for a Gutenberg book (most reliable first).
+ * Tries mirror/CDN patterns that are less likely to be blocked.
+ */
+function getTextUrls(gutenbergId: number): string[] {
+  return [
+    `https://www.gutenberg.org/cache/epub/${gutenbergId}/pg${gutenbergId}.txt`,
+    `https://www.gutenberg.org/files/${gutenbergId}/${gutenbergId}-0.txt`,
+    `https://www.gutenberg.org/ebooks/${gutenbergId}.txt.utf-8`,
+  ];
+}
+
+/**
  * Fetch the full text content of a Gutenberg book.
+ * Tries S3 cache first, then multiple Gutenberg URL patterns, then Gutendex API.
+ * Returns null (never throws) if all sources fail.
  */
 export async function fetchBookContent(gutenbergId: number): Promise<string | null> {
   const cachedKey = `gutenberg/${gutenbergId}.txt`;
@@ -146,26 +160,52 @@ export async function fetchBookContent(gutenbergId: number): Promise<string | nu
       const cachedContent = await getBookFromS3(cachedKey);
       if (cachedContent) return cachedContent;
     } catch (error) {
-      console.error("Failed to read Gutenberg content from S3 cache:", error);
+      console.error("[gutenberg] S3 cache read failed:", error instanceof Error ? error.message : error);
     }
   }
 
-  const book = await getGutenbergBook(gutenbergId);
-  if (!book) return null;
+  // Try multiple Gutenberg text URL patterns in order
+  const textUrls = getTextUrls(gutenbergId);
 
-  const textUrl = getTextUrl(book);
-  if (!textUrl) return null;
+  let content: string | null = null;
 
-  const response = await fetchWithRetry(textUrl, FETCH_CONTENT_TIMEOUT);
-  if (!response.ok) return null;
+  for (const textUrl of textUrls) {
+    try {
+      const response = await fetchWithRetry(textUrl, FETCH_CONTENT_TIMEOUT);
+      if (response.ok) {
+        content = await response.text();
+        break;
+      }
+    } catch (error) {
+      console.error(`[gutenberg] Fetch failed for ${textUrl}:`, error instanceof Error ? error.message : error);
+    }
+  }
 
-  const content = await response.text();
+  if (!content) {
+    // Last resort: try the Gutendex API to get the canonical text URL
+    try {
+      const book = await getGutenbergBook(gutenbergId);
+      if (book) {
+        const textUrl = getTextUrl(book);
+        if (textUrl && !textUrls.includes(textUrl)) {
+          const response = await fetchWithRetry(textUrl, FETCH_CONTENT_TIMEOUT);
+          if (response.ok) {
+            content = await response.text();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("[gutenberg] Gutendex fallback failed:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  if (!content) return null;
 
   if (isS3Configured()) {
     try {
       await uploadBookToS3(gutenbergId, content);
     } catch (error) {
-      console.error("Failed to write Gutenberg content to S3 cache:", error);
+      console.error("[gutenberg] S3 cache write failed:", error instanceof Error ? error.message : error);
     }
   }
 

@@ -503,7 +503,8 @@ export function BookReader({ bookId }: { bookId: string }) {
       ]);
 
       if (!contentRes.ok) {
-        toast.error("Failed to load book content");
+        const errData = await contentRes.json().catch(() => null);
+        toast.error(errData?.error || "Failed to load book content");
         router.push("/library-reader");
         return;
       }

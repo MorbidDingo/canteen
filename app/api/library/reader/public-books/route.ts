@@ -251,7 +251,13 @@ export async function POST(request: NextRequest) {
   const gutenbergId = parseInt(bookRow.gutenbergId, 10);
 
   // Fetch content from Gutenberg
-  const rawText = await fetchBookContent(gutenbergId);
+  let rawText: string | null = null;
+  try {
+    rawText = await fetchBookContent(gutenbergId);
+  } catch (error) {
+    console.error("[public-books] fetchBookContent threw:", error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: "Failed to fetch book content. The source may be temporarily unavailable." }, { status: 503 });
+  }
   if (!rawText) {
     return NextResponse.json({ error: "Failed to fetch book content from Project Gutenberg" }, { status: 502 });
   }
