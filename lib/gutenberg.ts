@@ -1,3 +1,5 @@
+import { getBookFromS3, uploadBookToS3 } from "@/lib/s3";
+
 /**
  * Project Gutenberg integration via the Gutendex API.
  * Fetches public domain book metadata and content for the reader system.
@@ -137,6 +139,15 @@ export function getTextUrl(book: GutenbergBook): string | null {
  * Fetch the full text content of a Gutenberg book.
  */
 export async function fetchBookContent(gutenbergId: number): Promise<string | null> {
+  const cachedKey = `gutenberg/${gutenbergId}.txt`;
+
+  try {
+    const cachedContent = await getBookFromS3(cachedKey);
+    if (cachedContent) return cachedContent;
+  } catch (error) {
+    console.error("Failed to read Gutenberg content from S3 cache:", error);
+  }
+
   const book = await getGutenbergBook(gutenbergId);
   if (!book) return null;
 
@@ -146,7 +157,15 @@ export async function fetchBookContent(gutenbergId: number): Promise<string | nu
   const response = await fetchWithRetry(textUrl, FETCH_CONTENT_TIMEOUT);
   if (!response.ok) return null;
 
-  return await response.text();
+  const content = await response.text();
+
+  try {
+    await uploadBookToS3(gutenbergId, content);
+  } catch (error) {
+    console.error("Failed to write Gutenberg content to S3 cache:", error);
+  }
+
+  return content;
 }
 
 /**

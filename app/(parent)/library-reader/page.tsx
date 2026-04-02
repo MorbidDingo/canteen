@@ -80,6 +80,16 @@ export default function LibraryReaderPage() {
   const [searching, setSearching] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const warmReaderContent = useCallback((book: ReaderBook | null | undefined) => {
+    if (!book?.isPublicDomain || book.totalChapters > 0) return;
+
+    fetch("/api/library/reader/public-books", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readableBookId: book.id }),
+    }).catch(() => {});
+  }, []);
+
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -113,6 +123,7 @@ export default function LibraryReaderPage() {
       setSearchQuery("");
       setSearchResults([]);
       if (match.isActive) {
+        warmReaderContent(match);
         router.push(`/library-reader/${match.id}`);
       } else {
         // Start reading session inline
@@ -124,6 +135,7 @@ export default function LibraryReaderPage() {
             body: JSON.stringify({ readableBookId: match.id }),
           });
           if (res.status === 409 || res.ok) {
+            warmReaderContent(match);
             router.push(`/library-reader/${match.id}`);
           } else if (res.status === 429) {
             toast.error(`Maximum ${READER_MAX_ACTIVE_BOOKS} books at a time.`);
@@ -148,7 +160,26 @@ export default function LibraryReaderPage() {
         setBooks(refreshedBooks);
         const found = refreshedBooks.find((b) => b.isPublicDomain && b.gutenbergId === String(gutenbergId));
         if (found) {
-          router.push(`/library-reader/${found.id}`);
+          setStartingBookId(found.id);
+          try {
+            const res = await fetch("/api/library/reader/sessions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ readableBookId: found.id }),
+            });
+            if (res.status === 409 || res.ok) {
+              warmReaderContent(found);
+              router.push(`/library-reader/${found.id}`);
+            } else if (res.status === 429) {
+              toast.error(`Maximum ${READER_MAX_ACTIVE_BOOKS} books at a time.`);
+            } else {
+              toast.error("Failed to start reading");
+            }
+          } catch {
+            toast.error("Failed to start reading");
+          } finally {
+            setStartingBookId(null);
+          }
         } else {
           toast.error("Book not available yet. Try again.");
         }
@@ -158,7 +189,7 @@ export default function LibraryReaderPage() {
     }
     setSearchQuery("");
     setSearchResults([]);
-  }, [books, router]);
+  }, [books, router, warmReaderContent]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -224,6 +255,8 @@ export default function LibraryReaderPage() {
 
   const startReading = async (readableBookId: string) => {
     setStartingBookId(readableBookId);
+    const targetBook = books.find((book) => book.id === readableBookId);
+
     try {
       const res = await fetch("/api/library/reader/sessions", {
         method: "POST",
@@ -233,6 +266,7 @@ export default function LibraryReaderPage() {
 
       if (res.status === 409) {
         // Already open, navigate directly
+        warmReaderContent(targetBook);
         router.push(`/library-reader/${readableBookId}`);
         return;
       }
@@ -248,6 +282,7 @@ export default function LibraryReaderPage() {
         return;
       }
 
+      warmReaderContent(targetBook);
       router.push(`/library-reader/${readableBookId}`);
     } catch {
       toast.error("Failed to start reading");

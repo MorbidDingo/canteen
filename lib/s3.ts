@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 
-const REGION = "ap-south-1";
+const REGION = process.env.AWS_REGION || "ap-south-1";
 const BUCKET = process.env.AWS_S3_BUCKET!;
 
 let _client: S3Client | null = null;

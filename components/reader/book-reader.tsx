@@ -371,6 +371,7 @@ export function BookReader({ bookId }: { bookId: string }) {
   // ── Pagination
   const [pageSlices, setPageSlices] = useState<PageSlice[]>([]);
   const [containerHeight, setContainerHeight] = useState(0);
+  const [restoredBookPage, setRestoredBookPage] = useState<number | null>(null);
 
   const mode = MODE_CONFIG[readingMode];
 
@@ -391,6 +392,15 @@ export function BookReader({ bookId }: { bookId: string }) {
     () => highlights.filter((h) => h.chapterNumber === currentChapter),
     [highlights, currentChapter],
   );
+
+  useEffect(() => {
+    if (chapters.length === 0) return;
+    if (chapters.some((chapter) => chapter.chapterNumber === currentChapter)) return;
+
+    setCurrentChapter(chapters[0].chapterNumber);
+    setPageIndex(0);
+    setRestoredBookPage(null);
+  }, [chapters, currentChapter]);
 
   // ── Map page index → API book-page number
   function currentPageToBookPage(): number {
@@ -449,6 +459,21 @@ export function BookReader({ bookId }: { bookId: string }) {
     setPageIndex((prev) => Math.min(prev, Math.max(0, slices.length - 1)));
   }, [activeChapter, containerHeight, fontSize, lineHeight, contentWidth]);
 
+  useEffect(() => {
+    if (!activeChapter || pageSlices.length === 0 || restoredBookPage == null) return;
+
+    const chapterSpan = activeChapter.pageEnd - activeChapter.pageStart;
+    const nextPageIndex = chapterSpan > 0
+      ? Math.round(
+          ((restoredBookPage - activeChapter.pageStart) / chapterSpan) *
+            Math.max(0, pageSlices.length - 1),
+        )
+      : 0;
+
+    setPageIndex(Math.max(0, Math.min(pageSlices.length - 1, nextPageIndex)));
+    setRestoredBookPage(null);
+  }, [activeChapter, pageSlices, restoredBookPage]);
+
   // ── Data Fetching
   const fetchBookData = useCallback(async () => {
     try {
@@ -466,8 +491,9 @@ export function BookReader({ bookId }: { bookId: string }) {
       }
 
       const contentData = await contentRes.json();
+      const nextChapters = contentData.chapters ?? [];
       setBookInfo(contentData.book);
-      setChapters(contentData.chapters ?? []);
+      setChapters(nextChapters);
 
       if (bookmarksRes.ok) {
         const d = await bookmarksRes.json();
@@ -481,10 +507,22 @@ export function BookReader({ bookId }: { bookId: string }) {
         const d = await progressRes.json();
         const p = d.progress;
         if (p) {
-          setCurrentChapter(p.currentChapter);
+          const hasSavedChapter = nextChapters.some(
+            (chapter: Chapter) => chapter.chapterNumber === p.currentChapter,
+          );
+          const fallbackChapter = nextChapters[0]?.chapterNumber ?? 1;
+
+          setCurrentChapter(hasSavedChapter ? p.currentChapter : fallbackChapter);
+          setRestoredBookPage(hasSavedChapter ? (p.currentPage ?? null) : null);
           setReadingMode(p.readingMode as ReadingMode);
           setFontSize(p.fontSize ?? 17);
+        } else {
+          setCurrentChapter(nextChapters[0]?.chapterNumber ?? 1);
+          setRestoredBookPage(null);
         }
+      } else {
+        setCurrentChapter(nextChapters[0]?.chapterNumber ?? 1);
+        setRestoredBookPage(null);
       }
     } catch {
       toast.error("Failed to load book");
@@ -780,6 +818,8 @@ export function BookReader({ bookId }: { bookId: string }) {
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
+      if (window.getSelection()?.toString().trim()) return;
+
       const dx = e.changedTouches[0].clientX - touchStartX.current;
       const dy = e.changedTouches[0].clientY - touchStartY.current;
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
@@ -875,7 +915,7 @@ export function BookReader({ bookId }: { bookId: string }) {
   return (
     <div
       className={cn(
-        "flex flex-col select-none",
+        "flex flex-col",
         mode.bg,
         isFullscreen ? "fixed inset-0 z-[60]" : "min-h-[100dvh]",
       )}
@@ -965,7 +1005,6 @@ export function BookReader({ bookId }: { bookId: string }) {
       <div
         ref={contentAreaRef}
         className="flex-1 relative overflow-hidden"
-        style={{ touchAction: "none" }}
       >
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
@@ -1006,13 +1045,15 @@ export function BookReader({ bookId }: { bookId: string }) {
                 {/* Page content */}
                 <div
                   ref={contentInnerRef}
-                  className={cn("whitespace-pre-wrap", mode.text)}
+                  className={cn("whitespace-pre-wrap select-text", mode.text)}
                   style={{
                     fontSize: `${fontSize}px`,
                     lineHeight: lineHeight,
                     fontFamily: "Georgia, 'Times New Roman', serif",
                     fontFeatureSettings: '"liga" 1, "kern" 1',
                     letterSpacing: "0.01em",
+                    userSelect: "text",
+                    WebkitUserSelect: "text",
                   }}
                   onMouseUp={handleTextSelection}
                   onTouchEnd={(e) => {
@@ -1021,11 +1062,17 @@ export function BookReader({ bookId }: { bookId: string }) {
                     if (dx < 30) handleTextSelection();
                   }}
                 >
-                  {renderWithHighlights(
-                    currentPageText,
-                    currentPageSlice?.startOffset ?? 0,
-                    currentChapterHighlights,
-                    (hl) => setActiveHighlight(hl),
+                  {currentPageSlice ? (
+                    renderWithHighlights(
+                      currentPageText,
+                      currentPageSlice.startOffset,
+                      currentChapterHighlights,
+                      (hl) => setActiveHighlight(hl),
+                    )
+                  ) : (
+                    <div className={cn("flex min-h-[30vh] items-center justify-center text-sm", mode.sub)}>
+                      Preparing page…
+                    </div>
                   )}
                 </div>
               </div>
