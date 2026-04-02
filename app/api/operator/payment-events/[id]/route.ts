@@ -192,7 +192,7 @@ export async function PATCH(
 
   const [updated] = await db
     .update(paymentEvent)
-    .set(updates as Parameters<typeof db.update>[0])
+    .set(updates as Partial<typeof paymentEvent.$inferInsert>)
     .where(eq(paymentEvent.id, id))
     .returning();
 
