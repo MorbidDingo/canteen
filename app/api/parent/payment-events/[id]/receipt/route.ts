@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
 import { paymentEvent, paymentEventReceipt, child } from "@/lib/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 export async function GET(
   _req: NextRequest,
@@ -55,7 +55,7 @@ export async function GET(
         .leftJoin(child, eq(child.id, paymentEventReceipt.childId))
         .where(and(
           eq(paymentEventReceipt.eventId, id),
-          // only receipts for this parent's children
+          inArray(paymentEventReceipt.childId, childIds),
         ))
         .orderBy(desc(paymentEventReceipt.paidAt))
     : [];

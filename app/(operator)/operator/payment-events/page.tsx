@@ -171,7 +171,7 @@ export default function OperatorPaymentEventsPage() {
     }
   }
 
-  async function handleCreate() {
+  async function handleCreate(activate: boolean) {
     if (!form.title || !form.amount) return toast.error("Title and amount are required");
     const amt = parseFloat(form.amount);
     if (isNaN(amt) || amt <= 0) return toast.error("Enter a valid amount");
@@ -183,6 +183,7 @@ export default function OperatorPaymentEventsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          activate,
           amount: amt,
           paymentAccountId: form.paymentAccountId || undefined,
           dueDate: form.dueDate || undefined,
@@ -192,7 +193,7 @@ export default function OperatorPaymentEventsPage() {
         const d = await res.json();
         throw new Error(d.error ?? "Failed");
       }
-      toast.success(form.activate ? "Event created and activated!" : "Event saved as draft");
+      toast.success(activate ? "Event created and activated!" : "Event saved as draft");
       setCreateOpen(false);
       setForm({ title: "", description: "", amount: "", paymentAccountId: "", targetType: "BOTH", dueDate: "", kioskMode: false, activate: false });
       void fetchData();
@@ -575,14 +576,14 @@ export default function OperatorPaymentEventsPage() {
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                onClick={() => { setForm((f) => ({ ...f, activate: false })); handleCreate(); }}
+                onClick={() => void handleCreate(false)}
                 disabled={saving}
                 className="rounded-xl"
               >
                 Save as Draft
               </Button>
               <Button
-                onClick={() => { setForm((f) => ({ ...f, activate: true })); handleCreate(); }}
+                onClick={() => void handleCreate(true)}
                 disabled={saving}
                 className="rounded-xl"
               >
