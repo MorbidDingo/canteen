@@ -1,13 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "@/components/ui/motion";
 import { spring } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import type { ReadingMode } from "@/lib/constants";
-import { READING_MODES, READING_MODE_LABELS } from "@/lib/constants";
 import {
   BookOpen,
   Bookmark,
@@ -16,7 +22,6 @@ import {
   Highlighter,
   Loader2,
   Moon,
-  Settings,
   Sun,
   Volume2,
   VolumeX,
@@ -25,10 +30,14 @@ import {
   Plus,
   List,
   ArrowLeft,
+  Maximize2,
+  Minimize2,
+  Settings2,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// ─── Types ───────────────────────────────────────────────
+// ─── Types ──────────────────────────────────────────────
 
 interface Chapter {
   id: string;
@@ -71,97 +80,376 @@ interface HighlightItem {
   createdAt: string;
 }
 
-// ─── Reading Mode Styles ─────────────────────────────────
+// ─── Mode Config ─────────────────────────────────────────
 
-const READING_MODE_STYLES: Record<ReadingMode, { bg: string; text: string; filter: string }> = {
-  LIGHT: { bg: "bg-white", text: "text-gray-900", filter: "" },
-  DARK: { bg: "bg-gray-950", text: "text-gray-100", filter: "" },
-  BLUE_LIGHT: { bg: "bg-amber-50", text: "text-amber-950", filter: "sepia(20%) saturate(80%)" },
-  GREY: { bg: "bg-neutral-200", text: "text-neutral-800", filter: "saturate(0%) brightness(95%)" },
+const MODE_CONFIG: Record<
+  ReadingMode,
+  {
+    bg: string;
+    text: string;
+    sub: string;
+    bar: string;
+    sheet: string;
+    filter: string;
+    accent: string;
+    btnHover: string;
+    icon: React.ReactNode;
+  }
+> = {
+  LIGHT: {
+    bg: "bg-[#FAFAF8]",
+    text: "text-[#1C1C1C]",
+    sub: "text-[#888]",
+    bar: "bg-white/85 backdrop-blur-xl border-black/[0.06]",
+    sheet: "bg-white border-black/[0.06]",
+    filter: "",
+    accent: "text-indigo-600",
+    btnHover: "hover:bg-black/[0.05]",
+    icon: <Sun className="h-4 w-4" />,
+  },
+  DARK: {
+    bg: "bg-[#0F0F0F]",
+    text: "text-[#E0E0E0]",
+    sub: "text-[#666]",
+    bar: "bg-[#1A1A1A]/90 backdrop-blur-xl border-white/[0.08]",
+    sheet: "bg-[#1A1A1A] border-white/[0.08]",
+    filter: "",
+    accent: "text-indigo-400",
+    btnHover: "hover:bg-white/[0.06]",
+    icon: <Moon className="h-4 w-4" />,
+  },
+  BLUE_LIGHT: {
+    bg: "bg-[#FFF8EE]",
+    text: "text-[#2C1B00]",
+    sub: "text-[#A07840]",
+    bar: "bg-[#FFF8EE]/90 backdrop-blur-xl border-amber-900/[0.08]",
+    sheet: "bg-[#FFF8EE] border-amber-900/[0.08]",
+    filter: "sepia(18%) saturate(80%)",
+    accent: "text-amber-700",
+    btnHover: "hover:bg-amber-900/[0.06]",
+    icon: <span className="text-sm">🕯️</span>,
+  },
+  GREY: {
+    bg: "bg-[#EBEBEB]",
+    text: "text-[#282828]",
+    sub: "text-[#777]",
+    bar: "bg-[#F2F2F2]/90 backdrop-blur-xl border-black/[0.06]",
+    sheet: "bg-[#F2F2F2] border-black/[0.06]",
+    filter: "saturate(0%)",
+    accent: "text-[#444]",
+    btnHover: "hover:bg-black/[0.05]",
+    icon: <span className="text-sm">⚪</span>,
+  },
 };
 
-// ─── Page Flip Variants ──────────────────────────────────
-
-const pageFlipVariants = {
-  enter: (direction: number) => ({
-    rotateY: direction > 0 ? 90 : -90,
-    opacity: 0,
-    transformOrigin: direction > 0 ? "left center" : "right center",
-  }),
-  center: {
-    rotateY: 0,
-    opacity: 1,
-  },
-  exit: (direction: number) => ({
-    rotateY: direction > 0 ? -90 : 90,
-    opacity: 0,
-    transformOrigin: direction > 0 ? "right center" : "left center",
-  }),
+const MODE_ORDER: ReadingMode[] = ["LIGHT", "DARK", "BLUE_LIGHT", "GREY"];
+const MODE_LABELS: Record<ReadingMode, string> = {
+  LIGHT: "Light",
+  DARK: "Dark",
+  BLUE_LIGHT: "Warm",
+  GREY: "Grey",
 };
 
-const bookOpenVariants = {
-  closed: {
-    scaleX: 0,
-    opacity: 0,
-    transformOrigin: "left center",
-  },
-  open: {
-    scaleX: 1,
-    opacity: 1,
-    transformOrigin: "left center",
-    transition: { type: "spring" as const, stiffness: 200, damping: 25, mass: 1 },
-  },
-};
+// ─── Width Options ───────────────────────────────────────
+
+const WIDTH_OPTIONS = [
+  { label: "S", title: "Narrow", px: 520 },
+  { label: "M", title: "Normal", px: 680 },
+  { label: "L", title: "Wide", px: 840 },
+] as const;
+type WidthPx = (typeof WIDTH_OPTIONS)[number]["px"];
+
+// ─── Utility: absolute DOM offset ───────────────────────
+
+function getAbsoluteTextOffset(container: HTMLElement, targetNode: Node, nodeOffset: number): number {
+  let total = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let cur: Node | null = walker.nextNode();
+  while (cur) {
+    if (cur === targetNode) return total + nodeOffset;
+    total += cur.textContent?.length ?? 0;
+    cur = walker.nextNode();
+  }
+  return total + nodeOffset;
+}
+
+// ─── Utility: compute pages ──────────────────────────────
+
+interface PageSlice {
+  startOffset: number; // char offset in chapter content
+  endOffset: number;
+}
+
+function computePageSlices(
+  content: string,
+  containerHeight: number,
+  fontSize: number,
+  lineHeight: number,
+  textWidthPx: number,
+  titleHeightPx: number,
+): PageSlice[] {
+  if (typeof window === "undefined" || containerHeight <= 0 || !content) {
+    return [{ startOffset: 0, endOffset: content.length }];
+  }
+
+  const probe = document.createElement("div");
+  probe.style.cssText = [
+    "position:fixed",
+    "top:-9999px",
+    "left:0",
+    `width:${textWidthPx}px`,
+    `font-size:${fontSize}px`,
+    `line-height:${lineHeight}`,
+    "font-family:inherit",
+    "white-space:pre-wrap",
+    "word-break:break-word",
+    "visibility:hidden",
+    "pointer-events:none",
+    "padding:0",
+    "margin:0",
+  ].join(";");
+  document.body.appendChild(probe);
+
+  const paragraphs = content.split("\n");
+  const slices: PageSlice[] = [];
+  let buf: string[] = [];
+  let bufHeight = 0;
+  let pageStartOffset = 0;
+  let isFirst = true;
+
+  const cap = () => (isFirst ? Math.max(60, containerHeight - titleHeightPx) : containerHeight);
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    probe.textContent = p || "\u00A0";
+    const ph = probe.offsetHeight;
+
+    if (bufHeight + ph > cap() && buf.length > 0) {
+      const joined = buf.join("\n");
+      slices.push({ startOffset: pageStartOffset, endOffset: pageStartOffset + joined.length });
+      pageStartOffset += joined.length + 1; // +1 for the \n separator
+      buf = [p];
+      bufHeight = ph;
+      isFirst = false;
+    } else {
+      if (buf.length > 0) bufHeight += ph;
+      else bufHeight = ph;
+      buf.push(p);
+    }
+  }
+
+  if (buf.length > 0) {
+    const joined = buf.join("\n");
+    slices.push({ startOffset: pageStartOffset, endOffset: pageStartOffset + joined.length });
+  }
+
+  document.body.removeChild(probe);
+  return slices.length > 0 ? slices : [{ startOffset: 0, endOffset: content.length }];
+}
+
+// ─── Highlight Renderer ──────────────────────────────────
+
+function renderWithHighlights(
+  text: string,
+  pageStartOffset: number,
+  highlights: HighlightItem[],
+  onClickHighlight: (hl: HighlightItem) => void,
+): React.ReactNode {
+  const pageEndOffset = pageStartOffset + text.length;
+
+  const pageHls = mergeOverlapping(
+    highlights
+      .filter((hl) => hl.startOffset < pageEndOffset && hl.endOffset > pageStartOffset)
+      .map((hl) => ({
+        ...hl,
+        localStart: Math.max(0, hl.startOffset - pageStartOffset),
+        localEnd: Math.min(text.length, hl.endOffset - pageStartOffset),
+      }))
+      .filter((hl) => hl.localStart < hl.localEnd),
+  );
+
+  if (pageHls.length === 0) return <>{text}</>;
+
+  const parts: React.ReactNode[] = [];
+  let idx = 0;
+
+  for (const hl of pageHls) {
+    if (hl.localStart > idx) {
+      parts.push(<span key={`t${idx}`}>{text.slice(idx, hl.localStart)}</span>);
+    }
+    parts.push(
+      <mark
+        key={hl.id}
+        onClick={() => onClickHighlight(hl)}
+        style={{
+          backgroundColor: `${hl.color}38`,
+          borderBottom: `2px solid ${hl.color}`,
+          borderRadius: "2px 2px 0 0",
+          padding: "1px 0",
+          cursor: "pointer",
+        }}
+        title={hl.note || hl.highlightedText}
+      >
+        {text.slice(hl.localStart, hl.localEnd)}
+      </mark>,
+    );
+    idx = hl.localEnd;
+  }
+
+  if (idx < text.length) parts.push(<span key="tend">{text.slice(idx)}</span>);
+
+  return <>{parts}</>;
+}
+
+// ─── Merge overlapping highlight spans ───────────────────
+type LocalHighlight = HighlightItem & { localStart: number; localEnd: number };
+
+function mergeOverlapping(hls: LocalHighlight[]): LocalHighlight[] {
+  if (hls.length <= 1) return hls;
+  const sorted = [...hls].sort((a, b) => a.localStart - b.localStart);
+  const merged: LocalHighlight[] = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1];
+    const cur = sorted[i];
+    if (cur.localStart < last.localEnd) {
+      // Overlapping — extend the current merged span
+      merged[merged.length - 1] = {
+        ...last,
+        localEnd: Math.max(last.localEnd, cur.localEnd),
+      };
+    } else {
+      merged.push(cur);
+    }
+  }
+  return merged;
+}
 
 // ─── Component ───────────────────────────────────────────
 
 export function BookReader({ bookId }: { bookId: string }) {
   const router = useRouter();
-  const contentRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contentAreaRef = useRef<HTMLDivElement>(null);
+  const contentInnerRef = useRef<HTMLDivElement>(null);
 
-  // State
+  // ── Core data
   const [loading, setLoading] = useState(true);
   const [bookInfo, setBookInfo] = useState<BookInfo | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
   const [highlights, setHighlights] = useState<HighlightItem[]>([]);
 
+  // ── Reading position
   const [currentChapter, setCurrentChapter] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [readingMode, setReadingMode] = useState<ReadingMode>("LIGHT");
-  const [fontSize, setFontSize] = useState(16);
+  const [pageIndex, setPageIndex] = useState(0); // 0-based index within pageSlices
   const [direction, setDirection] = useState(0);
-  const [isBookOpen, setIsBookOpen] = useState(false);
 
-  // Panels
-  const [showSettings, setShowSettings] = useState(false);
-  const [showBookmarks, setShowBookmarks] = useState(false);
-  const [showChapters, setShowChapters] = useState(false);
+  // ── Presentation
+  const [readingMode, setReadingMode] = useState<ReadingMode>("LIGHT");
+  const [fontSize, setFontSize] = useState(17);
+  const [lineHeight, setLineHeight] = useState(1.85);
+  const [contentWidth, setContentWidth] = useState<WidthPx>(680);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Audio (browser TTS)
+  // ── UI panels
+  const [showControls, setShowControls] = useState(true);
+  const [activePanel, setActivePanel] = useState<"none" | "settings" | "annotations" | "chapters">(
+    "none",
+  );
+  const [annotationTab, setAnnotationTab] = useState<"bookmarks" | "highlights">("bookmarks");
+  const [activeHighlight, setActiveHighlight] = useState<HighlightItem | null>(null);
+
+  // ── Audio
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // Saved position for "go back" after navigating to bookmark/highlight
-  const [savedPosition, setSavedPosition] = useState<{ chapter: number; page: number } | null>(null);
+  // ── Return position after annotation jump
+  const [savedPosition, setSavedPosition] = useState<{ chapter: number; page: number } | null>(
+    null,
+  );
 
+  // ── Pagination
+  const [pageSlices, setPageSlices] = useState<PageSlice[]>([]);
+  const [containerHeight, setContainerHeight] = useState(0);
+
+  const mode = MODE_CONFIG[readingMode];
+
+  // ── Derived
   const activeChapter = useMemo(
     () => chapters.find((c) => c.chapterNumber === currentChapter),
     [chapters, currentChapter],
   );
+
+  const currentPageSlice = pageSlices[pageIndex] ?? null;
+
+  const currentPageText = useMemo(() => {
+    if (!activeChapter || !currentPageSlice) return "";
+    return activeChapter.content.slice(currentPageSlice.startOffset, currentPageSlice.endOffset);
+  }, [activeChapter, currentPageSlice]);
 
   const currentChapterHighlights = useMemo(
     () => highlights.filter((h) => h.chapterNumber === currentChapter),
     [highlights, currentChapter],
   );
 
-  const isCurrentPageBookmarked = useMemo(
-    () => bookmarks.some((b) => b.chapterNumber === currentChapter && b.page === currentPage),
-    [bookmarks, currentChapter, currentPage],
-  );
+  // ── Map page index → API book-page number
+  function currentPageToBookPage(): number {
+    if (!activeChapter) return 1;
+    const total = pageSlices.length;
+    if (total <= 1) return activeChapter.pageStart;
+    return Math.round(
+      activeChapter.pageStart +
+        (pageIndex / (total - 1)) * (activeChapter.pageEnd - activeChapter.pageStart),
+    );
+  }
 
-  // ─── Data Fetching ─────────────────────────────────────
+  const isCurrentPageBookmarked = useMemo(() => {
+    if (!activeChapter) return false;
+    const bookPage = currentPageToBookPage();
+    return bookmarks.some((b) => b.chapterNumber === currentChapter && b.page === bookPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookmarks, currentChapter, pageIndex, pageSlices, activeChapter]);
 
+  // ── Measure content area
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (contentAreaRef.current) {
+        const h = contentAreaRef.current.clientHeight;
+        if (h > 0) setContainerHeight(h);
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (contentAreaRef.current) ro.observe(contentAreaRef.current);
+    return () => ro.disconnect();
+  }, [isFullscreen]);
+
+  // ── Compute page slices when chapter or settings change
+  useEffect(() => {
+    if (!activeChapter || containerHeight <= 0) return;
+
+    const padding = 48; // vertical padding in content area
+    const titleH = fontSize * lineHeight * 2.5 + 32;
+    const availH = containerHeight - padding;
+
+    // Actual text column width
+    const vw = window.innerWidth;
+    const actualWidth = Math.min(contentWidth, vw) - 40; // 40 = horizontal padding
+
+    const slices = computePageSlices(
+      activeChapter.content,
+      availH,
+      fontSize,
+      lineHeight,
+      actualWidth,
+      titleH,
+    );
+    setPageSlices(slices);
+    // Keep page index in bounds
+    setPageIndex((prev) => Math.min(prev, Math.max(0, slices.length - 1)));
+  }, [activeChapter, containerHeight, fontSize, lineHeight, contentWidth]);
+
+  // ── Data Fetching
   const fetchBookData = useCallback(async () => {
     try {
       const [contentRes, bookmarksRes, highlightsRes, progressRes] = await Promise.all([
@@ -179,31 +467,25 @@ export function BookReader({ bookId }: { bookId: string }) {
 
       const contentData = await contentRes.json();
       setBookInfo(contentData.book);
-      setChapters(contentData.chapters || []);
+      setChapters(contentData.chapters ?? []);
 
       if (bookmarksRes.ok) {
-        const bmData = await bookmarksRes.json();
-        setBookmarks(bmData.bookmarks || []);
+        const d = await bookmarksRes.json();
+        setBookmarks(d.bookmarks ?? []);
       }
-
       if (highlightsRes.ok) {
-        const hlData = await highlightsRes.json();
-        setHighlights(hlData.highlights || []);
+        const d = await highlightsRes.json();
+        setHighlights(d.highlights ?? []);
       }
-
       if (progressRes.ok) {
-        const progData = await progressRes.json();
-        const p = progData.progress;
+        const d = await progressRes.json();
+        const p = d.progress;
         if (p) {
           setCurrentChapter(p.currentChapter);
-          setCurrentPage(p.currentPage);
           setReadingMode(p.readingMode as ReadingMode);
-          setFontSize(p.fontSize);
+          setFontSize(p.fontSize ?? 17);
         }
       }
-
-      // Book opening animation
-      setTimeout(() => setIsBookOpen(true), 100);
     } catch {
       toast.error("Failed to load book");
     } finally {
@@ -215,10 +497,35 @@ export function BookReader({ bookId }: { bookId: string }) {
     fetchBookData();
   }, [fetchBookData]);
 
-  // ─── Progress Auto-Save ────────────────────────────────
+  // ── Auto-hide controls
+  const resetHideTimer = useCallback(() => {
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    setShowControls(true);
+    hideControlsTimer.current = setTimeout(() => {
+      if (activePanel === "none") setShowControls(false);
+    }, 4000);
+  }, [activePanel]);
 
+  useEffect(() => {
+    resetHideTimer();
+    return () => {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    };
+  }, [resetHideTimer]);
+
+  // Keep controls visible while a panel is open
+  useEffect(() => {
+    if (activePanel !== "none") {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      setShowControls(true);
+    } else {
+      resetHideTimer();
+    }
+  }, [activePanel, resetHideTimer]);
+
+  // ── Progress auto-save
   const saveProgress = useCallback(
-    (chapter: number, page: number, mode: ReadingMode, size: number) => {
+    (chapter: number, bookPage: number, mode: ReadingMode, size: number) => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         fetch(`/api/library/reader/${bookId}/progress`, {
@@ -226,7 +533,7 @@ export function BookReader({ bookId }: { bookId: string }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             currentChapter: chapter,
-            currentPage: page,
+            currentPage: bookPage,
             readingMode: mode,
             fontSize: size,
           }),
@@ -236,42 +543,55 @@ export function BookReader({ bookId }: { bookId: string }) {
     [bookId],
   );
 
-  // ─── Navigation ────────────────────────────────────────
-
-  const goToPage = useCallback(
-    (dir: number) => {
+  // ── Navigation
+  const goToPageIndex = useCallback(
+    (newPageIdx: number) => {
       if (!activeChapter) return;
-      const newPage = currentPage + dir;
 
-      if (newPage > activeChapter.pageEnd) {
-        // Next chapter
+      if (newPageIdx >= pageSlices.length) {
+        // Advance to next chapter
         const nextCh = chapters.find((c) => c.chapterNumber === currentChapter + 1);
         if (nextCh) {
           setDirection(1);
           setCurrentChapter(nextCh.chapterNumber);
-          setCurrentPage(nextCh.pageStart);
+          setPageIndex(0);
           saveProgress(nextCh.chapterNumber, nextCh.pageStart, readingMode, fontSize);
         }
         return;
       }
 
-      if (newPage < activeChapter.pageStart) {
-        // Previous chapter
+      if (newPageIdx < 0) {
+        // Go to previous chapter last page
         const prevCh = chapters.find((c) => c.chapterNumber === currentChapter - 1);
         if (prevCh) {
           setDirection(-1);
           setCurrentChapter(prevCh.chapterNumber);
-          setCurrentPage(prevCh.pageEnd);
+          setPageIndex(Number.MAX_SAFE_INTEGER); // will be clamped by slice recompute
           saveProgress(prevCh.chapterNumber, prevCh.pageEnd, readingMode, fontSize);
         }
         return;
       }
 
-      setDirection(dir);
-      setCurrentPage(newPage);
-      saveProgress(currentChapter, newPage, readingMode, fontSize);
+      setDirection(newPageIdx > pageIndex ? 1 : -1);
+      setPageIndex(newPageIdx);
+      const bookPage =
+        activeChapter.pageStart +
+        Math.round(
+          (newPageIdx / Math.max(1, pageSlices.length - 1)) *
+            (activeChapter.pageEnd - activeChapter.pageStart),
+        );
+      saveProgress(currentChapter, bookPage, readingMode, fontSize);
     },
-    [activeChapter, chapters, currentChapter, currentPage, readingMode, fontSize, saveProgress],
+    [
+      activeChapter,
+      chapters,
+      currentChapter,
+      pageIndex,
+      pageSlices,
+      readingMode,
+      fontSize,
+      saveProgress,
+    ],
   );
 
   const goToChapter = useCallback(
@@ -280,8 +600,8 @@ export function BookReader({ bookId }: { bookId: string }) {
       if (ch) {
         setDirection(chapterNum > currentChapter ? 1 : -1);
         setCurrentChapter(ch.chapterNumber);
-        setCurrentPage(ch.pageStart);
-        setShowChapters(false);
+        setPageIndex(0);
+        setActivePanel("none");
         saveProgress(ch.chapterNumber, ch.pageStart, readingMode, fontSize);
       }
     },
@@ -289,35 +609,49 @@ export function BookReader({ bookId }: { bookId: string }) {
   );
 
   const navigateToAnnotation = useCallback(
-    (chapterNum: number, page: number) => {
-      // Save current position before jumping
-      setSavedPosition({ chapter: currentChapter, page: currentPage });
-      setDirection(chapterNum > currentChapter ? 1 : chapterNum < currentChapter ? -1 : (page > currentPage ? 1 : -1));
+    (chapterNum: number, bookPage: number) => {
+      setSavedPosition({ chapter: currentChapter, page: pageIndex });
+      setDirection(chapterNum >= currentChapter ? 1 : -1);
       setCurrentChapter(chapterNum);
-      setCurrentPage(page);
-      setShowBookmarks(false);
+      // Approximate page index from book page
+      const ch = chapters.find((c) => c.chapterNumber === chapterNum);
+      if (ch) {
+        const fraction =
+          ch.pageEnd > ch.pageStart
+            ? (bookPage - ch.pageStart) / (ch.pageEnd - ch.pageStart)
+            : 0;
+        setPageIndex(Math.max(0, Math.round(fraction * (pageSlices.length - 1))));
+      }
+      setActivePanel("none");
     },
-    [currentChapter, currentPage],
+    [currentChapter, pageIndex, chapters, pageSlices.length],
   );
 
-  const returnToSavedPosition = useCallback(() => {
+  const returnToSaved = useCallback(() => {
     if (!savedPosition) return;
-    setDirection(savedPosition.chapter > currentChapter ? 1 : savedPosition.chapter < currentChapter ? -1 : (savedPosition.page > currentPage ? 1 : -1));
+    setDirection(
+      savedPosition.chapter > currentChapter
+        ? 1
+        : savedPosition.chapter < currentChapter
+          ? -1
+          : savedPosition.page > pageIndex
+            ? 1
+            : -1,
+    );
     setCurrentChapter(savedPosition.chapter);
-    setCurrentPage(savedPosition.page);
+    setPageIndex(savedPosition.page);
     saveProgress(savedPosition.chapter, savedPosition.page, readingMode, fontSize);
     setSavedPosition(null);
-  }, [savedPosition, currentChapter, currentPage, readingMode, fontSize, saveProgress]);
+  }, [savedPosition, currentChapter, pageIndex, readingMode, fontSize, saveProgress]);
 
-  // ─── Bookmark Toggle ──────────────────────────────────
-
+  // ── Bookmark
   const toggleBookmark = useCallback(async () => {
+    const bookPage = currentPageToBookPage();
     const existing = bookmarks.find(
-      (b) => b.chapterNumber === currentChapter && b.page === currentPage,
+      (b) => b.chapterNumber === currentChapter && b.page === bookPage,
     );
 
     if (existing) {
-      // Remove
       await fetch(
         `/api/library/reader/${bookId}/bookmarks?bookmarkId=${encodeURIComponent(existing.id)}`,
         { method: "DELETE" },
@@ -325,45 +659,57 @@ export function BookReader({ bookId }: { bookId: string }) {
       setBookmarks((prev) => prev.filter((b) => b.id !== existing.id));
       toast.success("Bookmark removed");
     } else {
-      // Add
       const res = await fetch(`/api/library/reader/${bookId}/bookmarks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chapterNumber: currentChapter,
-          page: currentPage,
-          label: `Ch ${currentChapter}, Page ${currentPage}`,
+          page: bookPage,
+          label: `Ch ${currentChapter} · Pg ${bookPage}`,
         }),
       });
       if (res.ok) {
         const data = await res.json();
         setBookmarks((prev) => [...prev, data.bookmark]);
-        toast.success("Page bookmarked");
+        toast.success("Bookmarked");
       }
     }
-  }, [bookId, bookmarks, currentChapter, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId, bookmarks, currentChapter, pageIndex, pageSlices, activeChapter]);
 
-  // ─── Highlight Selection ───────────────────────────────
-
+  // ── Highlight
   const handleTextSelection = useCallback(async () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) return;
-
-    const text = selection.toString().trim();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !contentInnerRef.current) return;
+    const text = sel.toString().trim();
     if (!text || text.length < 3) return;
 
-    const range = selection.getRangeAt(0);
-    const startOffset = range.startOffset;
-    const endOffset = range.endOffset;
+    const range = sel.getRangeAt(0);
+    const startOffset = getAbsoluteTextOffset(
+      contentInnerRef.current,
+      range.startContainer,
+      range.startOffset,
+    );
+    const endOffset = getAbsoluteTextOffset(
+      contentInnerRef.current,
+      range.endContainer,
+      range.endOffset,
+    );
+
+    // Adjust by page slice offset to get chapter-level offset
+    const pageStart = currentPageSlice?.startOffset ?? 0;
+    const chapterStart = pageStart + startOffset;
+    const chapterEnd = pageStart + endOffset;
+    const bookPage = currentPageToBookPage();
 
     const res = await fetch(`/api/library/reader/${bookId}/highlights`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chapterNumber: currentChapter,
-        page: currentPage,
-        startOffset,
-        endOffset,
+        page: bookPage,
+        startOffset: chapterStart,
+        endOffset: chapterEnd,
         highlightedText: text,
       }),
     });
@@ -371,532 +717,893 @@ export function BookReader({ bookId }: { bookId: string }) {
     if (res.ok) {
       const data = await res.json();
       setHighlights((prev) => [...prev, data.highlight]);
-      selection.removeAllRanges();
-      toast.success("Text highlighted");
+      sel.removeAllRanges();
+      toast.success("Highlighted");
     }
-  }, [bookId, currentChapter, currentPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookId, currentChapter, currentPageSlice, pageIndex, pageSlices, activeChapter]);
 
-  // ─── TTS (Text-to-Speech) ─────────────────────────────
+  const removeHighlight = useCallback(
+    async (hlId: string) => {
+      await fetch(`/api/library/reader/${bookId}/highlights?highlightId=${encodeURIComponent(hlId)}`, {
+        method: "DELETE",
+      });
+      setHighlights((prev) => prev.filter((h) => h.id !== hlId));
+      setActiveHighlight(null);
+      toast.success("Highlight removed");
+    },
+    [bookId],
+  );
 
+  // ── TTS
   const toggleSpeech = useCallback(() => {
     if (isSpeaking) {
       speechSynthesis.cancel();
       setIsSpeaking(false);
       return;
     }
-
-    if (!activeChapter) return;
-
-    const utterance = new SpeechSynthesisUtterance(activeChapter.content);
-    utterance.rate = 0.9;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    speechSynthesis.speak(utterance);
+    if (!currentPageText) return;
+    const utt = new SpeechSynthesisUtterance(currentPageText);
+    utt.rate = 0.9;
+    utt.onend = () => setIsSpeaking(false);
+    utt.onerror = () => setIsSpeaking(false);
+    speechSynthesis.speak(utt);
     setIsSpeaking(true);
-  }, [isSpeaking, activeChapter]);
+  }, [isSpeaking, currentPageText]);
 
-  // Cleanup speech on unmount
-  useEffect(() => {
-    return () => {
-      speechSynthesis.cancel();
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, []);
-
-  // ─── Keyboard Navigation ──────────────────────────────
-
+  // ── Keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") {
         e.preventDefault();
-        goToPage(1);
+        goToPageIndex(pageIndex + 1);
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
         e.preventDefault();
-        goToPage(-1);
+        goToPageIndex(pageIndex - 1);
+      } else if (e.key === "Escape") {
+        if (activePanel !== "none") setActivePanel("none");
+        else if (isFullscreen) setIsFullscreen(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goToPage]);
+  }, [goToPageIndex, pageIndex, activePanel, isFullscreen]);
 
-  // ─── Reading Mode ─────────────────────────────────────
+  // ── Touch swipe
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
 
-  const modeStyle = READING_MODE_STYLES[readingMode];
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
 
-  const cycleReadingMode = useCallback(() => {
-    const modes = Object.keys(READING_MODES) as ReadingMode[];
-    const idx = modes.indexOf(readingMode);
-    const next = modes[(idx + 1) % modes.length];
-    setReadingMode(next);
-    saveProgress(currentChapter, currentPage, next, fontSize);
-    toast.success(`${READING_MODE_LABELS[next]} mode`);
-  }, [readingMode, currentChapter, currentPage, fontSize, saveProgress]);
-
-  const adjustFontSize = useCallback(
-    (delta: number) => {
-      const newSize = Math.min(28, Math.max(12, fontSize + delta));
-      setFontSize(newSize);
-      saveProgress(currentChapter, currentPage, readingMode, newSize);
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const dx = e.changedTouches[0].clientX - touchStartX.current;
+      const dy = e.changedTouches[0].clientY - touchStartY.current;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+        if (dx < 0) goToPageIndex(pageIndex + 1);
+        else goToPageIndex(pageIndex - 1);
+      }
     },
-    [fontSize, currentChapter, currentPage, readingMode, saveProgress],
+    [goToPageIndex, pageIndex],
   );
 
-  // ─── Render ────────────────────────────────────────────
+  // ── Fullscreen API
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // fallback: toggle CSS full-screen
+      setIsFullscreen((v) => !v);
+    }
+  }, []);
+
+  // ── Cleanup
+  useEffect(() => {
+    return () => {
+      speechSynthesis.cancel();
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    };
+  }, []);
+
+  // ── Overall progress %
+  const progressPct = useMemo(() => {
+    if (!bookInfo || bookInfo.totalPages <= 0) return 0;
+    const bookPage = currentPageToBookPage();
+    return (bookPage / bookInfo.totalPages) * 100;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookInfo, currentChapter, pageIndex, pageSlices, activeChapter]);
+
+  // ─── Render ──────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center min-h-[100dvh] gap-4",
+          "bg-[#FAFAF8]",
+        )}
+      >
+        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+        <p className="text-sm text-neutral-400 font-light tracking-wide">Opening book…</p>
       </div>
     );
   }
 
   if (!bookInfo || chapters.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 px-4">
-        <BookOpen className="h-10 w-10 text-muted-foreground/40" />
-        <p className="text-sm text-muted-foreground">Book content not available</p>
-        <Button variant="outline" size="sm" onClick={() => router.push("/library-reader")}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back to shelf
+      <div className="flex flex-col items-center justify-center min-h-[60dvh] gap-3 px-6">
+        <BookOpen className="h-9 w-9 text-neutral-300" />
+        <p className="text-sm text-neutral-500 text-center">Book content is not available yet.</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full text-xs"
+          onClick={() => router.push("/library-reader")}
+        >
+          <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+          Back to library
         </Button>
       </div>
     );
   }
 
-  return (
-    <motion.div
-      variants={bookOpenVariants}
-      initial="closed"
-      animate={isBookOpen ? "open" : "closed"}
-      className={cn("min-h-screen flex flex-col", modeStyle.bg)}
-      style={{ filter: modeStyle.filter || undefined }}
-    >
-      {/* Top Bar */}
-      <div
-        className={cn(
-          "sticky top-0 z-30 flex items-center justify-between px-3 py-2 border-b backdrop-blur-md",
-          readingMode === "DARK" ? "border-white/10 bg-gray-950/80" : "border-black/5 bg-white/80",
-        )}
-      >
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => {
-            speechSynthesis.cancel();
-            router.push("/library-reader");
-          }}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+  const isFirstPage =
+    currentChapter === chapters[0]?.chapterNumber && pageIndex === 0;
+  const isLastPage =
+    currentChapter === chapters[chapters.length - 1]?.chapterNumber &&
+    pageIndex >= pageSlices.length - 1;
 
-        <div className="flex-1 text-center px-2 min-w-0">
-          <p className={cn("text-xs font-medium truncate", modeStyle.text)}>{bookInfo.title}</p>
-          <p className="text-[10px] text-muted-foreground truncate">
-            Ch {currentChapter} • Page {currentPage}
-            {bookInfo.totalPages > 0 && ` of ${bookInfo.totalPages}`}
+  const isFirstChPageOfChapter = pageIndex === 0;
+  const chapterTitle = activeChapter?.title ?? "";
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col select-none",
+        mode.bg,
+        isFullscreen ? "fixed inset-0 z-[60]" : "min-h-[100dvh]",
+      )}
+      style={{ filter: mode.filter || undefined }}
+      onClick={resetHideTimer}
+      onTouchStart={(e) => {
+        handleTouchStart(e);
+        resetHideTimer();
+      }}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* ── Top bar ── */}
+      <motion.div
+        animate={{ opacity: showControls ? 1 : 0, y: showControls ? 0 : -8 }}
+        transition={{ duration: 0.25 }}
+        className={cn(
+          "sticky top-0 z-30 flex items-center justify-between px-3 h-[52px] border-b",
+          mode.bar,
+          "pointer-events-none",
+        )}
+        style={{ pointerEvents: showControls ? "auto" : "none" }}
+      >
+        {/* Left */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              speechSynthesis.cancel();
+              router.push("/library-reader");
+            }}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              mode.text,
+            )}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Center */}
+        <div className="flex-1 text-center px-3 min-w-0">
+          <p className={cn("text-xs font-semibold truncate tracking-tight", mode.text)}>
+            {bookInfo.title}
+          </p>
+          <p className={cn("text-[10px] truncate mt-0.5", mode.sub)}>
+            {chapterTitle ? `${chapterTitle}` : `Chapter ${currentChapter}`}
+            {pageSlices.length > 1 ? ` · ${pageIndex + 1}/${pageSlices.length}` : ""}
           </p>
         </div>
 
+        {/* Right */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setShowChapters(!showChapters)}
+          <button
+            onClick={() => setActivePanel(activePanel === "chapters" ? "none" : "chapters")}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              activePanel === "chapters" ? mode.accent : mode.text,
+            )}
           >
             <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => setShowSettings(!showSettings)}
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === "settings" ? "none" : "settings")}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              activePanel === "settings" ? mode.accent : mode.text,
+            )}
           >
-            <Settings className="h-4 w-4" />
-          </Button>
+            <Settings2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            className={cn(
+              "h-8 w-8 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              mode.text,
+            )}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
         </div>
-      </div>
+      </motion.div>
 
-      {/* Settings Panel */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={spring.snappy}
-            className={cn(
-              "overflow-hidden border-b z-20",
-              readingMode === "DARK" ? "border-white/10 bg-gray-900" : "border-black/5 bg-gray-50",
-            )}
-          >
-            <div className="p-3 space-y-3">
-              {/* Reading Mode */}
-              <div>
-                <p className={cn("text-[10px] font-medium uppercase tracking-wider mb-2", modeStyle.text)}>
-                  Reading Mode
-                </p>
-                <div className="flex gap-2">
-                  {(Object.keys(READING_MODES) as ReadingMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => {
-                        setReadingMode(mode);
-                        saveProgress(currentChapter, currentPage, mode, fontSize);
-                      }}
-                      className={cn(
-                        "flex-1 py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all border",
-                        readingMode === mode
-                          ? "border-indigo-500 bg-indigo-500/10 text-indigo-500"
-                          : readingMode === "DARK"
-                            ? "border-white/10 text-white/60"
-                            : "border-black/10 text-black/60",
-                      )}
-                    >
-                      {READING_MODE_LABELS[mode]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Font Size */}
-              <div className="flex items-center justify-between">
-                <p className={cn("text-[10px] font-medium uppercase tracking-wider", modeStyle.text)}>
-                  Font Size: {fontSize}px
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => adjustFontSize(-2)}
-                    disabled={fontSize <= 12}
-                  >
-                    <Minus className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    onClick={() => adjustFontSize(2)}
-                    disabled={fontSize >= 28}
-                  >
-                    <Plus className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Chapter List Panel */}
-      <AnimatePresence>
-        {showChapters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={spring.snappy}
-            className={cn(
-              "overflow-hidden border-b z-20 max-h-64 overflow-y-auto",
-              readingMode === "DARK" ? "border-white/10 bg-gray-900" : "border-black/5 bg-gray-50",
-            )}
-          >
-            <div className="p-3 space-y-1">
-              {chapters.map((ch) => (
-                <button
-                  key={ch.id}
-                  onClick={() => goToChapter(ch.chapterNumber)}
-                  className={cn(
-                    "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors",
-                    ch.chapterNumber === currentChapter
-                      ? "bg-indigo-500/10 text-indigo-500 font-medium"
-                      : readingMode === "DARK"
-                        ? "text-white/70 hover:bg-white/5"
-                        : "text-black/70 hover:bg-black/5",
-                  )}
-                >
-                  <span className="text-[10px] text-muted-foreground mr-2">Ch {ch.chapterNumber}</span>
-                  {ch.title}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Content Area */}
-      <div className="flex-1 relative" style={{ perspective: "1200px" }}>
+      {/* ── Content area ── */}
+      <div
+        ref={contentAreaRef}
+        className="flex-1 relative overflow-hidden"
+        style={{ touchAction: "none" }}
+      >
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
-            key={`${currentChapter}-${currentPage}`}
+            key={`${currentChapter}-${pageIndex}`}
             custom={direction}
-            variants={pageFlipVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="w-full"
+            initial={{ opacity: 0, x: direction > 0 ? "6%" : "-6%" }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: direction > 0 ? "-6%" : "6%" }}
+            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+            className="absolute inset-0 overflow-hidden"
           >
             <div
-              ref={contentRef}
-              className={cn("px-5 py-6 max-w-2xl mx-auto min-h-[60vh]", modeStyle.text)}
-              style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
-              onMouseUp={handleTextSelection}
-              onTouchEnd={handleTextSelection}
+              className="h-full overflow-y-hidden flex flex-col items-center"
             >
-              {/* Chapter title for first page */}
-              {activeChapter && currentPage === activeChapter.pageStart && (
-                <h2
-                  className={cn(
-                    "text-2xl font-bold mb-6 text-center",
-                    readingMode === "DARK" ? "text-white" : "text-gray-900",
-                  )}
-                >
-                  {activeChapter.title}
-                </h2>
-              )}
-
-              {/* Content */}
-              <div className="whitespace-pre-wrap">
-                {activeChapter?.content || ""}
-              </div>
-
-              {/* Highlights overlay info */}
-              {currentChapterHighlights.length > 0 && (
-                <div className="mt-8 pt-4 border-t border-current/10">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
-                    Highlights ({currentChapterHighlights.length})
-                  </p>
-                  {currentChapterHighlights.map((h) => (
-                    <div
-                      key={h.id}
-                      className="mb-2 px-3 py-2 rounded-lg border-l-2"
-                      style={{ borderLeftColor: h.color, backgroundColor: `${h.color}15` }}
+              <div
+                className="w-full h-full px-5 py-6 overflow-hidden"
+                style={{ maxWidth: `${contentWidth}px` }}
+              >
+                {/* Chapter title on first page */}
+                {isFirstChPageOfChapter && chapterTitle && (
+                  <div className="mb-6">
+                    <p className={cn("text-[10px] uppercase tracking-[0.2em] mb-1", mode.sub)}>
+                      Chapter {currentChapter}
+                    </p>
+                    <h2
+                      className={cn("text-xl font-bold leading-snug", mode.text)}
+                      style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
                     >
-                      <p className="text-xs italic">&ldquo;{h.highlightedText}&rdquo;</p>
-                      {h.note && (
-                        <p className="text-[10px] text-muted-foreground mt-1">{h.note}</p>
-                      )}
-                    </div>
-                  ))}
+                      {chapterTitle}
+                    </h2>
+                    <div
+                      className="mt-3 h-px w-8 rounded-full"
+                      style={{ background: "currentColor", opacity: 0.15 }}
+                    />
+                  </div>
+                )}
+
+                {/* Page content */}
+                <div
+                  ref={contentInnerRef}
+                  className={cn("whitespace-pre-wrap", mode.text)}
+                  style={{
+                    fontSize: `${fontSize}px`,
+                    lineHeight: lineHeight,
+                    fontFamily: "Georgia, 'Times New Roman', serif",
+                    fontFeatureSettings: '"liga" 1, "kern" 1',
+                    letterSpacing: "0.01em",
+                  }}
+                  onMouseUp={handleTextSelection}
+                  onTouchEnd={(e) => {
+                    // Only process selection if text was selected (not a swipe)
+                    const dx = Math.abs(e.changedTouches[0].clientX - touchStartX.current);
+                    if (dx < 30) handleTextSelection();
+                  }}
+                >
+                  {renderWithHighlights(
+                    currentPageText,
+                    currentPageSlice?.startOffset ?? 0,
+                    currentChapterHighlights,
+                    (hl) => setActiveHighlight(hl),
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Bottom Controls */}
-      <div
+      {/* ── Bottom bar ── */}
+      <motion.div
+        animate={{ opacity: showControls ? 1 : 0, y: showControls ? 0 : 8 }}
+        transition={{ duration: 0.25 }}
         className={cn(
-          "sticky bottom-0 z-30 border-t px-3 py-2 backdrop-blur-md",
-          readingMode === "DARK" ? "border-white/10 bg-gray-950/80" : "border-black/5 bg-white/80",
+          "sticky bottom-0 z-30 border-t",
+          mode.bar,
+          isFullscreen ? "" : "pb-safe",
         )}
+        style={{ pointerEvents: showControls ? "auto" : "none" }}
       >
         {/* Progress bar */}
-        <div className="h-1 bg-muted rounded-full mb-2 overflow-hidden">
+        <div className="h-[2px] w-full overflow-hidden">
           <motion.div
-            className="h-full bg-indigo-500 rounded-full"
-            animate={{
-              width: bookInfo.totalPages > 0
-                ? `${(currentPage / bookInfo.totalPages) * 100}%`
-                : "0%",
-            }}
+            className="h-full bg-indigo-500/60 rounded-full"
+            animate={{ width: `${progressPct}%` }}
             transition={spring.gentle}
           />
         </div>
 
-        <div className="flex items-center justify-between">
-          {/* Left controls */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => goToPage(-1)}
-              disabled={currentChapter === 1 && currentPage <= (chapters[0]?.pageStart ?? 1)}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-          </div>
+        <div className="flex items-center justify-between px-4 h-14">
+          {/* Prev */}
+          <button
+            onClick={() => goToPageIndex(pageIndex - 1)}
+            disabled={isFirstPage}
+            className={cn(
+              "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              mode.text,
+              isFirstPage && "opacity-25 pointer-events-none",
+            )}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
 
           {/* Center controls */}
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("h-8 w-8 p-0", isCurrentPageBookmarked && "text-amber-500")}
+            {/* Bookmark */}
+            <button
               onClick={toggleBookmark}
-            >
-              <Bookmark className={cn("h-4 w-4", isCurrentPageBookmarked && "fill-current")} />
-            </Button>
-
-            {showBookmarks ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => setShowBookmarks(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => setShowBookmarks(true)}
-              >
-                <Highlighter className="h-4 w-4" />
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={cycleReadingMode}
-            >
-              {readingMode === "DARK" ? (
-                <Moon className="h-4 w-4" />
-              ) : (
-                <Sun className="h-4 w-4" />
+              className={cn(
+                "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+                mode.btnHover,
+                isCurrentPageBookmarked ? "text-amber-500" : mode.text,
               )}
-            </Button>
+            >
+              <Bookmark
+                className={cn("h-4 w-4", isCurrentPageBookmarked && "fill-current")}
+              />
+            </button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn("h-8 w-8 p-0", isSpeaking && "text-indigo-500")}
+            {/* Annotations */}
+            <button
+              onClick={() =>
+                setActivePanel(activePanel === "annotations" ? "none" : "annotations")
+              }
+              className={cn(
+                "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+                mode.btnHover,
+                activePanel === "annotations" ? mode.accent : mode.text,
+              )}
+            >
+              <Highlighter className="h-4 w-4" />
+            </button>
+
+            {/* Reading mode cycle */}
+            <button
+              onClick={() => {
+                const idx = MODE_ORDER.indexOf(readingMode);
+                const next = MODE_ORDER[(idx + 1) % MODE_ORDER.length];
+                setReadingMode(next);
+                saveProgress(currentChapter, currentPageToBookPage(), next, fontSize);
+              }}
+              className={cn(
+                "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+                mode.btnHover,
+                mode.text,
+              )}
+            >
+              {mode.icon}
+            </button>
+
+            {/* TTS */}
+            <button
               onClick={toggleSpeech}
+              className={cn(
+                "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+                mode.btnHover,
+                isSpeaking ? "text-indigo-500" : mode.text,
+              )}
             >
               {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </Button>
+            </button>
           </div>
 
-          {/* Right controls */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => goToPage(1)}
-              disabled={
-                currentChapter === chapters[chapters.length - 1]?.chapterNumber &&
-                currentPage >= (chapters[chapters.length - 1]?.pageEnd ?? 1)
-              }
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bookmarks Drawer */}
-      <AnimatePresence>
-        {showBookmarks && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={spring.snappy}
+          {/* Next */}
+          <button
+            onClick={() => goToPageIndex(pageIndex + 1)}
+            disabled={isLastPage}
             className={cn(
-              "fixed bottom-16 left-0 right-0 z-40 rounded-t-2xl border-t max-h-64 overflow-y-auto shadow-xl",
-              readingMode === "DARK" ? "bg-gray-900 border-white/10" : "bg-white border-black/5",
+              "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
+              mode.btnHover,
+              mode.text,
+              isLastPage && "opacity-25 pointer-events-none",
             )}
           >
-            <div className="p-4">
-              <h3 className={cn("text-sm font-bold mb-3", modeStyle.text)}>
-                Bookmarks & Highlights
-              </h3>
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </motion.div>
 
-              {/* Bookmarks */}
-              {bookmarks.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Bookmarks ({bookmarks.length})
-                  </p>
-                  <div className="space-y-1">
-                    {bookmarks.map((bm) => (
-                      <button
-                        key={bm.id}
-                        onClick={() => navigateToAnnotation(bm.chapterNumber, bm.page)}
-                        className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors",
-                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
-                        )}
-                      >
-                        <Bookmark className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                        <span className={modeStyle.text}>
-                          {bm.label || `Ch ${bm.chapterNumber}, Page ${bm.page}`}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+      {/* ── Settings panel ── */}
+      <AnimatePresence>
+        {activePanel === "settings" && (
+          <>
+            <motion.div
+              key="settings-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setActivePanel("none")}
+            />
+            <motion.div
+              key="settings-sheet"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={spring.snappy}
+              className={cn(
+                "fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t shadow-2xl",
+                mode.sheet,
               )}
+            >
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-8 h-1 rounded-full bg-current opacity-20" />
+              </div>
 
-              {/* Highlights */}
-              {highlights.length > 0 && (
+              <div className="px-5 pb-8 pt-2 space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className={cn("text-sm font-semibold", mode.text)}>Reading Settings</h3>
+                  <button
+                    onClick={() => setActivePanel("none")}
+                    className={cn(
+                      "h-7 w-7 flex items-center justify-center rounded-full",
+                      mode.btnHover,
+                      mode.sub,
+                    )}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* Reading mode */}
                 <div>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                    Highlights ({highlights.length})
+                  <p className={cn("text-[10px] uppercase tracking-widest mb-2.5", mode.sub)}>
+                    Mode
                   </p>
-                  <div className="space-y-1">
-                    {highlights.map((hl) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {MODE_ORDER.map((m) => {
+                      const mc = MODE_CONFIG[m];
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            setReadingMode(m);
+                            saveProgress(currentChapter, currentPageToBookPage(), m, fontSize);
+                          }}
+                          className={cn(
+                            "py-2.5 px-1 rounded-xl border text-[11px] font-medium transition-all flex flex-col items-center gap-1",
+                            readingMode === m
+                              ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                              : cn(mc.bg, "border-transparent opacity-70"),
+                          )}
+                        >
+                          <span>{mc.icon}</span>
+                          <span className={readingMode === m ? "" : mc.text}>
+                            {MODE_LABELS[m]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Font size */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <p className={cn("text-[10px] uppercase tracking-widest", mode.sub)}>
+                      Font Size
+                    </p>
+                    <span className={cn("text-xs font-semibold tabular-nums", mode.text)}>
+                      {fontSize}px
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const s = Math.max(13, fontSize - 1);
+                        setFontSize(s);
+                        saveProgress(currentChapter, currentPageToBookPage(), readingMode, s);
+                      }}
+                      disabled={fontSize <= 13}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-full border",
+                        mode.btnHover,
+                        mode.text,
+                        fontSize <= 13 && "opacity-30",
+                      )}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <div className="flex-1 relative h-1.5 rounded-full bg-current/10">
+                      <div
+                        className="absolute left-0 top-0 h-full bg-indigo-500/70 rounded-full transition-all"
+                        style={{ width: `${((fontSize - 13) / (26 - 13)) * 100}%` }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => {
+                        const s = Math.min(26, fontSize + 1);
+                        setFontSize(s);
+                        saveProgress(currentChapter, currentPageToBookPage(), readingMode, s);
+                      }}
+                      disabled={fontSize >= 26}
+                      className={cn(
+                        "h-8 w-8 flex items-center justify-center rounded-full border",
+                        mode.btnHover,
+                        mode.text,
+                        fontSize >= 26 && "opacity-30",
+                      )}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Line height */}
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <p className={cn("text-[10px] uppercase tracking-widest", mode.sub)}>
+                      Line Spacing
+                    </p>
+                    <span className={cn("text-xs font-semibold tabular-nums", mode.text)}>
+                      {lineHeight.toFixed(2)}×
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    {[1.5, 1.7, 1.85, 2.1].map((lh) => (
                       <button
-                        key={hl.id}
-                        onClick={() => navigateToAnnotation(hl.chapterNumber, hl.page)}
+                        key={lh}
+                        onClick={() => setLineHeight(lh)}
                         className={cn(
-                          "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors border-l-2",
-                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
+                          "flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all",
+                          lineHeight === lh
+                            ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                            : cn(mode.btnHover, "border-current/10", mode.sub),
                         )}
-                        style={{ borderLeftColor: hl.color, backgroundColor: `${hl.color}08` }}
                       >
-                        <p className="italic line-clamp-2">&ldquo;{hl.highlightedText}&rdquo;</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          Ch {hl.chapterNumber}, Page {hl.page}
-                        </p>
+                        {lh}×
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {bookmarks.length === 0 && highlights.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  No bookmarks or highlights yet.
-                </p>
+                {/* Content width */}
+                <div>
+                  <p className={cn("text-[10px] uppercase tracking-widest mb-2.5", mode.sub)}>
+                    Page Width
+                  </p>
+                  <div className="flex gap-2">
+                    {WIDTH_OPTIONS.map((w) => (
+                      <button
+                        key={w.px}
+                        onClick={() => setContentWidth(w.px)}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all flex flex-col items-center gap-0.5",
+                          contentWidth === w.px
+                            ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                            : cn(mode.btnHover, "border-current/10", mode.sub),
+                        )}
+                      >
+                        <span className="font-bold">{w.label}</span>
+                        <span className="text-[9px] opacity-70">{w.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Chapters panel ── */}
+      <AnimatePresence>
+        {activePanel === "chapters" && (
+          <>
+            <motion.div
+              key="chapters-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setActivePanel("none")}
+            />
+            <motion.div
+              key="chapters-sheet"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={spring.snappy}
+              className={cn(
+                "fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t shadow-2xl max-h-[70dvh] flex flex-col",
+                mode.sheet,
               )}
+            >
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-8 h-1 rounded-full bg-current opacity-20" />
+              </div>
+              <div className="flex items-center justify-between px-5 py-2 flex-shrink-0">
+                <h3 className={cn("text-sm font-semibold", mode.text)}>Chapters</h3>
+                <button
+                  onClick={() => setActivePanel("none")}
+                  className={cn(
+                    "h-7 w-7 flex items-center justify-center rounded-full",
+                    mode.btnHover,
+                    mode.sub,
+                  )}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1 px-3 pb-8">
+                {chapters.map((ch) => (
+                  <button
+                    key={ch.id}
+                    onClick={() => goToChapter(ch.chapterNumber)}
+                    className={cn(
+                      "w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-3 mb-0.5",
+                      ch.chapterNumber === currentChapter
+                        ? "bg-indigo-500/10 text-indigo-600 font-medium"
+                        : cn(mode.btnHover, mode.text),
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-[10px] tabular-nums w-7 shrink-0",
+                        ch.chapterNumber === currentChapter ? "text-indigo-500" : mode.sub,
+                      )}
+                    >
+                      {ch.chapterNumber}
+                    </span>
+                    <span className="truncate">{ch.title}</span>
+                    {ch.chapterNumber === currentChapter && (
+                      <span className="ml-auto shrink-0 h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Annotations panel ── */}
+      <AnimatePresence>
+        {activePanel === "annotations" && (
+          <>
+            <motion.div
+              key="ann-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setActivePanel("none")}
+            />
+            <motion.div
+              key="ann-sheet"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={spring.snappy}
+              className={cn(
+                "fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t shadow-2xl max-h-[70dvh] flex flex-col",
+                mode.sheet,
+              )}
+            >
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-8 h-1 rounded-full bg-current opacity-20" />
+              </div>
+              <div className="flex items-center justify-between px-5 py-2 flex-shrink-0">
+                <h3 className={cn("text-sm font-semibold", mode.text)}>Notes & Highlights</h3>
+                <button
+                  onClick={() => setActivePanel("none")}
+                  className={cn(
+                    "h-7 w-7 flex items-center justify-center rounded-full",
+                    mode.btnHover,
+                    mode.sub,
+                  )}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex px-5 gap-3 flex-shrink-0 border-b border-current/10">
+                {(["bookmarks", "highlights"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setAnnotationTab(tab)}
+                    className={cn(
+                      "pb-2 text-xs font-medium border-b-2 -mb-px transition-colors capitalize",
+                      annotationTab === tab
+                        ? cn("border-indigo-500", mode.accent)
+                        : cn("border-transparent", mode.sub),
+                    )}
+                  >
+                    {tab}{" "}
+                    <span className="tabular-nums">
+                      ({tab === "bookmarks" ? bookmarks.length : highlights.length})
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="overflow-y-auto flex-1 px-3 pb-8 pt-2">
+                {annotationTab === "bookmarks" ? (
+                  <>
+                    {bookmarks.length === 0 ? (
+                      <p className={cn("text-xs text-center py-6", mode.sub)}>
+                        No bookmarks yet.
+                        <br />
+                        Tap the bookmark icon to save your place.
+                      </p>
+                    ) : (
+                      bookmarks.map((bm) => (
+                        <button
+                          key={bm.id}
+                          onClick={() => navigateToAnnotation(bm.chapterNumber, bm.page)}
+                          className={cn(
+                            "w-full text-left px-3 py-3 rounded-xl mb-1 flex items-center gap-3 transition-colors",
+                            mode.btnHover,
+                          )}
+                        >
+                          <Bookmark className="h-4 w-4 text-amber-500 fill-current shrink-0" />
+                          <div className="min-w-0">
+                            <p className={cn("text-sm truncate", mode.text)}>
+                              {bm.label ?? `Ch ${bm.chapterNumber} · Pg ${bm.page}`}
+                            </p>
+                            <p className={cn("text-[10px] mt-0.5", mode.sub)}>
+                              {new Date(bm.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {highlights.length === 0 ? (
+                      <p className={cn("text-xs text-center py-6", mode.sub)}>
+                        No highlights yet.
+                        <br />
+                        Select text to highlight it.
+                      </p>
+                    ) : (
+                      highlights.map((hl) => (
+                        <button
+                          key={hl.id}
+                          onClick={() => navigateToAnnotation(hl.chapterNumber, hl.page)}
+                          className={cn(
+                            "w-full text-left px-3 py-3 rounded-xl mb-1 flex items-start gap-3 transition-colors",
+                            mode.btnHover,
+                          )}
+                        >
+                          <div
+                            className="mt-0.5 h-3.5 w-1 rounded-full shrink-0"
+                            style={{ backgroundColor: hl.color }}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={cn("text-sm line-clamp-2 italic", mode.text)}
+                            >
+                              &ldquo;{hl.highlightedText}&rdquo;
+                            </p>
+                            {hl.note && (
+                              <p className={cn("text-[10px] mt-0.5", mode.sub)}>{hl.note}</p>
+                            )}
+                            <p className={cn("text-[10px] mt-1", mode.sub)}>
+                              Ch {hl.chapterNumber} · Pg {hl.page}
+                            </p>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Highlight tooltip ── */}
+      <AnimatePresence>
+        {activeHighlight && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 8 }}
+            transition={{ duration: 0.18 }}
+            className={cn(
+              "fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-[80vw] rounded-2xl shadow-2xl border px-4 py-3",
+              mode.sheet,
+            )}
+          >
+            <p className={cn("text-xs italic line-clamp-3 mb-2", mode.text)}>
+              &ldquo;{activeHighlight.highlightedText}&rdquo;
+            </p>
+            {activeHighlight.note && (
+              <p className={cn("text-[10px] mb-2", mode.sub)}>{activeHighlight.note}</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                onClick={() => removeHighlight(activeHighlight.id)}
+                className={cn(
+                  "text-[10px] px-2.5 py-1 rounded-full border transition-colors text-red-500 border-red-500/30",
+                  "hover:bg-red-500/10",
+                )}
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => setActiveHighlight(null)}
+                className={cn(
+                  "text-[10px] px-2.5 py-1 rounded-full border transition-colors",
+                  mode.btnHover,
+                  mode.sub,
+                  "border-current/20",
+                )}
+              >
+                Dismiss
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* "Return to reading" floating button */}
+      {/* ── Return-to-position pill ── */}
       <AnimatePresence>
         {savedPosition && (
           <motion.button
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 60, opacity: 0 }}
+            initial={{ y: 24, opacity: 0, scale: 0.9 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 24, opacity: 0, scale: 0.9 }}
             transition={spring.snappy}
-            onClick={returnToSavedPosition}
+            onClick={returnToSaved}
             className={cn(
-              "fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-xs font-medium",
-              readingMode === "DARK"
-                ? "bg-indigo-600 text-white"
-                : "bg-indigo-500 text-white",
+              "fixed z-50 bottom-24 left-1/2 -translate-x-1/2",
+              "flex items-center gap-2 px-4 py-2 rounded-full shadow-xl text-xs font-medium",
+              "bg-indigo-600 text-white",
             )}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Return to Ch {savedPosition.chapter}, Pg {savedPosition.page}
+            <RotateCcw className="h-3 w-3" />
+            Return to reading
           </motion.button>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
