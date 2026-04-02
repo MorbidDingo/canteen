@@ -150,6 +150,7 @@ export async function PATCH(
         : parsed.data.availableUnits !== undefined ? AUDIT_ACTIONS.UNITS_UPDATED
         : AUDIT_ACTIONS.MENU_ITEM_UPDATED;
       logAudit({
+        organizationId,
         userId: access.session.user.id,
         userRole: access.membershipRole || access.session.user.role,
         action,
@@ -215,6 +216,7 @@ export async function DELETE(
 
     if (access.session?.user) {
       logAudit({
+        organizationId,
         userId: access.session.user.id,
         userRole: access.membershipRole || access.session.user.role,
         action: AUDIT_ACTIONS.MENU_ITEM_DELETED,

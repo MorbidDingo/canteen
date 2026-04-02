@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { child, temporaryRfidAccess, user } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { sendMessage } from "@/lib/messaging-service";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const MIN_STUDENT_HOURS = 1;
 const MAX_STUDENT_HOURS = 48;
@@ -225,6 +226,15 @@ export async function POST(request: NextRequest) {
     console.error("[Messaging] Error sending temporary card notification:", error);
   }
 
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.TEMP_CARD_ISSUED,
+    details: { childId, cardId: created.id, accessType, durationHours },
+    request,
+  });
+
   return NextResponse.json({ card: created });
 }
 
@@ -272,6 +282,15 @@ export async function DELETE(request: NextRequest) {
   if (!updated) {
     return NextResponse.json({ error: "Temporary card not found or already revoked" }, { status: 404 });
   }
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.TEMP_CARD_REVOKED,
+    details: { cardId },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentTag, user } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list all tags for the org
 export async function GET(request: NextRequest) {
@@ -106,6 +107,15 @@ export async function POST(request: NextRequest) {
       createdBy: access.actorUserId,
     })
     .returning();
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_TAG_CREATED,
+    details: { tagId: created.id, name: created.name },
+    request,
+  });
 
   return NextResponse.json({ tag: created }, { status: 201 });
 }

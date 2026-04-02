@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { discount, menuItem } from "@/lib/db/schema";
 import { and, eq, desc } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list all discounts with menu item info
 export async function GET() {
@@ -139,6 +140,15 @@ export async function POST(request: NextRequest) {
         endDate: data.endDate ? new Date(data.endDate) : null,
       })
       .returning();
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "ADMIN",
+      action: AUDIT_ACTIONS.DISCOUNT_CREATED,
+      details: { discountId: created.id, menuItemId: created.menuItemId, type: created.type, value: created.value },
+      request,
+    });
 
     return NextResponse.json({ discount: created }, { status: 201 });
   } catch (error) {

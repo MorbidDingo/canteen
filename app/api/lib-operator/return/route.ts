@@ -322,6 +322,7 @@ export async function POST(request: NextRequest) {
     }).catch(() => {});
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || "LIB_OPERATOR",
       action: AUDIT_ACTIONS.RETURN_CONFIRMED,
@@ -339,6 +340,7 @@ export async function POST(request: NextRequest) {
 
     if (fineAmount > 0 && fineDeducted) {
       await logAudit({
+        organizationId: access.activeOrganizationId,
         userId: access.actorUserId,
         userRole: access.membershipRole || "LIB_OPERATOR",
         action: AUDIT_ACTIONS.LIBRARY_FINE_DEDUCTED,

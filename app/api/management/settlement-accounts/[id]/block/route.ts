@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { settlementAccount } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const blockSchema = z.object({
   reason: z.string().min(3).max(500),
@@ -51,6 +52,15 @@ export async function POST(
       })
       .where(eq(settlementAccount.id, id));
 
+    logAudit({
+      organizationId: access.activeOrganizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.SETTLEMENT_ACCOUNT_BLOCKED,
+      details: { accountId: id, reason: parsed.data.reason },
+      request,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
@@ -63,7 +73,7 @@ export async function POST(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -99,6 +109,15 @@ export async function DELETE(
         updatedAt: new Date(),
       })
       .where(eq(settlementAccount.id, id));
+
+    logAudit({
+      organizationId: access.activeOrganizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.SETTLEMENT_ACCOUNT_UNBLOCKED,
+      details: { accountId: id },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

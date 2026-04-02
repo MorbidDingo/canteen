@@ -110,6 +110,7 @@ export async function POST(
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_ADDED,

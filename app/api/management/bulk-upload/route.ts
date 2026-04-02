@@ -420,6 +420,7 @@ async function processUpload(
 
   emitStage?.("finalizing", "Writing audit and preparing response", 40);
   await logAudit({
+    organizationId,
     userId: access.actorUserId,
     userRole: access.membershipRole || access.session.user.role,
     action: AUDIT_ACTIONS.BULK_UPLOAD,

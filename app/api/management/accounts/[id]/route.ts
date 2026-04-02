@@ -92,6 +92,7 @@ export async function PATCH(
     }
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.ACCOUNT_UPDATED,
@@ -189,6 +190,7 @@ export async function DELETE(
       .where(eq(organizationMembership.id, target.membershipId));
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.ACCOUNT_DELETED,

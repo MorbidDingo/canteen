@@ -57,6 +57,9 @@ export function logAiUsage(params: {
   tokens: number;
   metadata?: Record<string, unknown>;
 }): void {
+  // Skip logging for system-generated operations (no real user FK)
+  if (params.userId === "system") return;
+
   db.insert(aiUsageLog)
     .values({
       userId: params.userId,

@@ -3,6 +3,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { child, temporaryRfidAccess, user, wallet } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const MIN_GUEST_HOURS = 1;
 const MAX_GUEST_HOURS = 5 * 24;
@@ -144,6 +145,15 @@ export async function POST(request: NextRequest) {
       temporaryRfidCardId: temporaryRfidAccess.temporaryRfidCardId,
       validUntil: temporaryRfidAccess.validUntil,
     });
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.GUEST_CARD_ISSUED,
+    details: { guestChildId: guestChild.id, name, durationHours },
+    request,
+  });
 
   return NextResponse.json({
     guest: {

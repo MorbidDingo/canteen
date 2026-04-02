@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentPermission } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // PATCH — update permission scope
 export async function PATCH(
@@ -59,6 +60,15 @@ export async function PATCH(
     .where(eq(contentPermission.id, id))
     .returning();
 
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_PERMISSION_UPDATED,
+    details: { permissionId: id, scope },
+    request,
+  });
+
   return NextResponse.json({ permission: updated });
 }
 
@@ -106,6 +116,15 @@ export async function DELETE(
   }
 
   await db.delete(contentPermission).where(eq(contentPermission.id, id));
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_PERMISSION_REVOKED,
+    details: { permissionId: id },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

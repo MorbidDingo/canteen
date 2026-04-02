@@ -12,6 +12,7 @@ import {
   user,
 } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 type DeviceType = "GATE" | "KIOSK" | "LIBRARY";
 
@@ -349,6 +350,15 @@ export async function POST(request: NextRequest) {
         createdAt: now,
         updatedAt: now,
       });
+    });
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.DEVICE_ACCOUNT_CREATED,
+      details: { deviceType, deviceName, accountEmail },
+      request,
     });
 
     return NextResponse.json({

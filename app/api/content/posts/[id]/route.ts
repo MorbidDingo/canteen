@@ -14,6 +14,7 @@ import { eq, and, or, inArray, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { getContentPermission } from "@/lib/content-permission";
 import { checkAudienceAccess } from "@/lib/content-audience";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — get a single post (author view OR reader view with audience verification)
 export async function GET(
@@ -200,6 +201,15 @@ export async function PATCH(
     return updated;
   });
 
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? access.session.user.role,
+    action: AUDIT_ACTIONS.CONTENT_POST_UPDATED,
+    details: { postId: id },
+    request,
+  });
+
   return NextResponse.json({ post: result });
 }
 
@@ -241,6 +251,15 @@ export async function DELETE(
   }
 
   await db.delete(contentPost).where(eq(contentPost.id, id));
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? access.session.user.role,
+    action: AUDIT_ACTIONS.CONTENT_POST_DELETED,
+    details: { postId: id },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

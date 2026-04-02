@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentTag } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // PATCH — update tag name/color
 export async function PATCH(
@@ -85,6 +86,15 @@ export async function PATCH(
     .where(eq(contentTag.id, id))
     .returning();
 
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_TAG_UPDATED,
+    details: { tagId: id },
+    request,
+  });
+
   return NextResponse.json({ tag: updated });
 }
 
@@ -127,6 +137,15 @@ export async function DELETE(
   }
 
   await db.delete(contentTag).where(eq(contentTag.id, id));
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_TAG_DELETED,
+    details: { tagId: id },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

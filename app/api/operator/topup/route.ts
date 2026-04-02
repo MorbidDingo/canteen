@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { child, wallet, walletTransaction } from "@/lib/db/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   let access;
@@ -84,5 +85,14 @@ export async function POST(request: NextRequest) {
     operatorId: access.actorUserId,
   });
 
-  return NextResponse.json({ newBalance });
+  logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "OPERATOR",
+      action: AUDIT_ACTIONS.WALLET_TOPUP,
+      details: { childId, amount, newBalance },
+      request,
+    });
+
+    return NextResponse.json({ newBalance });
 }

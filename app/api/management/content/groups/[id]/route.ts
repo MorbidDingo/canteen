@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentGroup } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // PATCH — update group name/description
 export async function PATCH(
@@ -77,6 +78,15 @@ export async function PATCH(
     .where(eq(contentGroup.id, id))
     .returning();
 
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_GROUP_UPDATED,
+    details: { groupId: id },
+    request,
+  });
+
   return NextResponse.json({ group: updated });
 }
 
@@ -119,6 +129,15 @@ export async function DELETE(
   }
 
   await db.delete(contentGroup).where(eq(contentGroup.id, id));
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_GROUP_DELETED,
+    details: { groupId: id },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

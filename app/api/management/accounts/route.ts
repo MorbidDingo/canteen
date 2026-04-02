@@ -255,6 +255,7 @@ export async function POST(request: NextRequest) {
     }
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: mode === "bulk" ? AUDIT_ACTIONS.ACCOUNT_BULK_CREATED : AUDIT_ACTIONS.ACCOUNT_CREATED,

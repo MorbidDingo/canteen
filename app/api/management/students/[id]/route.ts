@@ -80,6 +80,7 @@ export async function DELETE(
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole ?? "UNKNOWN",
       action: AUDIT_ACTIONS.STUDENT_DELETED,

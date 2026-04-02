@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentPermission, organizationMembership, user } from "@/lib/db/schema";
 import { eq, and, ilike, or } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list all content permissions for the org
 export async function GET(request: NextRequest) {
@@ -122,6 +123,15 @@ export async function POST(request: NextRequest) {
       grantedBy: access.actorUserId,
     })
     .returning();
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_PERMISSION_GRANTED,
+    details: { permissionId: created.id, grantedTo: created.userId, scope: created.scope },
+    request,
+  });
 
   return NextResponse.json({ permission: created }, { status: 201 });
 }

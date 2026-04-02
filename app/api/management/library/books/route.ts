@@ -284,6 +284,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_CREATED,

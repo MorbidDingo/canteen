@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
     .where(and(eq(child.id, childId), eq(child.organizationId, organizationId)));
 
   logAudit({
+    organizationId,
     userId: access.actorUserId,
     userRole: access.membershipRole ?? "UNKNOWN",
     action: rfidCardId ? AUDIT_ACTIONS.CARD_ASSIGNED : AUDIT_ACTIONS.CARD_UNLINKED,

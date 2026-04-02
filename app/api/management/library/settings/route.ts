@@ -93,6 +93,7 @@ export async function PUT(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.LIBRARY_SETTINGS_UPDATED,

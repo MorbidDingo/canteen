@@ -235,6 +235,7 @@ export async function POST(request: NextRequest) {
 
     if (access.session?.user) {
       logAudit({
+        organizationId,
         userId: access.session.user.id,
         userRole: access.membershipRole || access.session.user.role,
         action: AUDIT_ACTIONS.MENU_ITEM_CREATED,

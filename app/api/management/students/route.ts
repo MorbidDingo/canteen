@@ -235,6 +235,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId,
       userId: session.user.id,
       userRole: session.user.role,
       action: AUDIT_ACTIONS.STUDENT_CREATED,

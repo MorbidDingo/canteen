@@ -11,6 +11,7 @@ import {
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { broadcast } from "@/lib/sse";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const TARGET_TYPES = ["ALL_PARENTS", "ALL_GENERAL", "ALL_USERS", "SPECIFIC_CLASS", "SPECIFIC_USERS"] as const;
 type TargetType = (typeof TARGET_TYPES)[number];
@@ -74,6 +75,15 @@ export async function POST(request: NextRequest) {
 
     // Broadcast SSE to all connected clients so parent/general accounts refresh
     broadcast("notice-updated", { noticeId: notice.id, organizationId });
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.NOTICE_CREATED,
+      details: { noticeId: notice.id, title: data.title },
+      request,
+    });
 
     return NextResponse.json({ notice });
   } catch (error) {

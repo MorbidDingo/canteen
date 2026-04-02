@@ -10,6 +10,7 @@ import {
   sanitizeStringArray,
   validateSelectedAccountIds,
 } from "@/lib/payment-events";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function GET() {
   let access;
@@ -66,7 +67,7 @@ export async function GET() {
   });
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   let access;
   try {
     access = await requireAccess({ scope: "organization", allowedOrgRoles: ["OPERATOR"] });
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const body = await request.json();
   const {
     title, description, amount, paymentAccountId,
     targetType, targetClass, targetAccountIds,
@@ -153,6 +154,15 @@ export async function POST(req: NextRequest) {
   }
 
   broadcast("payment-event", { action: "created", event: created });
+
+  logAudit({
+    organizationId: access.activeOrganizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.PAYMENT_EVENT_CREATED,
+    details: { eventId: created.id, title: created.title, amount: created.amount },
+    request,
+  });
 
   return NextResponse.json({ event: created }, { status: 201 });
 }

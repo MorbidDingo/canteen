@@ -192,6 +192,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: session.user.id,
       userRole: session.user.role,
       action: AUDIT_ACTIONS.PARENT_CREATED,

@@ -181,7 +181,7 @@ export async function queryContentChunks(
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
 
   // 3. Execute vector similarity search with audience scoping
-  const results = await db.execute<{
+  let results: { rows: Array<{
     id: string;
     post_id: string;
     attachment_id: string;
@@ -192,28 +192,50 @@ export async function queryContentChunks(
     post_title: string;
     post_type: "ASSIGNMENT" | "NOTE";
     author_name: string;
-  }>(sql`
-    SELECT
-      c.id,
-      c.post_id,
-      c.attachment_id,
-      c.chunk_index,
-      c.content,
-      1 - (c.embedding <=> ${embeddingStr}::vector) AS similarity,
-      c.metadata,
-      p.title AS post_title,
-      p.type AS post_type,
-      u.name AS author_name
-    FROM content_document_chunk c
-    INNER JOIN content_post p ON p.id = c.post_id
-    INNER JOIN "user" u ON u.id = p.author_user_id
-    WHERE c.organization_id = ${organizationId}
-      AND c.post_id = ANY(${accessiblePostIds}::text[])
-      AND c.embedding IS NOT NULL
-      AND 1 - (c.embedding <=> ${embeddingStr}::vector) > ${threshold}
-    ORDER BY c.embedding <=> ${embeddingStr}::vector
-    LIMIT ${topK}
-  `);
+  }> };
+
+  try {
+    results = await db.execute<{
+      id: string;
+      post_id: string;
+      attachment_id: string;
+      chunk_index: number;
+      content: string;
+      similarity: number;
+      metadata: { page?: number; section?: string; filename?: string };
+      post_title: string;
+      post_type: "ASSIGNMENT" | "NOTE";
+      author_name: string;
+    }>(sql`
+      SELECT
+        c.id,
+        c.post_id,
+        c.attachment_id,
+        c.chunk_index,
+        c.content,
+        1 - (c.embedding::vector <=> ${embeddingStr}::vector) AS similarity,
+        c.metadata,
+        p.title AS post_title,
+        p.type AS post_type,
+        u.name AS author_name
+      FROM content_document_chunk c
+      INNER JOIN content_post p ON p.id = c.post_id
+      INNER JOIN "user" u ON u.id = p.author_user_id
+      WHERE c.organization_id = ${organizationId}
+        AND c.post_id = ANY(${`{${accessiblePostIds.join(",")}}`}::text[])
+        AND c.embedding IS NOT NULL
+        AND 1 - (c.embedding::vector <=> ${embeddingStr}::vector) > ${threshold}
+      ORDER BY c.embedding::vector <=> ${embeddingStr}::vector
+      LIMIT ${topK}
+    `);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes('type "vector" does not exist') || msg.includes('operator does not exist') && msg.includes('<=>')) {
+      console.error("[content-search] pgvector extension is not enabled or embedding column is not vector type. Run: CREATE EXTENSION IF NOT EXISTS vector;");
+      return [];
+    }
+    throw err;
+  }
 
   const mapped = results.rows.map((r) => ({
     chunkId: r.id,

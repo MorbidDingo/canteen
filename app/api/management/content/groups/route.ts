@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { contentGroup, contentGroupMember, user } from "@/lib/db/schema";
 import { eq, and, count } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — list all groups for the org with member counts
 export async function GET(request: NextRequest) {
@@ -105,6 +106,15 @@ export async function POST(request: NextRequest) {
       createdBy: access.actorUserId,
     })
     .returning();
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.CONTENT_GROUP_CREATED,
+    details: { groupId: created.id, name: created.name },
+    request,
+  });
 
   return NextResponse.json({ group: created }, { status: 201 });
 }

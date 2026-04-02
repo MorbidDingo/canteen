@@ -175,6 +175,7 @@ export async function PATCH(
       .where(eq(order.id, id));
 
     logAudit({
+      organizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole ?? "UNKNOWN",
       action: AUDIT_ACTIONS.ORDER_STATUS_CHANGED,

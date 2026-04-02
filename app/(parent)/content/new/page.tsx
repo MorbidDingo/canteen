@@ -15,12 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { BottomSheet } from "@/components/ui/motion";
 import {
   ArrowLeft,
   Loader2,
@@ -32,9 +27,16 @@ import {
   GraduationCap,
   User,
   Users,
+  ClipboardList,
+  StickyNote,
+  Calendar,
+  Tag,
+  Eye,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 
-type Tag = { id: string; name: string; color: string | null };
+type TagItem = { id: string; name: string; color: string | null };
 type Group = { id: string; name: string; memberCount: number };
 type ClassInfo = { className: string; sections: string[] };
 
@@ -62,7 +64,7 @@ export default function NewPostPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Lookups
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tags, setTags] = useState<TagItem[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
 
@@ -71,7 +73,7 @@ export default function NewPostPage() {
   const [creatingTag, setCreatingTag] = useState(false);
 
   // Audience builder
-  const [audienceDialogOpen, setAudienceDialogOpen] = useState(false);
+  const [audienceSheetOpen, setAudienceSheetOpen] = useState(false);
   const [audienceMode, setAudienceMode] = useState<"ALL_ORG" | "CLASS" | "SECTION" | "USER" | "GROUP">("ALL_ORG");
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
@@ -91,9 +93,7 @@ export default function NewPostPage() {
     if (classesRes.ok) setClasses((await classesRes.json()).classes);
   }, []);
 
-  useEffect(() => {
-    fetchLookups();
-  }, [fetchLookups]);
+  useEffect(() => { fetchLookups(); }, [fetchLookups]);
 
   // User search debounce
   useEffect(() => {
@@ -111,11 +111,8 @@ export default function NewPostPage() {
           const data = await res.json();
           setUserResults(data.members || []);
         }
-      } catch {
-        // ignore
-      } finally {
-        setUserSearching(false);
-      }
+      } catch { /* ignore */ }
+      finally { setUserSearching(false); }
     }, 300);
     return () => clearTimeout(timeout);
   }, [userSearch]);
@@ -124,18 +121,17 @@ export default function NewPostPage() {
     if (audienceMode === "ALL_ORG") {
       if (audiences.some((a) => a.audienceType === "ALL_ORG")) return;
       setAudiences([{ audienceType: "ALL_ORG", label: "Entire Organization" }]);
-      setAudienceDialogOpen(false);
+      setAudienceSheetOpen(false);
       return;
     }
     if (audienceMode === "CLASS" && selectedClass) {
       if (audiences.some((a) => a.audienceType === "CLASS" && a.className === selectedClass)) return;
-      // Remove ALL_ORG if adding specific targets
       setAudiences((prev) => [
         ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
         { audienceType: "CLASS", className: selectedClass, label: `Class: ${selectedClass}` },
       ]);
       setSelectedClass("");
-      setAudienceDialogOpen(false);
+      setAudienceSheetOpen(false);
       return;
     }
     if (audienceMode === "SECTION" && selectedClass && selectedSection) {
@@ -145,7 +141,7 @@ export default function NewPostPage() {
         { audienceType: "SECTION", className: selectedClass, section: selectedSection, label: `${selectedClass} - ${selectedSection}` },
       ]);
       setSelectedSection("");
-      setAudienceDialogOpen(false);
+      setAudienceSheetOpen(false);
       return;
     }
     if (audienceMode === "GROUP" && selectedGroup) {
@@ -156,7 +152,7 @@ export default function NewPostPage() {
         { audienceType: "GROUP", groupId: selectedGroup, label: `Group: ${group.name}` },
       ]);
       setSelectedGroup("");
-      setAudienceDialogOpen(false);
+      setAudienceSheetOpen(false);
     }
   }
 
@@ -164,11 +160,11 @@ export default function NewPostPage() {
     if (audiences.some((a) => a.userId === member.userId)) return;
     setAudiences((prev) => [
       ...prev.filter((a) => a.audienceType !== "ALL_ORG"),
-      { audienceType: "USER", userId: member.userId, label: `User: ${member.name}` },
+      { audienceType: "USER", userId: member.userId, label: member.name },
     ]);
     setUserSearch("");
     setUserResults([]);
-    setAudienceDialogOpen(false);
+    setAudienceSheetOpen(false);
   }
 
   function removeAudience(index: number) {
@@ -206,23 +202,25 @@ export default function NewPostPage() {
     );
   }
 
+  function getFileIcon(file: File) {
+    if (file.type.startsWith("image/")) return <ImageIcon className="h-4 w-4 text-blue-500" />;
+    if (file.type === "application/pdf") return <FileText className="h-4 w-4 text-red-500" />;
+    return <Paperclip className="h-4 w-4 text-muted-foreground" />;
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
   async function handleSubmit(asDraft: boolean) {
-    if (!title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
-    if (!body.trim()) {
-      toast.error("Body is required");
-      return;
-    }
-    if (audiences.length === 0) {
-      toast.error("At least one audience target is required");
-      return;
-    }
+    if (!title.trim()) { toast.error("Title is required"); return; }
+    if (!body.trim()) { toast.error("Body is required"); return; }
+    if (audiences.length === 0) { toast.error("Add at least one audience target"); return; }
 
     setSubmitting(true);
     try {
-      // 1. Create the post
       const postRes = await fetch("/api/content/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -249,7 +247,7 @@ export default function NewPostPage() {
 
       const { post } = await postRes.json();
 
-      // 2. Upload attachments
+      // Upload attachments
       for (const file of files) {
         const formData = new FormData();
         formData.append("file", file);
@@ -257,12 +255,10 @@ export default function NewPostPage() {
           method: "POST",
           body: formData,
         });
-        if (!attRes.ok) {
-          toast.error(`Failed to upload ${file.name}`);
-        }
+        if (!attRes.ok) toast.error(`Failed to upload ${file.name}`);
       }
 
-      // 3. Publish if not draft
+      // Publish if not draft
       if (!asDraft) {
         await fetch(`/api/content/posts/${post.id}`, {
           method: "PATCH",
@@ -280,337 +276,362 @@ export default function NewPostPage() {
     }
   }
 
-  const sectionsForSelectedClass = classes.find(
-    (c) => c.className === selectedClass,
-  )?.sections || [];
+  const sectionsForSelectedClass = classes.find((c) => c.className === selectedClass)?.sections || [];
+  const audienceIconMap: Record<string, React.ReactNode> = {
+    ALL_ORG: <Globe className="h-3 w-3" />,
+    CLASS: <GraduationCap className="h-3 w-3" />,
+    SECTION: <GraduationCap className="h-3 w-3" />,
+    USER: <User className="h-3 w-3" />,
+    GROUP: <Users className="h-3 w-3" />,
+  };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-4 pb-28">
+    <div className="mx-auto max-w-2xl px-4 py-4 pb-32">
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/content")}>
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          type="button"
+          onClick={() => router.push("/content")}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/40 transition-colors hover:bg-muted"
+        >
           <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="text-lg font-bold">New Post</h1>
+        </button>
+        <div>
+          <h1 className="text-lg font-semibold">New Post</h1>
+          <p className="text-[11px] text-muted-foreground">Create an assignment or note</p>
+        </div>
       </div>
 
-      {/* Type selector */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Type</Label>
-        <Select value={type} onValueChange={(v) => setType(v as "ASSIGNMENT" | "NOTE")}>
-          <SelectTrigger className="h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
-            <SelectItem value="NOTE">Note</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Type selector — pill style */}
+      <div className="flex gap-2 mb-5">
+        <button
+          type="button"
+          onClick={() => setType("ASSIGNMENT")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 py-3.5 text-sm font-medium transition-all ${
+            type === "ASSIGNMENT"
+              ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/20 dark:text-blue-300"
+              : "border-border/40 bg-card text-muted-foreground hover:border-border"
+          }`}
+        >
+          <ClipboardList className="h-4 w-4" />
+          Assignment
+        </button>
+        <button
+          type="button"
+          onClick={() => setType("NOTE")}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 py-3.5 text-sm font-medium transition-all ${
+            type === "NOTE"
+              ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-950/20 dark:text-emerald-300"
+              : "border-border/40 bg-card text-muted-foreground hover:border-border"
+          }`}
+        >
+          <StickyNote className="h-4 w-4" />
+          Note
+        </button>
       </div>
 
-      {/* Title */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Title</Label>
-        <Input
-          placeholder="e.g. Math Homework Chapter 5"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-      </div>
-
-      {/* Body */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Body</Label>
-        <Textarea
-          placeholder="Write the content or instructions..."
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={6}
-        />
-      </div>
-
-      {/* Due date (assignments only) */}
-      {type === "ASSIGNMENT" && (
-        <div className="space-y-1.5">
-          <Label className="text-xs font-medium">Due Date (optional)</Label>
+      {/* Form fields — card style sections */}
+      <div className="space-y-4">
+        {/* Title */}
+        <div className="rounded-2xl border border-border/40 bg-card p-4">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</Label>
           <Input
-            type="datetime-local"
-            value={dueAt}
-            onChange={(e) => setDueAt(e.target.value)}
+            placeholder={type === "ASSIGNMENT" ? "e.g. Math Homework Chapter 5" : "e.g. Class Notes — Photosynthesis"}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-2 border-0 bg-transparent px-0 text-base font-medium placeholder:text-muted-foreground/40 focus-visible:ring-0"
           />
         </div>
-      )}
 
-      {/* Tags */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Tags</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => toggleTag(tag.id)}
-              className="transition-transform active:scale-95"
-            >
-              <Badge
-                variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
-                className="cursor-pointer text-xs"
-                style={
-                  tag.color && selectedTagIds.includes(tag.id)
-                    ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
-                    : tag.color
-                    ? { borderColor: tag.color, color: tag.color }
-                    : undefined
-                }
-              >
-                {tag.name}
-              </Badge>
-            </button>
-          ))}
-          <div className="flex items-center gap-1">
+        {/* Body */}
+        <div className="rounded-2xl border border-border/40 bg-card p-4">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Content</Label>
+          <Textarea
+            placeholder="Write the content or instructions..."
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            rows={5}
+            className="mt-2 border-0 bg-transparent px-0 text-sm placeholder:text-muted-foreground/40 focus-visible:ring-0 resize-none"
+          />
+        </div>
+
+        {/* Due date (assignments only) */}
+        {type === "ASSIGNMENT" && (
+          <div className="rounded-2xl border border-border/40 bg-card p-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Due Date</Label>
+              <span className="text-[10px] text-muted-foreground/60">(optional)</span>
+            </div>
             <Input
-              placeholder="New tag..."
-              value={newTagName}
-              onChange={(e) => setNewTagName(e.target.value)}
-              className="h-6 w-24 text-xs"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleCreateTag();
-                }
-              }}
+              type="datetime-local"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+              className="mt-2 border-0 bg-transparent px-0 text-sm focus-visible:ring-0"
             />
-            {newTagName.trim() && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 px-1.5"
-                onClick={handleCreateTag}
-                disabled={creatingTag}
-              >
-                {creatingTag ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Audience */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs font-medium">Audience</Label>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={() => setAudienceDialogOpen(true)}
-          >
-            <Plus className="mr-1 h-3 w-3" />
-            Add Target
-          </Button>
-        </div>
-        {audiences.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No audience selected. Add at least one target.
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-1.5">
-            {audiences.map((a, i) => (
-              <Badge key={i} variant="secondary" className="gap-1 text-xs">
-                {a.audienceType === "ALL_ORG" && <Globe className="h-3 w-3" />}
-                {(a.audienceType === "CLASS" || a.audienceType === "SECTION") && <GraduationCap className="h-3 w-3" />}
-                {a.audienceType === "USER" && <User className="h-3 w-3" />}
-                {a.audienceType === "GROUP" && <Users className="h-3 w-3" />}
-                {a.label}
-                <button type="button" onClick={() => removeAudience(i)}>
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
           </div>
         )}
-      </div>
 
-      {/* Audience Dialog */}
-      <Dialog open={audienceDialogOpen} onOpenChange={setAudienceDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Audience Target</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Select value={audienceMode} onValueChange={(v) => setAudienceMode(v as typeof audienceMode)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL_ORG">Entire Organization</SelectItem>
-                <SelectItem value="CLASS">Class</SelectItem>
-                <SelectItem value="SECTION">Class + Section</SelectItem>
-                <SelectItem value="GROUP">Group</SelectItem>
-                <SelectItem value="USER">Specific User</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {audienceMode === "ALL_ORG" && (
-              <Button className="w-full" onClick={addAudience}>
-                <Globe className="mr-2 h-4 w-4" />
-                Target Entire Organization
-              </Button>
-            )}
-
-            {(audienceMode === "CLASS" || audienceMode === "SECTION") && (
-              <>
-                <Select value={selectedClass} onValueChange={setSelectedClass}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Select class..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {classes.map((c) => (
-                      <SelectItem key={c.className} value={c.className}>
-                        {c.className}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {audienceMode === "SECTION" && selectedClass && (
-                  <Select value={selectedSection} onValueChange={setSelectedSection}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Select section..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sectionsForSelectedClass.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Button
-                  className="w-full"
-                  onClick={addAudience}
-                  disabled={!selectedClass || (audienceMode === "SECTION" && !selectedSection)}
-                >
-                  Add {audienceMode === "CLASS" ? "Class" : "Section"}
-                </Button>
-              </>
-            )}
-
-            {audienceMode === "GROUP" && (
-              <>
-                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Select group..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>
-                        {g.name} ({g.memberCount} members)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  className="w-full"
-                  onClick={addAudience}
-                  disabled={!selectedGroup}
-                >
-                  Add Group
-                </Button>
-              </>
-            )}
-
-            {audienceMode === "USER" && (
-              <>
-                <Input
-                  placeholder="Search by name or email..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                />
-                {userSearching && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Searching...
-                  </p>
-                )}
-                {userResults.length > 0 && (
-                  <div className="max-h-40 overflow-y-auto rounded-md border">
-                    {userResults.map((m) => (
-                      <button
-                        key={m.userId}
-                        type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
-                        onClick={() => addUserAudience(m)}
-                      >
-                        <div>
-                          <div className="font-medium">{m.name}</div>
-                          <div className="text-xs text-muted-foreground">{m.email}</div>
-                        </div>
-                        <Badge variant="outline" className="text-[10px]">{m.role}</Badge>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+        {/* Tags */}
+        <div className="rounded-2xl border border-border/40 bg-card p-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Tag className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</Label>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* File attachments */}
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium">Attachments</Label>
-        <div className="space-y-2">
-          {files.map((file, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs">
-              <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 truncate flex-1">{file.name}</span>
-              <span className="shrink-0 text-muted-foreground">
-                {(file.size / 1024).toFixed(0)}KB
-              </span>
-              <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
-                <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => toggleTag(tag.id)}
+                className="transition-transform active:scale-95"
+              >
+                <Badge
+                  variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
+                  className="cursor-pointer text-xs rounded-lg"
+                  style={
+                    tag.color && selectedTagIds.includes(tag.id)
+                      ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
+                      : tag.color
+                      ? { borderColor: tag.color, color: tag.color }
+                      : undefined
+                  }
+                >
+                  {tag.name}
+                </Badge>
               </button>
+            ))}
+            <div className="flex items-center gap-1">
+              <Input
+                placeholder="New tag..."
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                className="h-6 w-24 rounded-lg border-dashed text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); handleCreateTag(); }
+                }}
+              />
+              {newTagName.trim() && (
+                <Button size="sm" variant="ghost" className="h-6 px-1.5" onClick={handleCreateTag} disabled={creatingTag}>
+                  {creatingTag ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                </Button>
+              )}
             </div>
-          ))}
-          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground transition-colors hover:bg-muted/30">
-            <Upload className="h-4 w-4" />
-            <span>Click to add files (images, PDFs, documents)</span>
-            <input
-              type="file"
-              className="hidden"
-              multiple
-              onChange={(e) => {
-                if (e.target.files) {
-                  setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
-                }
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </div>
+        </div>
+
+        {/* Audience */}
+        <div className="rounded-2xl border border-border/40 bg-card p-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Audience</Label>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAudienceSheetOpen(true)}
+              className="flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </button>
+          </div>
+          {audiences.length === 0 ? (
+            <p className="text-xs text-muted-foreground/60 py-2">
+              No audience selected. Tap &ldquo;Add&rdquo; to choose who can see this.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {audiences.map((a, i) => (
+                <Badge key={i} variant="secondary" className="gap-1.5 text-xs rounded-lg py-1">
+                  {audienceIconMap[a.audienceType]}
+                  {a.label}
+                  <button type="button" onClick={() => removeAudience(i)} className="ml-0.5 hover:text-destructive">
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Attachments */}
+        <div className="rounded-2xl border border-border/40 bg-card p-4">
+          <div className="flex items-center gap-2 mb-2.5">
+            <Paperclip className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Attachments</Label>
+          </div>
+          <div className="space-y-2">
+            {files.map((file, i) => (
+              <div key={i} className="flex items-center gap-2.5 rounded-xl bg-muted/30 px-3 py-2">
+                {getFileIcon(file)}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{file.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{formatFileSize(file.size)}</p>
+                </div>
+                <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
+                  <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            ))}
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/40 px-4 py-4 text-xs text-muted-foreground transition-colors hover:border-border hover:bg-muted/20">
+              <Upload className="h-5 w-5 text-muted-foreground/40" />
+              <span>Tap to add files</span>
+              <input
+                type="file"
+                className="hidden"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files) setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
         </div>
       </div>
 
-      {/* Submit buttons */}
-      <div className="flex gap-2 pt-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          disabled={submitting}
-          onClick={() => handleSubmit(true)}
-        >
-          {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-          Save as Draft
-        </Button>
-        <Button
-          className="flex-1"
-          disabled={submitting}
-          onClick={() => handleSubmit(false)}
-        >
-          {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-          Publish
-        </Button>
+      {/* Submit — sticky bottom */}
+      <div className="fixed bottom-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-sm px-4 py-3">
+        <div className="mx-auto max-w-2xl flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1 h-11 rounded-xl text-sm font-medium"
+            disabled={submitting}
+            onClick={() => handleSubmit(true)}
+          >
+            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            Save Draft
+          </Button>
+          <Button
+            className="flex-1 h-11 rounded-xl text-sm font-medium"
+            disabled={submitting}
+            onClick={() => handleSubmit(false)}
+          >
+            {submitting && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            Publish
+          </Button>
+        </div>
       </div>
+
+      {/* Audience Bottom Sheet */}
+      <BottomSheet
+        open={audienceSheetOpen}
+        onClose={() => setAudienceSheetOpen(false)}
+        snapPoints={[0.6]}
+      >
+        <div className="px-4 py-3 border-b">
+          <h3 className="text-sm font-semibold">Add Audience</h3>
+          <p className="text-[11px] text-muted-foreground">Choose who can see this post</p>
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          <Select value={audienceMode} onValueChange={(v) => setAudienceMode(v as typeof audienceMode)}>
+            <SelectTrigger className="h-10 rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL_ORG">Entire Organization</SelectItem>
+              <SelectItem value="CLASS">Class</SelectItem>
+              <SelectItem value="SECTION">Class + Section</SelectItem>
+              <SelectItem value="GROUP">Group</SelectItem>
+              <SelectItem value="USER">Specific User</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {audienceMode === "ALL_ORG" && (
+            <Button className="w-full h-10 rounded-xl" onClick={addAudience}>
+              <Globe className="mr-2 h-4 w-4" />
+              Target Entire Organization
+            </Button>
+          )}
+
+          {(audienceMode === "CLASS" || audienceMode === "SECTION") && (
+            <>
+              <Select value={selectedClass} onValueChange={setSelectedClass}>
+                <SelectTrigger className="h-10 rounded-xl">
+                  <SelectValue placeholder="Select class..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {classes.map((c) => (
+                    <SelectItem key={c.className} value={c.className}>{c.className}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {audienceMode === "SECTION" && selectedClass && (
+                <Select value={selectedSection} onValueChange={setSelectedSection}>
+                  <SelectTrigger className="h-10 rounded-xl">
+                    <SelectValue placeholder="Select section..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sectionsForSelectedClass.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button
+                className="w-full h-10 rounded-xl"
+                onClick={addAudience}
+                disabled={!selectedClass || (audienceMode === "SECTION" && !selectedSection)}
+              >
+                Add {audienceMode === "CLASS" ? "Class" : "Section"}
+              </Button>
+            </>
+          )}
+
+          {audienceMode === "GROUP" && (
+            <>
+              <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                <SelectTrigger className="h-10 rounded-xl">
+                  <SelectValue placeholder="Select group..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>{g.name} ({g.memberCount})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button className="w-full h-10 rounded-xl" onClick={addAudience} disabled={!selectedGroup}>
+                Add Group
+              </Button>
+            </>
+          )}
+
+          {audienceMode === "USER" && (
+            <>
+              <Input
+                placeholder="Search by name or email..."
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                className="h-10 rounded-xl"
+              />
+              {userSearching && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Searching...
+                </div>
+              )}
+              {userResults.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-xl border divide-y">
+                  {userResults.map((m) => (
+                    <button
+                      key={m.userId}
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-muted/40 transition-colors"
+                      onClick={() => addUserAudience(m)}
+                    >
+                      <div>
+                        <div className="text-xs font-medium">{m.name}</div>
+                        <div className="text-[10px] text-muted-foreground">{m.email}</div>
+                      </div>
+                      <Badge variant="outline" className="text-[10px]">{m.role}</Badge>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </BottomSheet>
     </div>
   );
 }

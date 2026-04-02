@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     }).catch(() => {});
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || "LIB_OPERATOR",
       action: AUDIT_ACTIONS.RETURN_REJECTED,

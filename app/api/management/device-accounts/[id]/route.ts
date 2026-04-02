@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { organizationDevice } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function PATCH(
   request: NextRequest,
@@ -37,6 +38,15 @@ export async function PATCH(
     if (!updated) {
       return NextResponse.json({ error: "Device not found" }, { status: 404 });
     }
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.DEVICE_STATUS_UPDATED,
+      details: { deviceId: id, status: body.status },
+      request,
+    });
 
     return NextResponse.json({ success: true, device: updated });
   } catch (error) {

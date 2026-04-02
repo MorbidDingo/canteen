@@ -4,6 +4,7 @@ import { appSetting } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { APP_SETTINGS_DEFAULTS } from "@/lib/constants";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET — fetch all app settings (merged with defaults)
 export async function GET() {
@@ -85,6 +86,15 @@ export async function POST(request: NextRequest) {
         });
       }
     }
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "ADMIN",
+      action: AUDIT_ACTIONS.SETTINGS_UPDATED,
+      details: { keys: Object.keys(settings) },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

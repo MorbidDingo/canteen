@@ -174,6 +174,7 @@ export async function POST(request: NextRequest) {
     // Audit
     try {
       await logAudit({
+        organizationId,
         action: AUDIT_ACTIONS.READABLE_BOOK_CREATED,
         userId: access.session.user.id,
         userRole: access.membershipRole ?? "UNKNOWN",

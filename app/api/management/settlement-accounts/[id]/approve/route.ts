@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { settlementAccount } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 /**
  * POST /api/management/settlement-accounts/[id]/approve
@@ -11,7 +12,7 @@ import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
  * making it ACTIVE so it can receive settlements.
  */
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -56,6 +57,15 @@ export async function POST(
         updatedAt: new Date(),
       })
       .where(eq(settlementAccount.id, id));
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.SETTLEMENT_ACCOUNT_APPROVED,
+      details: { accountId: id },
+      request,
+    });
 
     return NextResponse.json({ success: true, status: "ACTIVE" });
   } catch (error) {

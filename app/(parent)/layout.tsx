@@ -82,7 +82,7 @@ type NoticeItem = {
 
 function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
   if (pathname.startsWith("/library")) return "library";
-  if (pathname.startsWith("/content") || pathname.startsWith("/assignments")) return "content";
+  if (pathname.startsWith("/content") || pathname.startsWith("/assignments") || pathname.startsWith("/calendar")) return "content";
   if (
     pathname === "/menu" ||
     pathname.startsWith("/orders") ||
@@ -104,6 +104,7 @@ function getActiveTab(pathname: string): string {
     return "settings";
   }
   if (pathname === "/controls") return "controls";
+  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "calendar";
   if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
   if (pathname === "/cart") return "cart";
   if (pathname === "/assignments" || pathname.startsWith("/assignments/")) return "feed";
@@ -513,7 +514,7 @@ function ParentLayoutContent({
         { key: "feed" as const, href: "/assignments", icon: IoList, label: "Feed", locked: false },
         { key: "home" as const, href: "/content", icon: IoDocumentText, label: "Posts", locked: false },
         { key: "new" as const, href: "/content/new", icon: IoAdd, label: "Create", locked: false },
-        { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
+        { key: "calendar" as const, href: "/calendar", icon: IoCalendar, label: "Calendar", locked: false },
         { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
       ];
     }
@@ -575,30 +576,32 @@ function ParentLayoutContent({
                 </Link>
               </div>
 
-              {/* AI Chat button — orange, always visible, mode-aware */}
-              <button
-                type="button"
-                aria-label={parentMode === "library" ? "Open Library Assistant" : "Open AI assistant"}
-                onClick={() => {
-                  if (parentMode === "library") {
-                    setLibraryChatOpen((v) => !v);
-                  } else {
-                    setChatOpen((v) => !v);
-                  }
-                }}
-                className={cn(
-                  "inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-all",
-                  parentMode === "library"
-                    ? libraryChatOpen
+              {/* AI Chat button — orange, visible in canteen/library only (content has per-post AI) */}
+              {parentMode !== "content" && (
+                <button
+                  type="button"
+                  aria-label={parentMode === "library" ? "Open Library Assistant" : "Open AI assistant"}
+                  onClick={() => {
+                    if (parentMode === "library") {
+                      setLibraryChatOpen((v) => !v);
+                    } else {
+                      setChatOpen((v) => !v);
+                    }
+                  }}
+                  className={cn(
+                    "inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-all",
+                    parentMode === "library"
+                      ? libraryChatOpen
+                        ? "bg-[#b87314] text-white"
+                        : "bg-[#d4891a] text-white hover:bg-[#b87314]"
+                      : chatOpen
                       ? "bg-[#b87314] text-white"
-                      : "bg-[#d4891a] text-white hover:bg-[#b87314]"
-                    : chatOpen
-                    ? "bg-[#b87314] text-white"
-                    : "bg-[#d4891a] text-white hover:bg-[#b87314]",
-                )}
-              >
-                <IoChatbubbleEllipses className="h-5 w-5" />
-              </button>
+                      : "bg-[#d4891a] text-white hover:bg-[#b87314]",
+                  )}
+                >
+                  <IoChatbubbleEllipses className="h-5 w-5" />
+                </button>
+              )}
             </div>
           </div>
 

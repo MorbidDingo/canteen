@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auditLog, user } from "@/lib/db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 
 export async function GET(request: NextRequest) {
@@ -31,12 +31,18 @@ export async function GET(request: NextRequest) {
   const page = Math.max(parseInt(searchParams.get("page") || "1"), 1);
   const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "50"), 1), 100);
   const actionFilter = searchParams.get("action");
+  const actionsFilter = searchParams.get("actions");
   const offset = (page - 1) * limit;
 
   try {
     const conditions = [];
     conditions.push(eq(auditLog.organizationId, organizationId));
-    if (actionFilter) {
+    if (actionsFilter) {
+      const actionList = actionsFilter.split(",").filter(Boolean);
+      if (actionList.length > 0) {
+        conditions.push(inArray(auditLog.action, actionList));
+      }
+    } else if (actionFilter) {
       conditions.push(eq(auditLog.action, actionFilter));
     }
 

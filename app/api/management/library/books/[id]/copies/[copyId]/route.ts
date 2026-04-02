@@ -97,6 +97,7 @@ export async function PATCH(
       .limit(1);
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_UPDATED,
@@ -172,6 +173,7 @@ export async function DELETE(
     });
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole || access.session.user.role,
       action: AUDIT_ACTIONS.BOOK_COPY_RETIRED,

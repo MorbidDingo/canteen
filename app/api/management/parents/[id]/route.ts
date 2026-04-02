@@ -89,6 +89,7 @@ export async function PATCH(
     await db.delete(sessionTable).where(eq(sessionTable.userId, id));
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: session.user.id,
       userRole: session.user.role,
       action: AUDIT_ACTIONS.PASSWORD_CHANGED,
@@ -213,6 +214,7 @@ export async function DELETE(
     await db.delete(user).where(eq(user.id, id));
 
     await logAudit({
+      organizationId: access.activeOrganizationId,
       userId: session.user.id,
       userRole: session.user.role,
       action: AUDIT_ACTIONS.PARENT_DELETED,

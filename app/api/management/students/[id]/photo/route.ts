@@ -130,6 +130,7 @@ export async function POST(
       .where(and(eq(child.id, id), eq(child.organizationId, organizationId)));
 
     await logAudit({
+      organizationId,
       userId: access.actorUserId,
       userRole: access.membershipRole ?? "UNKNOWN",
       action: AUDIT_ACTIONS.STUDENT_PHOTO_UPDATED,

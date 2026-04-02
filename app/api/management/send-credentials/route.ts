@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import nodemailer from "nodemailer";
 import { runParallelForEach } from "@/lib/bulk-upload-engine";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const DEFAULT_GMAIL_CONCURRENCY = 3;
 const DEFAULT_SMTP_CONCURRENCY = 6;
@@ -110,6 +111,15 @@ export async function POST(request: NextRequest) {
 
     const sent = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;
+
+    logAudit({
+      organizationId: access.activeOrganizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.CREDENTIALS_SENT,
+      details: { total: credentials.length, sent, failed },
+      request,
+    });
 
     return NextResponse.json({ sent, failed, concurrency: sendConcurrency, providerHost: host, results });
   } catch (error) {

@@ -5,6 +5,7 @@ import { organizationPaymentConfig } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { encryptKeySecretForStorage } from "@/lib/razorpay";
 import crypto from "crypto";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function GET() {
   try {
@@ -125,6 +126,15 @@ export async function PUT(request: NextRequest) {
         updatedAt: now,
       });
     }
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.PAYMENT_CONFIG_UPDATED,
+      details: { mode, isNew: !existing },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

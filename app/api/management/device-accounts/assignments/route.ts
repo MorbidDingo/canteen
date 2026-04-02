@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { organizationDevice, organizationDeviceAssignment, organizationMembership } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 type DeviceType = "GATE" | "KIOSK" | "LIBRARY";
 
@@ -95,6 +96,15 @@ export async function POST(request: NextRequest) {
       })
       .onConflictDoNothing();
 
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.DEVICE_ASSIGNED,
+      details: { deviceId, assignedUserId: userId },
+      request,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
@@ -136,6 +146,15 @@ export async function DELETE(request: NextRequest) {
           eq(organizationDeviceAssignment.userId, userId),
         ),
       );
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.DEVICE_UNASSIGNED,
+      details: { deviceId, unassignedUserId: userId },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

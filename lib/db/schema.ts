@@ -1927,13 +1927,38 @@ export const managementNotice = pgTable("management_notice", {
     .references(() => user.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   message: text("message").notNull(),
+  // GENERAL, EXAM, EVENT, HOLIDAY_ANNOUNCEMENT
+  category: text("category").notNull().$default(() => "GENERAL"),
   // ALL_PARENTS, ALL_GENERAL, ALL_USERS, SPECIFIC_CLASS, SPECIFIC_USERS
   targetType: text("target_type").notNull(),
   targetClass: text("target_class"),                        // set when targetType = SPECIFIC_CLASS
   targetUserIds: text("target_user_ids"),                   // JSON string[] when targetType = SPECIFIC_USERS
+  eventDate: timestamp("event_date"),                       // optional date for calendar display
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
+
+// ─── School Holidays ────────────────────────
+
+export const schoolHoliday = pgTable("school_holiday", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date"),                            // null = single-day holiday
+  description: text("description"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const schoolHolidayRelations = relations(schoolHoliday, ({ one }) => ({
+  organization: one(organization, { fields: [schoolHoliday.organizationId], references: [organization.id] }),
+  createdByUser: one(user, { fields: [schoolHoliday.createdBy], references: [user.id] }),
+}));
 
 export const noticeAcknowledgment = pgTable("notice_acknowledgment", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

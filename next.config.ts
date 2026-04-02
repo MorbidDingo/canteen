@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     "pg",
     "razorpay",
+    "pdf-parse",
   ],
   images: {
     remotePatterns: [
@@ -22,7 +23,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    middlewareClientMaxBodySize: "25mb",
+    proxyClientMaxBodySize: "25mb",
     serverActions: {
       bodySizeLimit: "25mb",
     },

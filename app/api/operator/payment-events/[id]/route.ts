@@ -10,6 +10,7 @@ import {
   sanitizeStringArray,
   validateSelectedAccountIds,
 } from "@/lib/payment-events";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function GET(
   _req: NextRequest,
@@ -66,7 +67,7 @@ export async function GET(
 }
 
 export async function PATCH(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -88,7 +89,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
 
-  const body = await req.json();
+  const body = await request.json();
   const {
     status,
     kioskMode,
@@ -203,11 +204,20 @@ export async function PATCH(
 
   broadcast("payment-event", { action: "updated", event: updated });
 
+  logAudit({
+    organizationId: access.activeOrganizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.PAYMENT_EVENT_UPDATED,
+    details: { eventId: id },
+    request,
+  });
+
   return NextResponse.json({ event: updated });
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -244,6 +254,15 @@ export async function DELETE(
 
   await db.delete(paymentEvent).where(eq(paymentEvent.id, id));
   broadcast("payment-event", { action: "deleted", eventId: id });
+
+  logAudit({
+    organizationId: access.activeOrganizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.PAYMENT_EVENT_DELETED,
+    details: { eventId: id },
+    request,
+  });
 
   return NextResponse.json({ success: true });
 }

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { organizationMembership, settlementAccount, user } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { encryptKeySecretForStorage } from "@/lib/razorpay";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
@@ -165,6 +166,15 @@ export async function POST(request: NextRequest) {
         status: "PENDING_VERIFICATION",
       })
       .returning({ id: settlementAccount.id, status: settlementAccount.status });
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.SETTLEMENT_ACCOUNT_CREATED,
+      details: { accountId: created.id },
+      request,
+    });
 
     return NextResponse.json({ account: created });
   } catch (error) {

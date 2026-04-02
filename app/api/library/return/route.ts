@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
       });
 
       await logAudit({
+        organizationId: requestOrgId,
         userId: studentChild.id,
         userRole: "STUDENT",
         action: AUDIT_ACTIONS.BOOK_RETURNED,
@@ -382,6 +383,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId: requestOrgId,
       userId: studentChild.id,
       userRole: "STUDENT",
       action: AUDIT_ACTIONS.BOOK_RETURNED,
@@ -399,6 +401,7 @@ export async function POST(request: NextRequest) {
 
     if (fineAmount > 0 && fineDeducted) {
       await logAudit({
+        organizationId: requestOrgId,
         userId: studentChild.id,
         userRole: "STUDENT",
         action: AUDIT_ACTIONS.LIBRARY_FINE_DEDUCTED,

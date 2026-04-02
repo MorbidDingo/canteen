@@ -11,6 +11,7 @@ import { checkAudienceAccess } from "@/lib/content-audience";
 import { uploadFileToS3 } from "@/lib/s3";
 import { configureCloudinary } from "@/lib/cloudinary";
 import cloudinary from "cloudinary";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -164,6 +165,15 @@ export async function POST(
 
     attachments.push(att);
   }
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? access.session.user.role,
+    action: AUDIT_ACTIONS.CONTENT_SUBMITTED,
+    details: { postId, submissionId: submission.id },
+    request,
+  });
 
   return NextResponse.json({ submission, attachments }, { status: 201 });
 }

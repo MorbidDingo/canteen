@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { discount, menuItem } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const updateSchema = z.object({
   active: z.boolean().optional(),
@@ -74,6 +75,15 @@ export async function PATCH(
       .where(eq(discount.id, id))
       .returning();
 
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "ADMIN",
+      action: AUDIT_ACTIONS.DISCOUNT_UPDATED,
+      details: { discountId: id },
+      request,
+    });
+
     return NextResponse.json({ discount: updated });
   } catch (error) {
     if (error instanceof AccessDeniedError) {
@@ -89,7 +99,7 @@ export async function PATCH(
 
 // DELETE — remove a discount
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -120,6 +130,15 @@ export async function DELETE(
     }
 
     await db.delete(discount).where(eq(discount.id, id));
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "ADMIN",
+      action: AUDIT_ACTIONS.DISCOUNT_DELETED,
+      details: { discountId: id },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

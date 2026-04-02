@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
     });
 
     await logAudit({
+      organizationId: requestOrgId,
       userId: studentChild.id,
       userRole: "STUDENT",
       action: AUDIT_ACTIONS.BOOK_REISSUED,

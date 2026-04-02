@@ -3,9 +3,10 @@ import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
 import { paymentEventAccount } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function PATCH(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -17,7 +18,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const body = await request.json();
   const { action, rejectionReason } = body; // action: "approve" | "reject"
 
   if (!action || !["approve", "reject"].includes(action)) {
@@ -46,6 +47,15 @@ export async function PATCH(
     )
     .where(eq(paymentEventAccount.id, id))
     .returning();
+
+  logAudit({
+    organizationId: access.activeOrganizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "MANAGEMENT",
+    action: AUDIT_ACTIONS.PAYMENT_ACCOUNT_REVIEWED,
+    details: { accountId: id, decision: action },
+    request,
+  });
 
   return NextResponse.json({ account: updated });
 }

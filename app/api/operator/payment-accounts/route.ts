@@ -3,6 +3,7 @@ import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
 import { paymentEventAccount, user } from "@/lib/db/schema";
 import { and, desc, eq } from "drizzle-orm";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 export async function GET() {
   let access;
@@ -36,7 +37,7 @@ export async function GET() {
   return NextResponse.json({ accounts });
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   let access;
   try {
     access = await requireAccess({ scope: "organization", allowedOrgRoles: ["OPERATOR"] });
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const body = await request.json();
   const { label, method, upiId, accountHolderName, accountNumber, ifscCode, bankName } = body;
 
   if (!label || !method) {
@@ -72,6 +73,15 @@ export async function POST(req: NextRequest) {
       bankName: method === "BANK_ACCOUNT" ? (bankName ?? null) : null,
     })
     .returning();
+
+  logAudit({
+    organizationId: access.activeOrganizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? "OPERATOR",
+    action: AUDIT_ACTIONS.PAYMENT_ACCOUNT_CREATED,
+    details: { accountId: created.id, label: created.label, method: created.method },
+    request,
+  });
 
   return NextResponse.json({ account: created }, { status: 201 });
 }

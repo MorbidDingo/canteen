@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { canteen, canteenPaymentRouting, settlementAccount, user } from "@/lib/db/schema";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 const updateRoutingSchema = z
   .object({
@@ -147,6 +148,15 @@ export async function PUT(request: NextRequest) {
         overriddenAt: new Date(),
       });
     }
+
+    logAudit({
+      organizationId,
+      userId: access.actorUserId,
+      userRole: access.membershipRole ?? "MANAGEMENT",
+      action: AUDIT_ACTIONS.CANTEEN_ROUTING_UPDATED,
+      details: { canteenId, settlementAccountId },
+      request,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -11,6 +11,7 @@ import {
 import { eq, and, count, sql } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { getContentPermission } from "@/lib/content-permission";
+import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
 // POST — create a new content post
 export async function POST(request: NextRequest) {
@@ -64,6 +65,27 @@ export async function POST(request: NextRequest) {
   }
   if (!postBody?.trim()) {
     return NextResponse.json({ error: "body is required" }, { status: 400 });
+  }
+
+  // Check for duplicate title within the same org + type + author
+  const [existing] = await db
+    .select({ id: contentPost.id })
+    .from(contentPost)
+    .where(
+      and(
+        eq(contentPost.organizationId, organizationId),
+        eq(contentPost.authorUserId, access.actorUserId),
+        eq(contentPost.type, type as "ASSIGNMENT" | "NOTE"),
+        sql`lower(${contentPost.title}) = lower(${title.trim()})`,
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json(
+      { error: `A ${type.toLowerCase()} with this title already exists` },
+      { status: 409 },
+    );
   }
 
   if (!audience || audience.length === 0) {
@@ -124,6 +146,15 @@ export async function POST(request: NextRequest) {
     }
 
     return post;
+  });
+
+  logAudit({
+    organizationId,
+    userId: access.actorUserId,
+    userRole: access.membershipRole ?? access.session.user.role,
+    action: AUDIT_ACTIONS.CONTENT_POST_CREATED,
+    details: { postId: result.id, type: result.type, title: result.title },
+    request,
   });
 
   return NextResponse.json({ post: result }, { status: 201 });
