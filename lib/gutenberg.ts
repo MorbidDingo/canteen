@@ -1,4 +1,4 @@
-import { getBookFromS3, uploadBookToS3 } from "@/lib/s3";
+import { getBookFromS3, uploadBookToS3, isS3Configured } from "@/lib/s3";
 
 /**
  * Project Gutenberg integration via the Gutendex API.
@@ -141,11 +141,13 @@ export function getTextUrl(book: GutenbergBook): string | null {
 export async function fetchBookContent(gutenbergId: number): Promise<string | null> {
   const cachedKey = `gutenberg/${gutenbergId}.txt`;
 
-  try {
-    const cachedContent = await getBookFromS3(cachedKey);
-    if (cachedContent) return cachedContent;
-  } catch (error) {
-    console.error("Failed to read Gutenberg content from S3 cache:", error);
+  if (isS3Configured()) {
+    try {
+      const cachedContent = await getBookFromS3(cachedKey);
+      if (cachedContent) return cachedContent;
+    } catch (error) {
+      console.error("Failed to read Gutenberg content from S3 cache:", error);
+    }
   }
 
   const book = await getGutenbergBook(gutenbergId);
@@ -159,10 +161,12 @@ export async function fetchBookContent(gutenbergId: number): Promise<string | nu
 
   const content = await response.text();
 
-  try {
-    await uploadBookToS3(gutenbergId, content);
-  } catch (error) {
-    console.error("Failed to write Gutenberg content to S3 cache:", error);
+  if (isS3Configured()) {
+    try {
+      await uploadBookToS3(gutenbergId, content);
+    } catch (error) {
+      console.error("Failed to write Gutenberg content to S3 cache:", error);
+    }
   }
 
   return content;
