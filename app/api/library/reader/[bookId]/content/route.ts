@@ -86,7 +86,16 @@ export async function GET(
   // For public domain books, fetch content on-demand if no chapters exist
   if (chapters.length === 0 && bookInfo.isPublicDomain && bookInfo.gutenbergId) {
     const gutenbergId = parseInt(bookInfo.gutenbergId, 10);
-    const rawText = await fetchBookContent(gutenbergId);
+    let rawText: string | null = null;
+    try {
+      rawText = await fetchBookContent(gutenbergId);
+    } catch (error) {
+      console.error(`Failed to fetch book content for Gutenberg ID ${gutenbergId}:`, error);
+      return NextResponse.json(
+        { error: "Failed to fetch book content from Project Gutenberg. Please try again later." },
+        { status: 502 },
+      );
+    }
 
     if (rawText) {
       const parsed = parseIntoChapters(rawText);

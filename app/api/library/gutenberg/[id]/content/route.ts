@@ -4,7 +4,7 @@ import { gutenbergCatalog } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { uploadBookToS3, getBookFromS3 } from "@/lib/s3";
 import { markBookDownloadedInIndex } from "@/lib/meilisearch";
-import { getGutenbergBook, getTextUrl } from "@/lib/gutenberg";
+import { getGutenbergBook, getTextUrl, FETCH_CONTENT_TIMEOUT } from "@/lib/gutenberg";
 
 /**
  * GET /api/library/gutenberg/[id]/content
@@ -45,7 +45,16 @@ export async function GET(
   }
 
   // Download from Gutenberg
-  const gutenbergBook = await getGutenbergBook(entry.gutenbergId);
+  let gutenbergBook;
+  try {
+    gutenbergBook = await getGutenbergBook(entry.gutenbergId);
+  } catch (error) {
+    console.error(`Failed to fetch Gutenberg metadata for ID ${entry.gutenbergId}:`, error);
+    return NextResponse.json(
+      { error: "Could not fetch book metadata from Gutenberg" },
+      { status: 502 },
+    );
+  }
   if (!gutenbergBook) {
     return NextResponse.json(
       { error: "Could not fetch book from Gutenberg" },
@@ -61,9 +70,18 @@ export async function GET(
     );
   }
 
-  const textResponse = await fetch(textUrl, {
-    signal: AbortSignal.timeout(60_000),
-  });
+  let textResponse: Response;
+  try {
+    textResponse = await fetch(textUrl, {
+      signal: AbortSignal.timeout(FETCH_CONTENT_TIMEOUT),
+    });
+  } catch (error) {
+    console.error(`Failed to download book text from Gutenberg (${textUrl}):`, error);
+    return NextResponse.json(
+      { error: "Failed to download book content from Gutenberg" },
+      { status: 502 },
+    );
+  }
 
   if (!textResponse.ok) {
     return NextResponse.json(

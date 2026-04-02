@@ -251,7 +251,13 @@ export async function POST(request: NextRequest) {
   const gutenbergId = parseInt(bookRow.gutenbergId, 10);
 
   // Fetch content from Gutenberg
-  const rawText = await fetchBookContent(gutenbergId);
+  let rawText: string | null = null;
+  try {
+    rawText = await fetchBookContent(gutenbergId);
+  } catch (error) {
+    console.error(`Failed to fetch book content for Gutenberg ID ${gutenbergId}:`, error);
+    return NextResponse.json({ error: "Failed to fetch book content from Project Gutenberg. Please try again later." }, { status: 502 });
+  }
   if (!rawText) {
     return NextResponse.json({ error: "Failed to fetch book content from Project Gutenberg" }, { status: 502 });
   }

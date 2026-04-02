@@ -45,9 +45,9 @@ export interface ParsedChapter {
 
 const GUTENDEX_API = "https://gutendex.com/books";
 const GUTENBERG_FILES = "https://www.gutenberg.org";
-const FETCH_TIMEOUT = 30_000;
-const FETCH_CONTENT_TIMEOUT = 60_000;
-const FETCH_RETRIES = 3;
+export const FETCH_TIMEOUT = 15_000;
+export const FETCH_CONTENT_TIMEOUT = 30_000;
+const FETCH_RETRIES = 2;
 const CHARS_PER_PAGE = 2000; // approximate characters per "page"
 
 // ─── Helpers ────────────────────────────────────────────────
