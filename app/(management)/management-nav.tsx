@@ -37,6 +37,7 @@ import {
   Receipt,
   Sun,
   FileCheck2,
+  CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrgSwitcher } from "@/components/org-switcher";
@@ -52,6 +53,7 @@ const links = [
   { href: "/management/notifications", label: "Notices", icon: Bell },
   { href: "/management/exams", label: "Exams", icon: FileCheck2 },
   { href: "/management/holidays", label: "Holidays", icon: Sun },
+  { href: "/management/timetable", label: "Timetable", icon: CalendarClock },
   { href: "/management/statistics", label: "Statistics", icon: BarChart3 },
   { href: "/management/attendance", label: "Attendance", icon: ClipboardCheck },
   { href: "/management/settlement-accounts", label: "Settlement Accounts", icon: Landmark },

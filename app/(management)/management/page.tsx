@@ -19,6 +19,7 @@ import {
   IoNotifications,
   IoCalendar,
   IoSunny,
+  IoTime,
 } from "react-icons/io5";
 
 const groups = [
@@ -39,6 +40,7 @@ const groups = [
       { href: "/management/notifications", label: "Notices", desc: "Send notices & reminders", icon: IoNotifications, color: "text-pink-600", bg: "bg-pink-50" },
       { href: "/management/exams", label: "Exams", desc: "Schedule & notify exams", icon: IoSchool, color: "text-indigo-600", bg: "bg-indigo-50" },
       { href: "/management/holidays", label: "Holidays", desc: "School holidays & closures", icon: IoSunny, color: "text-emerald-600", bg: "bg-emerald-50" },
+      { href: "/management/timetable", label: "Timetable", desc: "AI-powered scheduling", icon: IoTime, color: "text-violet-600", bg: "bg-violet-50" },
     ],
   },
   {
