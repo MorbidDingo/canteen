@@ -733,13 +733,13 @@ export default function OperatorPaymentEventsPage() {
   if (kioskEvent) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-slate-50">
-        <div className="border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+        <div className="border-b border-slate-200 bg-white/95 px-3 py-2.5 backdrop-blur sm:px-4 sm:py-3">
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-xl"
+              className="h-8 w-8 rounded-xl shrink-0"
               onClick={() => {
                 setKioskEvent(null);
                 setKioskSearch("");
@@ -750,40 +750,41 @@ export default function OperatorPaymentEventsPage() {
             </Button>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-900">{kioskEvent.title}</p>
-              <p className="text-xs text-slate-500">
+              <p className="truncate text-sm font-bold text-slate-900">{kioskEvent.title}</p>
+              <p className="text-[11px] text-slate-500">
                 {formatMoney(kioskEvent.amount)} per account
                 {kioskEvent.dueDate ? `  ·  Due ${new Date(kioskEvent.dueDate).toLocaleDateString()}` : ""}
               </p>
             </div>
 
-            <Badge variant="outline" className="gap-1 border-slate-300 text-slate-700">
+            <Badge variant="outline" className="gap-1 border-slate-300 text-[10px] text-slate-700 shrink-0">
               <Smartphone className="h-3 w-3" />
-              Kiosk Collection
+              <span className="hidden sm:inline">Kiosk Collection</span>
+              <span className="sm:hidden">Kiosk</span>
             </Badge>
           </div>
         </div>
 
-        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Card className="border-slate-200 bg-white">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Collected</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{kioskReceipts.length}</p>
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-3 px-3 py-3 sm:gap-4 sm:px-4 sm:py-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <Card className="border-slate-200/80 bg-white/90">
+              <CardContent className="p-2.5 sm:p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Collected</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">{kioskReceipts.length}</p>
               </CardContent>
             </Card>
-            <Card className="border-slate-200 bg-white">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Pending</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">
+            <Card className="border-slate-200/80 bg-white/90">
+              <CardContent className="p-2.5 sm:p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Pending</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                   {Math.max(kioskChildren.length - kioskReceipts.length, 0)}
                 </p>
               </CardContent>
             </Card>
-            <Card className="border-slate-200 bg-white">
-              <CardContent className="p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Total Collected</p>
-                <p className="mt-1 text-xl font-semibold text-emerald-700">
+            <Card className="border-slate-200/80 bg-white/90">
+              <CardContent className="p-2.5 sm:p-4">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Total</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-emerald-700 sm:text-xl">
                   {formatMoney(kioskReceipts.length * kioskEvent.amount)}
                 </p>
               </CardContent>
@@ -965,52 +966,50 @@ export default function OperatorPaymentEventsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f8fafc_0%,_#eef2f7_55%,_#e2e8f0_100%)] p-4 md:p-6">
-      <div className="mx-auto w-full max-w-5xl space-y-5">
-        <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-slate-50 to-slate-100/80 px-3 py-4 sm:px-6 sm:py-6">
+      <div className="mx-auto w-full max-w-2xl space-y-4 sm:max-w-5xl sm:space-y-5">
+        <div className="flex items-center gap-2.5">
           <Link href="/operator/topup">
             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-slate-700 hover:bg-white/70">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
 
-          <Card className="w-full border-slate-200/80 bg-white/85 shadow-sm backdrop-blur">
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div>
-                <p className="text-base font-semibold text-slate-900">Operator Payment Events</p>
-                <p className="text-sm text-slate-500">
-                  Premium, minimal workflow for event creation, collection, and reporting
-                </p>
-              </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-lg font-bold text-slate-900 sm:text-base">Payment Events</p>
+            <p className="text-[11px] text-slate-500">
+              Create, collect & manage payments
+            </p>
+          </div>
 
-              <Button onClick={openCreateEditor} className="rounded-xl bg-slate-900 text-white hover:bg-slate-800">
-                <Plus className="mr-1.5 h-4 w-4" />
-                New Event
-              </Button>
-            </CardContent>
-          </Card>
+          <Button onClick={openCreateEditor} className="h-9 gap-1.5 rounded-xl bg-slate-900 px-3.5 text-sm text-white hover:bg-slate-800 sm:px-4">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Event</span>
+            <span className="sm:hidden">New</span>
+          </Button>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <StatsCard label="Active" value={String(activeEvents.length)} />
-          <StatsCard label="Drafts" value={String(draftEvents.length)} />
-          <StatsCard label="History" value={String(historyEvents.length)} />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          <StatsCard label="Active" value={String(activeEvents.length)} accent="bg-emerald-50 text-emerald-700" />
+          <StatsCard label="Drafts" value={String(draftEvents.length)} accent="bg-amber-50 text-amber-700" />
+          <StatsCard label="History" value={String(historyEvents.length)} accent="bg-slate-100 text-slate-700" />
           <StatsCard
-            label="Total Collections"
+            label="Collected"
             value={formatMoney(events.reduce((sum, event) => sum + event.amount * event.receiptCount, 0))}
+            accent="bg-emerald-50 text-emerald-700"
           />
         </div>
 
         <Link href="/operator/payment-accounts">
-          <Card className="border-slate-200 bg-white hover:shadow-md">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                <CreditCard className="h-5 w-5" />
+          <Card className="border-slate-200/80 bg-white/90 shadow-sm backdrop-blur hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                <CreditCard className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">Payment Accounts</p>
-                <p className="text-xs text-slate-500">
-                  {approvedAccounts.length} approved account{approvedAccounts.length === 1 ? "" : "s"} available
+                <p className="text-[11px] text-slate-500">
+                  {approvedAccounts.length} approved
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 text-slate-400" />
@@ -1023,11 +1022,11 @@ export default function OperatorPaymentEventsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-slate-500" />
           </div>
         ) : (
-          <Tabs defaultValue="active" className="space-y-4">
-            <TabsList className="w-full rounded-xl bg-white">
-              <TabsTrigger value="active" className="flex-1 rounded-lg">Active</TabsTrigger>
-              <TabsTrigger value="draft" className="flex-1 rounded-lg">Draft</TabsTrigger>
-              <TabsTrigger value="history" className="flex-1 rounded-lg">History</TabsTrigger>
+          <Tabs defaultValue="active" className="space-y-3">
+            <TabsList className="w-full rounded-xl bg-white/90 p-1 shadow-sm backdrop-blur">
+              <TabsTrigger value="active" className="flex-1 rounded-lg text-xs data-[state=active]:shadow-sm">Active ({activeEvents.length})</TabsTrigger>
+              <TabsTrigger value="draft" className="flex-1 rounded-lg text-xs data-[state=active]:shadow-sm">Draft ({draftEvents.length})</TabsTrigger>
+              <TabsTrigger value="history" className="flex-1 rounded-lg text-xs data-[state=active]:shadow-sm">History ({historyEvents.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="active" className="space-y-3">
@@ -1105,9 +1104,9 @@ export default function OperatorPaymentEventsPage() {
       >
         <DialogContent className="max-h-[92vh] overflow-y-auto rounded-2xl border-slate-200 sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingEvent ? "Edit Payment Event" : "Create Payment Event"}</DialogTitle>
-            <DialogDescription>
-              Configure amount, due date, target filters, and optional kiosk collection flow.
+            <DialogTitle className="text-base">{editingEvent ? "Edit Payment Event" : "Create Payment Event"}</DialogTitle>
+            <DialogDescription className="text-[11px]">
+              Configure amount, due date, target filters, and kiosk collection.
             </DialogDescription>
           </DialogHeader>
 
@@ -1374,12 +1373,12 @@ export default function OperatorPaymentEventsPage() {
   );
 }
 
-function StatsCard({ label, value }: { label: string; value: string }) {
+function StatsCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <Card className="border-slate-200 bg-white">
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+    <Card className="border-slate-200/80 bg-white/90 shadow-sm backdrop-blur">
+      <CardContent className="p-3 sm:p-4">
+        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">{label}</p>
+        <p className={`mt-0.5 text-lg font-bold tabular-nums sm:text-xl ${accent ? accent.split(" ").filter((c) => c.startsWith("text-")).join(" ") : "text-slate-900"}`}>{value}</p>
       </CardContent>
     </Card>
   );
@@ -1387,12 +1386,12 @@ function StatsCard({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ icon, title }: { icon: ReactNode; title: string }) {
   return (
-    <Card className="border-dashed border-slate-300 bg-white">
-      <CardContent className="py-12 text-center">
-        <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+    <Card className="border-dashed border-slate-300/80 bg-white/60">
+      <CardContent className="py-10 text-center sm:py-12">
+        <div className="mx-auto mb-2.5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
           {icon}
         </div>
-        <p className="text-sm font-medium text-slate-700">{title}</p>
+        <p className="text-xs font-medium text-slate-500">{title}</p>
       </CardContent>
     </Card>
   );
@@ -1422,57 +1421,51 @@ function EventCard({
   const showDownload = dueComplete || event.status === "COMPLETED" || event.status === "CANCELLED";
 
   return (
-    <Card className="border-slate-200 bg-white shadow-sm">
-      <CardContent className="space-y-3 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <p className="truncate text-sm font-semibold text-slate-900">{event.title}</p>
-              <Badge variant={statusVariant(event.status)} className="text-[10px]">
+    <Card className="border-slate-200/80 bg-white/90 shadow-sm backdrop-blur overflow-hidden">
+      <CardContent className="p-3.5 sm:p-4">
+        {/* Top: Title + Amount */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-sm font-bold text-slate-900 leading-tight">{event.title}</p>
+              <Badge variant={statusVariant(event.status)} className="text-[9px] px-1.5 py-0">
                 {event.status}
               </Badge>
               {dueComplete ? (
-                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[10px] text-amber-700">
-                  Due Date Completed
+                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[9px] px-1.5 py-0 text-amber-700">
+                  Overdue
                 </Badge>
               ) : null}
             </div>
-
             {event.description ? (
-              <p className="line-clamp-2 text-xs text-slate-500">{event.description}</p>
+              <p className="line-clamp-1 text-[11px] text-slate-500">{event.description}</p>
             ) : null}
           </div>
-
-          <div className="text-right">
-            <p className="text-lg font-semibold text-slate-900">{formatMoney(event.amount)}</p>
-          </div>
+          <p className="text-base font-bold tabular-nums text-slate-900 shrink-0">{formatMoney(event.amount)}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+        {/* Meta row */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
           <span className="inline-flex items-center gap-1">
             <Receipt className="h-3 w-3" />
             {event.receiptCount} collected
           </span>
-
           <span className="inline-flex items-center gap-1">
             <Users className="h-3 w-3" />
             {targetSummary(event)}
           </span>
-
           {event.dueDate ? (
             <span className="inline-flex items-center gap-1">
               <CalendarDays className="h-3 w-3" />
               Due {new Date(event.dueDate).toLocaleDateString()}
             </span>
           ) : null}
-
           {event.kioskMode ? (
             <span className="inline-flex items-center gap-1 text-slate-700">
               <Smartphone className="h-3 w-3" />
-              Kiosk enabled
+              Kiosk
             </span>
           ) : null}
-
           {event.paymentAccountLabel ? (
             <span className="inline-flex items-center gap-1">
               {event.paymentAccountMethod === "UPI" ? (
@@ -1485,37 +1478,38 @@ function EventCard({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* Action buttons */}
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
           {event.status === "DRAFT" ? (
-            <Button size="sm" className="h-8 rounded-lg" onClick={() => onActivate(event.id)}>
-              <Send className="mr-1 h-3.5 w-3.5" />
+            <Button size="sm" className="h-7 rounded-lg px-2.5 text-[11px]" onClick={() => onActivate(event.id)}>
+              <Send className="mr-1 h-3 w-3" />
               Activate
             </Button>
           ) : null}
 
           {event.status === "ACTIVE" && event.kioskMode ? (
-            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onOpenKiosk(event)}>
-              <Fingerprint className="mr-1 h-3.5 w-3.5" />
-              Open Kiosk
+            <Button size="sm" variant="outline" className="h-7 rounded-lg px-2.5 text-[11px] border-slate-300" onClick={() => onOpenKiosk(event)}>
+              <Fingerprint className="mr-1 h-3 w-3" />
+              Kiosk
             </Button>
           ) : null}
 
           {(event.status === "DRAFT" || event.status === "ACTIVE") ? (
-            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onEdit(event)}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />
+            <Button size="sm" variant="outline" className="h-7 rounded-lg px-2.5 text-[11px] border-slate-300" onClick={() => onEdit(event)}>
+              <Pencil className="mr-1 h-3 w-3" />
               Edit
             </Button>
           ) : null}
 
           {event.status === "ACTIVE" ? (
-            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onComplete(event.id)}>
-              <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+            <Button size="sm" variant="outline" className="h-7 rounded-lg px-2.5 text-[11px] border-slate-300" onClick={() => onComplete(event.id)}>
+              <CheckCircle2 className="mr-1 h-3 w-3" />
               Complete
             </Button>
           ) : null}
 
           {event.status === "ACTIVE" ? (
-            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onCancel(event.id)}>
+            <Button size="sm" variant="outline" className="h-7 rounded-lg px-2.5 text-[11px] border-slate-300" onClick={() => onCancel(event.id)}>
               Cancel
             </Button>
           ) : null}
@@ -1524,18 +1518,18 @@ function EventCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 rounded-lg border-red-200 text-red-600 hover:bg-red-50"
+              className="h-7 rounded-lg px-2.5 text-[11px] border-red-200 text-red-600 hover:bg-red-50"
               onClick={() => onDelete(event.id)}
             >
-              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              <Trash2 className="mr-1 h-3 w-3" />
               Delete
             </Button>
           ) : null}
 
           {showDownload ? (
-            <Button size="sm" variant="outline" className="h-8 rounded-lg" onClick={() => onDownload(event)}>
-              <Download className="mr-1 h-3.5 w-3.5" />
-              CSV Report
+            <Button size="sm" variant="outline" className="h-7 rounded-lg px-2.5 text-[11px] border-slate-300" onClick={() => onDownload(event)}>
+              <Download className="mr-1 h-3 w-3" />
+              CSV
             </Button>
           ) : null}
         </div>
