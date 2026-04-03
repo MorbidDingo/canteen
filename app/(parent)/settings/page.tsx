@@ -307,55 +307,43 @@ export default function SettingsPage() {
 
   return (
     <div className="app-shell-compact space-y-4">
-      <div className="app-header-card bg-[linear-gradient(120deg,rgba(251,146,60,0.14),rgba(251,191,36,0.06)_45%,transparent_100%)]">
-        <h1 className="app-title">Settings</h1>
-        <p className="app-subtitle">
-          Manage family controls, communication preferences, and premium features.
+      <div className="pt-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-[13px] text-muted-foreground mt-0.5">
+          Family, preferences & premium
         </p>
       </div>
 
       {/* Certe+ Subscription Card */}
-      <Card className="overflow-hidden rounded-2xl border border-amber-200/40 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 shadow-[0_4px_24px_rgba(180,120,0,0.08)] dark:border-amber-200/15 dark:from-amber-950/25 dark:via-background dark:to-orange-950/20 dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
-        <CardContent className="p-5">
-          <button
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card p-5">
+        <button
             type="button"
             className="flex w-full items-center justify-between"
             onClick={() => setCertePlusExpanded((s) => !s)}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm">
-                <Sparkles className="h-4 w-4 text-white" />
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-foreground flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-background" />
               </div>
               <div>
-                <h3 className="font-bold text-sm tracking-tight">Certe+</h3>
+                <h3 className="font-semibold text-sm tracking-tight">Certe+</h3>
                 <p className="text-[11px] text-muted-foreground">
                   {certePlus?.active
-                    ? "Your premium benefits"
-                    : "Premium features & AI"}
+                    ? "Active"
+                    : "From ₹79/week"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               {certePlusResolved ? (
                 certePlus?.active ? (
-                  <Badge className="border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <Badge className="border-green-200/60 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-950/40 dark:text-green-300">
                     <CheckCircle className="mr-1 h-3 w-3" /> Active
                   </Badge>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="border-amber-300/60 text-amber-700 dark:border-amber-400/30 dark:text-amber-300"
-                  >
-                    From 79/week
-                  </Badge>
-                )
+                ) : null
               ) : (
-                <Badge
-                  variant="outline"
-                  className="border-slate-300 text-slate-600"
-                >
+                <Badge variant="outline" className="text-muted-foreground">
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                  Checking
                 </Badge>
               )}
               <ChevronDown
@@ -368,11 +356,11 @@ export default function SettingsPage() {
           </button>
 
           {certePlusExpanded && (
-            <div className="mt-4 border-t border-amber-200/25 dark:border-amber-500/15 pt-4">
+            <div className="mt-4 border-t border-border/30 pt-4">
           {!certePlusResolved ? (
-            <div className="flex items-center gap-2 rounded-xl border border-amber-200/40 bg-white/60 px-3 py-2.5 text-xs text-muted-foreground dark:bg-white/5">
+            <div className="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Syncing your Certe+ status...
+              Syncing status...
             </div>
           ) : certePlus?.active && certePlus.subscription ? (
             <div className="space-y-3">
@@ -382,16 +370,16 @@ export default function SettingsPage() {
                   isGeneralAccount ? "grid-cols-2" : "grid-cols-3",
                 )}
               >
-                <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                <div className="rounded-xl bg-muted/40 p-2.5 text-center">
                   <p className="text-[10px] text-muted-foreground">Expires</p>
-                  <p className="text-xs font-semibold">
+                  <p className="text-xs font-medium">
                     {new Date(certePlus.subscription.endDate).toLocaleDateString()}
                   </p>
                 </div>
                 {!isGeneralAccount && (
-                  <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                  <div className="rounded-xl bg-muted/40 p-2.5 text-center">
                     <p className="text-[10px] text-muted-foreground">Overdraft</p>
-                    <p className="text-xs font-semibold">
+                    <p className="text-xs font-medium">
                       {(
                         CERTE_PLUS.WALLET_OVERDRAFT_LIMIT -
                         certePlus.subscription.walletOverdraftUsed
@@ -400,9 +388,9 @@ export default function SettingsPage() {
                     </p>
                   </div>
                 )}
-                <div className="rounded-xl border border-amber-200/30 bg-white/60 p-2.5 text-center dark:bg-white/5">
+                <div className="rounded-xl bg-muted/40 p-2.5 text-center">
                   <p className="text-[10px] text-muted-foreground">Late returns</p>
-                  <p className="text-xs font-semibold">{totalPenaltyLeft} left</p>
+                  <p className="text-xs font-medium">{totalPenaltyLeft} left</p>
                 </div>
               </div>
 
@@ -413,7 +401,7 @@ export default function SettingsPage() {
                       className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                         benefit.comingSoon
                           ? "bg-muted text-muted-foreground"
-                          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                          : "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
                       }`}
                     >
                       {benefit.comingSoon ? (
@@ -443,7 +431,7 @@ export default function SettingsPage() {
                       className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
                         benefit.comingSoon
                           ? "bg-muted text-muted-foreground"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                          : "bg-muted text-foreground"
                       }`}
                     >
                       {benefit.comingSoon ? (
@@ -475,15 +463,15 @@ export default function SettingsPage() {
                     type="button"
                     onClick={() => setSelectedPlan(plan.key)}
                     className={cn(
-                      "rounded-xl border p-2.5 text-left transition-all",
+                      "rounded-xl border p-3 text-left transition-all",
                       selectedPlan === plan.key
-                        ? "border-amber-400 bg-amber-50/80 ring-1 ring-amber-400/50 dark:bg-amber-900/25"
-                        : "border-amber-200/40 bg-white/60 hover:border-amber-300 dark:border-amber-200/15 dark:bg-white/5",
+                        ? "border-foreground bg-muted/60 ring-1 ring-foreground/20"
+                        : "border-border/50 bg-muted/25 hover:border-border",
                     )}
                   >
-                    <p className="text-xs font-semibold">{plan.label}</p>
-                    <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
-                      {plan.price} credits
+                    <p className="text-xs font-medium">{plan.label}</p>
+                    <p className="text-sm font-semibold">
+                      ₹{plan.price}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       {plan.duration}
@@ -494,7 +482,7 @@ export default function SettingsPage() {
 
               <Button
                 size="sm"
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-sm"
+                className="w-full"
                 onClick={handleSubscribe}
                 disabled={subscribing}
               >
@@ -524,44 +512,38 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card p-5">
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">Theme</h3>
-            <p className="text-xs text-muted-foreground">
-              Choose your preferred app appearance.
-            </p>
+            <h3 className="text-sm font-medium">Theme</h3>
           </div>
           <ThemeSelector />
         </div>
       </Card>
 
-      <CardContent className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-0">
+      <CardContent className="overflow-hidden rounded-2xl border border-border/40 bg-card p-0">
         <div className="flex flex-1 flex-col justify-around">
           {visibleSettingItems.map(
             ({ href, label, description, icon: Icon }) => (
               <Link
                 key={href}
                 href={withParentMode(href)}
-                className="flex items-center gap-3 border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/50 last:border-b-0"
+                className="flex items-center gap-3 border-b border-border/30 px-4 py-3.5 transition-colors hover:bg-muted/40 last:border-b-0"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted/80">
-                  <Icon className="h-4 w-4" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/50">
+                  <Icon className="h-4 w-4 text-foreground/70" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium leading-none">{label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {description}
-                  </p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
               </Link>
             ),
           )}
         </div>
       </CardContent>
 
-      <Card className="overflow-hidden rounded-2xl border border-destructive/30 bg-card/70 p-4">
+      <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-sm font-semibold">Sign out</h3>
