@@ -523,20 +523,19 @@ function ParentLayoutContent({
   const renderPaymentEventDetail = (event: PaymentEventItem) => (
     <div className="space-y-4">
       {event.description && (
-        <p className="text-sm text-muted-foreground">{event.description}</p>
+        <p className="text-[13px] text-muted-foreground">{event.description}</p>
       )}
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
+      <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3.5">
         <div>
-          <p className="text-xs text-muted-foreground">Amount per child</p>
-          <p className="text-2xl font-bold flex items-center gap-1">
-            <IndianRupee className="h-5 w-5" />
-            {event.amount.toFixed(2)}
+          <p className="text-xs text-muted-foreground">Amount</p>
+          <p className="text-2xl font-semibold tabular-nums mt-0.5">
+            <span className="text-base text-muted-foreground">₹</span>{event.amount.toFixed(0)}
           </p>
         </div>
         {event.dueDate && (
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">Due date</p>
-            <p className={cn("text-sm font-semibold", new Date(event.dueDate) < new Date() && !event.children.every(c => c.paid) ? "text-destructive" : "")}>
+            <p className="text-xs text-muted-foreground">Due</p>
+            <p className={cn("text-sm font-medium mt-0.5", new Date(event.dueDate) < new Date() && !event.children.every(c => c.paid) ? "text-destructive" : "")}>
               {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
             </p>
           </div>
@@ -605,9 +604,8 @@ function ParentLayoutContent({
 
     if (paymentEvents.length === 0 && paymentReceipts.length === 0) {
       return (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-          <IoCalendar className="mx-auto h-6 w-6 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No payment events yet</p>
+        <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center">
+          <p className="text-xs text-muted-foreground">No payment events yet</p>
         </div>
       );
     }
@@ -616,7 +614,7 @@ function ParentLayoutContent({
       <div className="space-y-3">
         {activeEvents.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Pending</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">Pending</p>
             {activeEvents.map((event) => {
               const overdue = event.dueDate ? new Date(event.dueDate) < new Date() : false;
               const paid = event.children.every((c) => c.paid);
@@ -626,25 +624,23 @@ function ParentLayoutContent({
                   type="button"
                   onClick={() => setSelectedPaymentEvent(event)}
                   className={cn(
-                    "w-full text-left rounded-2xl border p-3.5 transition-all hover:border-primary/30",
-                    overdue && !paid ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-card/70",
+                    "w-full text-left rounded-xl p-4 transition-all",
+                    overdue && !paid ? "bg-destructive/5" : "bg-muted/40 hover:bg-muted/60",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{event.title}</p>
-                      {event.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{event.description}</p>}
+                      <p className="text-sm font-medium truncate">{event.title}</p>
                       {event.dueDate && (
-                        <p className={cn("text-[11px] mt-1", overdue && !paid ? "text-destructive font-medium" : "text-muted-foreground")}>
+                        <p className={cn("text-[11px] mt-0.5", overdue && !paid ? "text-destructive" : "text-muted-foreground")}>
                           Due {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                           {overdue && !paid && " · Overdue"}
                         </p>
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={cn("text-lg font-bold", paid ? "text-green-600 dark:text-green-400" : "")}>₹{event.amount.toFixed(0)}</p>
+                      <p className={cn("text-base font-semibold tabular-nums", paid ? "text-green-600 dark:text-green-400" : "")}>₹{event.amount.toFixed(0)}</p>
                       {paid && <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5 justify-end"><CheckCircle2 className="h-3 w-3" />Paid</span>}
-                      {!paid && overdue && <AlertCircle className="h-4 w-4 text-destructive ml-auto" />}
                     </div>
                   </div>
                 </button>
@@ -654,17 +650,17 @@ function ParentLayoutContent({
         )}
         {pastEvents.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">History</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">History</p>
             {pastEvents.map((event) => (
               <button
                 key={event.id}
                 type="button"
                 onClick={() => setSelectedPaymentEvent(event)}
-                className="w-full text-left rounded-2xl border border-border/40 bg-card/50 p-3.5 transition-all hover:border-primary/20"
+                className="w-full text-left rounded-xl bg-muted/25 hover:bg-muted/40 p-4 transition-all"
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium truncate">{event.title}</p>
-                  <p className="text-sm font-semibold text-muted-foreground shrink-0">₹{event.amount.toFixed(0)}</p>
+                  <p className="text-sm font-medium tabular-nums text-muted-foreground shrink-0">₹{event.amount.toFixed(0)}</p>
                 </div>
               </button>
             ))}
@@ -677,30 +673,29 @@ function ParentLayoutContent({
   const renderNotificationList = () => (
     <>
       {notifLoading ? (
-        <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-          Loading notifications...
+        <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+          Loading...
         </div>
       ) : noticeItems.length === 0 && notifItems.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-          <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
+        <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center">
+          <p className="text-xs text-muted-foreground">Nothing yet</p>
         </div>
       ) : (
         <div className="space-y-1">
-          {/* Management notices – shown first with premium styling */}
+          {/* Management notices */}
           {noticeItems.map((n) => (
             <div
               key={n.id}
               className={cn(
-                "rounded-xl border px-3 py-2.5 transition-colors",
+                "rounded-xl px-3.5 py-3 transition-colors",
                 n.acknowledged
-                  ? "border-border/40 bg-card/50"
-                  : "border-violet-200 bg-violet-50/70 dark:border-violet-800/50 dark:bg-violet-950/20",
+                  ? "bg-transparent"
+                  : "bg-muted/50",
               )}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-semibold text-violet-900 dark:text-violet-100")}>
+                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-medium")}>
                     {n.title}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{n.message}</p>
@@ -708,17 +703,17 @@ function ParentLayoutContent({
                     <button
                       type="button"
                       onClick={() => setActiveNotice(n)}
-                      className="text-[11px] font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 underline-offset-2 hover:underline"
+                      className="text-[11px] font-medium text-foreground/70 hover:text-foreground underline-offset-2 hover:underline"
                     >
-                      Open to view full
+                      View
                     </button>
-                    <span className="text-[10px] text-muted-foreground/60">
+                    <span className="text-[10px] text-muted-foreground/50">
                       · {new Date(n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     </span>
                   </div>
                 </div>
                 {!n.acknowledged && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 )}
               </div>
             </div>
@@ -730,22 +725,22 @@ function ParentLayoutContent({
               type="button"
               onClick={() => void markNotifAsRead(n.id, n.type)}
               className={cn(
-                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                "w-full text-left rounded-xl px-3.5 py-3 transition-colors",
                 n.readAt
-                  ? "hover:bg-card/70"
-                  : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
+                  ? "hover:bg-muted/40"
+                  : "bg-muted/40 hover:bg-muted/60",
               )}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                  <p className={cn("text-sm leading-tight", !n.readAt && "font-medium")}>{n.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                  <p className="mt-0.5 text-[10px] text-muted-foreground/60">
                     {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
                 {!n.readAt && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 )}
               </div>
             </button>
@@ -1048,22 +1043,19 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="space-y-1 border-b border-border/60 px-5 py-3">
-                <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <IoCart className="h-4 w-4 text-primary" />
-                  Cart
-                </h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="px-5 py-4">
+                <h3 className="text-lg font-semibold tracking-tight">Cart</h3>
+                <p className="text-[13px] text-muted-foreground">
                   {cartCount > 0
-                    ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
-                    : "Your cart is empty. Add something from the menu."}
+                    ? `${cartCount} item${cartCount > 1 ? "s" : ""}`
+                    : "Empty"}
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto px-5">
                 {cartItems.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    No items yet. Tap Menu to start an order.
+                  <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                    Add items from the menu.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1073,15 +1065,13 @@ function ParentLayoutContent({
                       return (
                         <div
                           key={item.menuItemId}
-                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{item.name}</p>
-                              <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
-                            </div>
-                            <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">× {item.quantity}</p>
                           </div>
+                          <p className="text-sm font-medium tabular-nums">{`₹${lineTotal.toFixed(0)}`}</p>
                         </div>
                       );
                     })}
@@ -1089,13 +1079,14 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="space-y-2 border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
-                  <span className="text-sm text-muted-foreground">Subtotal</span>
-                  <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
-                </div>
+              <div className="space-y-2 px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {cartCount > 0 && (
+                  <div className="flex items-center justify-between px-1 pb-1">
+                    <span className="text-[13px] text-muted-foreground">Subtotal</span>
+                    <span className="text-base font-semibold tabular-nums">{`₹${cartTotal.toFixed(0)}`}</span>
+                  </div>
+                )}
                 <Button
-                  variant="premium"
                   className="w-full"
                   disabled={cartCount === 0}
                   onClick={() => {
@@ -1103,7 +1094,7 @@ function ParentLayoutContent({
                     void router.push("/cart");
                   }}
                 >
-                  Open Full Cart
+                  View Cart
                 </Button>
                 {cartCount > 0 && (
                   <Button
@@ -1111,7 +1102,7 @@ function ParentLayoutContent({
                     className="w-full text-destructive hover:text-destructive"
                     onClick={clearCart}
                   >
-                    Clear Cart
+                    Clear
                   </Button>
                 )}
               </div>
@@ -1125,41 +1116,36 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="space-y-1 border-b border-border/60 px-5 py-3">
-                <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <IoWallet className="h-4 w-4 text-primary" />
-                  Family Wallet
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Quick balance snapshot across all child wallets.
-                </p>
+              <div className="px-5 py-4">
+                <h3 className="text-lg font-semibold tracking-tight">Wallet</h3>
+                <p className="text-[13px] text-muted-foreground">Family balance overview</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto px-5">
                 {walletsLoading ? (
-                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                    Loading wallet balances...
+                  <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                    Loading...
                   </div>
                 ) : walletError ? (
-                  <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                  <div className="space-y-3 rounded-2xl bg-destructive/5 p-5">
                     <p className="text-sm text-destructive">{walletError}</p>
                     <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
                       Retry
                     </Button>
                   </div>
                 ) : wallets.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    No wallet found yet. Add a child to activate family wallet.
+                  <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                    Add a child to activate wallet.
                   </div>
                 ) : (
                   <>
-                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {walletOwnerName}&apos;s Family Balance
+                    <div className="mb-4 rounded-2xl bg-muted/40 p-5">
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        {walletOwnerName}&apos;s Balance
                       </p>
-                      <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
-                        <IndianRupee className="h-5 w-5 text-primary" />
-                        {totalWalletBalance.toFixed(2)}
+                      <p className="mt-2 flex items-baseline gap-1 text-3xl font-semibold tabular-nums">
+                        <span className="text-lg text-muted-foreground">₹</span>
+                        {totalWalletBalance.toFixed(0)}
                       </p>
                     </div>
 
@@ -1167,19 +1153,12 @@ function ParentLayoutContent({
                       {wallets.map((wallet) => (
                         <div
                           key={wallet.childId}
-                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          className="flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-4 py-3"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold">{wallet.childName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {walletOwnerName}&apos;s available balance
-                              </p>
-                            </div>
-                            <p className="text-sm font-semibold text-primary">
-                              {`INR ${wallet.balance.toFixed(2)}`}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium">{wallet.childName}</p>
+                          <p className="text-sm font-medium tabular-nums text-foreground">
+                            ₹{wallet.balance.toFixed(0)}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1187,16 +1166,14 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
-                  variant="premium"
+                  className="w-full"
                   onClick={() => {
                     setWalletDrawerOpen(false);
                     void router.push(withParentMode("/wallet"));
                   }}
                 >
-                  <IoSparkles className="h-4 w-4" />
                   Open Wallet
                 </Button>
               </div>
@@ -1211,19 +1188,16 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-                <div className="space-y-0.5">
-                  <h3 className="flex items-center gap-2 text-base font-semibold">
-                    <IoNotifications className="h-4 w-4 text-orange-500" />
-                    Notifications
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{notifUnreadCount} unread</p>
+              <div className="flex items-center justify-between px-5 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight">Notifications</h3>
+                  <p className="text-[13px] text-muted-foreground">{notifUnreadCount} unread</p>
                 </div>
                 {notifUnreadCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    className="text-xs text-muted-foreground"
                     onClick={() => void markAllNotifsRead()}
                   >
                     Mark all read
@@ -1231,20 +1205,20 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto px-4">
                 {renderNotificationList()}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
+                  className="w-full"
                   variant="outline"
                   onClick={() => {
                     setNotificationDrawerOpen(false);
                     void router.push(withParentMode("/notifications"));
                   }}
                 >
-                  View All Notifications
+                  View All
                 </Button>
               </div>
             </div>
@@ -1258,7 +1232,7 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3">
+              <div className="flex items-center gap-2 px-5 py-4">
                 {selectedPaymentEvent ? (
                   <>
                     <button
@@ -1268,14 +1242,11 @@ function ParentLayoutContent({
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
-                    <h3 className="text-base font-semibold truncate">{selectedPaymentEvent.title}</h3>
+                    <h3 className="text-lg font-semibold tracking-tight truncate">{selectedPaymentEvent.title}</h3>
                   </>
                 ) : (
                   <>
-                    <h3 className="flex items-center gap-2 text-base font-semibold">
-                      <IoCalendar className="h-4 w-4 text-primary" />
-                      Payments
-                    </h3>
+                    <h3 className="text-lg font-semibold tracking-tight">Payments</h3>
                     {pendingEventsCount > 0 && (
                       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                         {pendingEventsCount}
@@ -1285,10 +1256,10 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto px-4">
                 {paymentsLoading ? (
-                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                    Loading payments...
+                  <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                    Loading...
                   </div>
                 ) : selectedPaymentEvent ? (
                   renderPaymentEventDetail(selectedPaymentEvent)
@@ -1297,9 +1268,9 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
+                  className="w-full"
                   variant="outline"
                   onClick={() => {
                     setPaymentsDrawerOpen(false);
@@ -1307,7 +1278,7 @@ function ParentLayoutContent({
                     void router.push("/events");
                   }}
                 >
-                  View Full History
+                  View History
                 </Button>
               </div>
             </div>
@@ -1324,25 +1295,22 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoCart className="h-4 w-4 text-primary" />
-                    Cart
-                  </SheetTitle>
-                  <SheetDescription>
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Cart</SheetTitle>
+                  <SheetDescription className="text-[13px]">
                     {cartCount > 0
-                      ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
-                      : "Your cart is empty. Add something from the menu."}
+                      ? `${cartCount} item${cartCount > 1 ? "s" : ""}`
+                      : "Empty"}
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-6">
                   {cartItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      No items yet. Tap Menu to start an order.
+                    <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                      Add items from the menu.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1352,15 +1320,13 @@ function ParentLayoutContent({
                         return (
                           <div
                             key={item.menuItemId}
-                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                            className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">{item.name}</p>
-                                <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
-                              </div>
-                              <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">× {item.quantity}</p>
                             </div>
+                            <p className="text-sm font-medium tabular-nums">{`₹${lineTotal.toFixed(0)}`}</p>
                           </div>
                         );
                       })}
@@ -1368,14 +1334,15 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
-                      <span className="text-sm text-muted-foreground">Subtotal</span>
-                      <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
-                    </div>
+                <SheetFooter className="px-6 py-5">
+                  <div className="space-y-2 w-full">
+                    {cartCount > 0 && (
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <span className="text-[13px] text-muted-foreground">Subtotal</span>
+                        <span className="text-base font-semibold tabular-nums">{`₹${cartTotal.toFixed(0)}`}</span>
+                      </div>
+                    )}
                     <Button
-                      variant="premium"
                       className="w-full"
                       disabled={cartCount === 0}
                       onClick={() => {
@@ -1383,7 +1350,7 @@ function ParentLayoutContent({
                         void router.push("/cart");
                       }}
                     >
-                      Open Full Cart
+                      View Cart
                     </Button>
                     {cartCount > 0 && (
                       <Button
@@ -1391,7 +1358,7 @@ function ParentLayoutContent({
                         className="w-full text-destructive hover:text-destructive"
                         onClick={clearCart}
                       >
-                        Clear Cart
+                        Clear
                       </Button>
                     )}
                   </div>
@@ -1409,44 +1376,39 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoWallet className="h-4 w-4 text-primary" />
-                    Family Wallet
-                  </SheetTitle>
-                  <SheetDescription>
-                    Quick balance snapshot across all child wallets.
-                  </SheetDescription>
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Wallet</SheetTitle>
+                  <SheetDescription className="text-[13px]">Family balance overview</SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-6">
                   {walletsLoading ? (
-                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                      Loading wallet balances...
+                    <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </div>
                   ) : walletError ? (
-                    <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                    <div className="space-y-3 rounded-2xl bg-destructive/5 p-5">
                       <p className="text-sm text-destructive">{walletError}</p>
                       <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
                         Retry
                       </Button>
                     </div>
                   ) : wallets.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      No wallet found yet. Add a child to activate family wallet.
+                    <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                      Add a child to activate wallet.
                     </div>
                   ) : (
                     <>
-                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          {walletOwnerName}&apos;s Family Balance
+                    <div className="mb-4 rounded-2xl bg-muted/40 p-5">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {walletOwnerName}&apos;s Balance
                         </p>
-                        <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
-                          <IndianRupee className="h-5 w-5 text-primary" />
-                          {totalWalletBalance.toFixed(2)}
+                        <p className="mt-2 flex items-baseline gap-1 text-3xl font-semibold tabular-nums">
+                          <span className="text-lg text-muted-foreground">₹</span>
+                          {totalWalletBalance.toFixed(0)}
                         </p>
                       </div>
 
@@ -1454,19 +1416,12 @@ function ParentLayoutContent({
                         {wallets.map((wallet) => (
                           <div
                             key={wallet.childId}
-                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                            className="flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-4 py-3"
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold">{wallet.childName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {walletOwnerName}&apos;s available balance
-                                </p>
-                              </div>
-                              <p className="text-sm font-semibold text-primary">
-                                {`INR ${wallet.balance.toFixed(2)}`}
-                              </p>
-                            </div>
+                            <p className="text-sm font-medium">{wallet.childName}</p>
+                            <p className="text-sm font-medium tabular-nums text-foreground">
+                              ₹{wallet.balance.toFixed(0)}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -1474,16 +1429,14 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <Button
-                    className="w-full gap-2"
-                    variant="premium"
+                    className="w-full"
                     onClick={() => {
                       setWalletDrawerOpen(false);
                       void router.push(withParentMode("/wallet"));
                     }}
                   >
-                    <IoSparkles className="h-4 w-4" />
                     Open Wallet
                   </Button>
                 </SheetFooter>
@@ -1501,43 +1454,40 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoNotifications className="h-4 w-4 text-orange-500" />
-                    Notifications
-                  </SheetTitle>
-                  <SheetDescription>
-                    {notifUnreadCount} unread notification{notifUnreadCount !== 1 ? "s" : ""}
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Notifications</SheetTitle>
+                  <SheetDescription className="text-[13px]">
+                    {notifUnreadCount} unread
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto px-4">
                   {renderNotificationList()}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <div className="space-y-2 w-full">
                     {notifUnreadCount > 0 && (
                       <Button
                         variant="ghost"
-                        className="w-full text-xs text-orange-600"
+                        className="w-full text-xs text-muted-foreground"
                         onClick={() => void markAllNotifsRead()}
                       >
                         Mark all as read
                       </Button>
                     )}
                     <Button
-                      className="w-full gap-2"
+                      className="w-full"
                       variant="outline"
                       onClick={() => {
                         setNotificationDrawerOpen(false);
                         void router.push(withParentMode("/notifications"));
                       }}
                     >
-                      View All Notifications
+                      View All
                     </Button>
                   </div>
                 </SheetFooter>
@@ -1556,10 +1506,10 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="border-b border-border/60">
+                <SheetHeader className="px-6 py-5">
                   <div className="flex items-center gap-2">
                     {selectedPaymentEvent ? (
                       <>
@@ -1570,14 +1520,11 @@ function ParentLayoutContent({
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <SheetTitle className="text-base font-semibold truncate">{selectedPaymentEvent.title}</SheetTitle>
+                        <SheetTitle className="text-lg font-semibold tracking-tight truncate">{selectedPaymentEvent.title}</SheetTitle>
                       </>
                     ) : (
                       <>
-                        <SheetTitle className="flex items-center gap-2 text-base">
-                          <IoCalendar className="h-4 w-4 text-primary" />
-                          Payments
-                        </SheetTitle>
+                        <SheetTitle className="text-lg font-semibold tracking-tight">Payments</SheetTitle>
                         {pendingEventsCount > 0 && (
                           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                             {pendingEventsCount}
@@ -1591,10 +1538,10 @@ function ParentLayoutContent({
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-5">
                   {paymentsLoading ? (
-                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                      Loading payments...
+                    <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </div>
                   ) : selectedPaymentEvent ? (
                     renderPaymentEventDetail(selectedPaymentEvent)
@@ -1603,9 +1550,9 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <Button
-                    className="w-full gap-2"
+                    className="w-full"
                     variant="outline"
                     onClick={() => {
                       setPaymentsDrawerOpen(false);
@@ -1613,7 +1560,7 @@ function ParentLayoutContent({
                       void router.push("/events");
                     }}
                   >
-                    View Full History
+                    View History
                   </Button>
                 </SheetFooter>
               </div>
@@ -1626,20 +1573,19 @@ function ParentLayoutContent({
         open={showControlsSheet}
         onClose={() => setShowControlsSheet(false)}
       >
-        <div className="flex flex-col items-center gap-4 py-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <IoShieldCheckmark className="h-7 w-7 text-primary" />
+        <div className="flex flex-col items-center gap-5 py-6">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <IoShieldCheckmark className="h-6 w-6 text-foreground" />
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-bold">Unlock Controls</h3>
-            <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
-              Set spend limits and block items with Certe Plus.
+            <h3 className="text-lg font-semibold tracking-tight">Unlock Controls</h3>
+            <p className="mt-1 max-w-[260px] text-[13px] text-muted-foreground">
+              Set spend limits and block items with Certe+
             </p>
           </div>
           <Button
-            variant="premium"
             size="lg"
-            className="w-full max-w-[280px]"
+            className="w-full max-w-[260px]"
             onClick={() => {
               setShowControlsSheet(false);
               void router.push(withParentMode("/settings"));
@@ -1654,12 +1600,12 @@ function ParentLayoutContent({
       <Dialog open={activeNotice !== null} onOpenChange={(open) => { if (!open) setActiveNotice(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base leading-snug pr-4">
+            <DialogTitle className="text-base font-semibold leading-snug pr-4">
               {activeNotice?.title ?? "Notice"}
             </DialogTitle>
             <DialogDescription className="sr-only">Notice from management</DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-violet-100 bg-violet-50/50 dark:border-violet-900/30 dark:bg-violet-950/20 p-4">
+          <div className="rounded-xl bg-muted/40 p-5">
             <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
               {activeNotice?.message}
             </p>
@@ -1673,7 +1619,7 @@ function ParentLayoutContent({
           <DialogFooter>
             {activeNotice && !activeNotice.acknowledged ? (
               <Button
-                className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+                className="w-full"
                 onClick={() => { if (activeNotice) void acknowledgeNotice(activeNotice.id); }}
               >
                 Acknowledge
