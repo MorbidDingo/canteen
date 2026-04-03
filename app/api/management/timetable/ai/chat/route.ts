@@ -93,13 +93,12 @@ export async function POST(request: NextRequest) {
       maxIterations--;
 
       const toolUseBlocks = response.content.filter(
-        (block): block is Anthropic.ContentBlockParam & { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } =>
-          block.type === "tool_use",
+        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
       );
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const toolUse of toolUseBlocks) {
-        const result = await executeTimetableTool(toolUse.name, toolUse.input, {
+        const result = await executeTimetableTool(toolUse.name, toolUse.input as Record<string, unknown>, {
           timetableId,
           organizationId,
           userId: access.actorUserId,
@@ -111,7 +110,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      anthropicMessages.push({ role: "assistant", content: response.content as Anthropic.ContentBlockParam[] });
+      anthropicMessages.push({ role: "assistant", content: response.content });
       anthropicMessages.push({ role: "user", content: toolResults });
 
       response = await anthropic.messages.create({
