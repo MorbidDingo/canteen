@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   // Check if user has content creation permission
   const contentPerm = await getContentPermission(organizationId, userId);
   const canCreate = contentPerm !== null;
+  const permissionScope: string | null = contentPerm?.scope ?? null;
 
   const { searchParams } = new URL(request.url);
   const tagFilter = searchParams.get("tagId");
@@ -174,7 +175,7 @@ export async function GET(request: NextRequest) {
     .offset(offset);
 
   if (matchedPostIds.length === 0) {
-    return NextResponse.json({ posts: [], total, page, limit, canCreate });
+    return NextResponse.json({ posts: [], total, page, limit, canCreate, permissionScope });
   }
 
   const postIds = matchedPostIds.map((r) => r.postId);
@@ -262,5 +263,5 @@ export async function GET(request: NextRequest) {
     attachments: attachmentsByPost.get(p.id) || [],
   }));
 
-  return NextResponse.json({ posts: feed, total, page, limit, canCreate });
+  return NextResponse.json({ posts: feed, total, page, limit, canCreate, permissionScope });
 }

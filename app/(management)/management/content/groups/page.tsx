@@ -63,6 +63,11 @@ export default function ContentGroupsPage() {
   const [newDescription, setNewDescription] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Create form — populate from classes/groups
+  const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+
   // Detail view
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -90,9 +95,19 @@ export default function ContentGroupsPage() {
     }
   }, []);
 
+  const fetchClasses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/content/classes");
+      if (!res.ok) return;
+      const data = await res.json();
+      setAvailableClasses((data.classes ?? []).map((c: { className: string }) => c.className).filter(Boolean));
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     fetchGroups();
-  }, [fetchGroups]);
+    fetchClasses();
+  }, [fetchGroups, fetchClasses]);
 
   const fetchMembers = useCallback(async (groupId: string) => {
     setMembersLoading(true);
@@ -143,16 +158,25 @@ export default function ContentGroupsPage() {
       const res = await fetch("/api/management/content/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, description: newDescription || undefined }),
+        body: JSON.stringify({
+          name: newName,
+          description: newDescription || undefined,
+          addFromClasses: selectedClasses.length > 0 ? selectedClasses : undefined,
+          addFromGroupIds: selectedGroupIds.length > 0 ? selectedGroupIds : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to create group");
       }
-      toast.success("Group created");
+      const data = await res.json();
+      const membersMsg = data.membersAdded > 0 ? ` with ${data.membersAdded} member(s)` : "";
+      toast.success(`Group created${membersMsg}`);
       setCreateOpen(false);
       setNewName("");
       setNewDescription("");
+      setSelectedClasses([]);
+      setSelectedGroupIds([]);
       fetchGroups();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create group");
@@ -375,7 +399,10 @@ export default function ContentGroupsPage() {
               <Button variant="outline" size="icon" onClick={fetchGroups} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               </Button>
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <Dialog open={createOpen} onOpenChange={(open) => {
+                setCreateOpen(open);
+                if (!open) { setNewName(""); setNewDescription(""); setSelectedClasses([]); setSelectedGroupIds([]); }
+              }}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="h-4 w-4 mr-2" />
@@ -403,6 +430,57 @@ export default function ContentGroupsPage() {
                         onChange={(e) => setNewDescription(e.target.value)}
                       />
                     </div>
+
+                    {/* Pre-populate from classes */}
+                    {availableClasses.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Add parents from classes (optional)</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableClasses.map((cls) => {
+                            const isSelected = selectedClasses.includes(cls);
+                            return (
+                              <button
+                                key={cls}
+                                type="button"
+                                onClick={() => setSelectedClasses((prev) => isSelected ? prev.filter((c) => c !== cls) : [...prev, cls])}
+                                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${isSelected ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground/50"}`}
+                              >
+                                {cls}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selectedClasses.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground">{selectedClasses.length} class{selectedClasses.length > 1 ? "es" : ""} selected — parents will be auto-added</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Pre-populate from other groups */}
+                    {groups.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Import from existing groups (optional)</label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {groups.map((g) => {
+                            const isSelected = selectedGroupIds.includes(g.id);
+                            return (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => setSelectedGroupIds((prev) => isSelected ? prev.filter((id) => id !== g.id) : [...prev, g.id])}
+                                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${isSelected ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground/50"}`}
+                              >
+                                {g.name} ({g.memberCount})
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selectedGroupIds.length > 0 && (
+                          <p className="text-[11px] text-muted-foreground">{selectedGroupIds.length} group{selectedGroupIds.length > 1 ? "s" : ""} selected — members will be imported</p>
+                        )}
+                      </div>
+                    )}
+
                     <Button
                       className="w-full"
                       onClick={handleCreate}

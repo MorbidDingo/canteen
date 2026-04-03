@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { contentGroup, contentGroupMember, user } from "@/lib/db/schema";
-import { eq, and, count } from "drizzle-orm";
+import { contentGroup, contentGroupMember, user, child, organizationMembership } from "@/lib/db/schema";
+import { eq, and, count, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ groups });
 }
 
-// POST — create a new group
+// POST — create a new group, optionally pre-populating from classes or other groups
 export async function POST(request: NextRequest) {
   let access;
   try {
@@ -73,7 +73,12 @@ export async function POST(request: NextRequest) {
 
   const organizationId = access.activeOrganizationId!;
   const body = await request.json();
-  const { name, description } = body as { name?: string; description?: string };
+  const { name, description, addFromClasses, addFromGroupIds } = body as {
+    name?: string;
+    description?: string;
+    addFromClasses?: string[];
+    addFromGroupIds?: string[];
+  };
 
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
@@ -107,14 +112,58 @@ export async function POST(request: NextRequest) {
     })
     .returning();
 
+  // Collect user IDs to add as members
+  const userIdsToAdd = new Set<string>();
+
+  // Add parents from specific classes
+  if (addFromClasses && addFromClasses.length > 0) {
+    const classParents = await db
+      .select({ parentId: child.parentId })
+      .from(child)
+      .where(
+        and(
+          eq(child.organizationId, organizationId),
+          inArray(child.className, addFromClasses),
+        ),
+      );
+    for (const classParent of classParents) {
+      if (classParent.parentId) userIdsToAdd.add(classParent.parentId);
+    }
+  }
+
+  // Add members from other groups
+  if (addFromGroupIds && addFromGroupIds.length > 0) {
+    const groupMembers = await db
+      .select({ userId: contentGroupMember.userId })
+      .from(contentGroupMember)
+      .where(inArray(contentGroupMember.groupId, addFromGroupIds));
+    for (const groupMember of groupMembers) {
+      userIdsToAdd.add(groupMember.userId);
+    }
+  }
+
+  // Insert members
+  if (userIdsToAdd.size > 0) {
+    const memberValues = Array.from(userIdsToAdd).map((userId) => ({
+      groupId: created.id,
+      userId,
+    }));
+    // Insert in batches to avoid parameter limits
+    const batchSize = 100;
+    for (let i = 0; i < memberValues.length; i += batchSize) {
+      const batch = memberValues.slice(i, i + batchSize);
+      await db.insert(contentGroupMember).values(batch).onConflictDoNothing();
+    }
+  }
+
   logAudit({
     organizationId,
     userId: access.actorUserId,
     userRole: access.membershipRole ?? "MANAGEMENT",
     action: AUDIT_ACTIONS.CONTENT_GROUP_CREATED,
-    details: { groupId: created.id, name: created.name },
+    details: { groupId: created.id, name: created.name, membersAdded: userIdsToAdd.size },
     request,
   });
 
-  return NextResponse.json({ group: created }, { status: 201 });
+  return NextResponse.json({ group: created, membersAdded: userIdsToAdd.size }, { status: 201 });
 }

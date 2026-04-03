@@ -63,6 +63,10 @@ export default function NewPostPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  // Permission
+  const [permissionScope, setPermissionScope] = useState<string | null>(null);
+  const [permissionLoaded, setPermissionLoaded] = useState(false);
+
   // Lookups
   const [tags, setTags] = useState<TagItem[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -82,15 +86,26 @@ export default function NewPostPage() {
   const [userResults, setUserResults] = useState<OrgMember[]>([]);
   const [userSearching, setUserSearching] = useState(false);
 
+  const canCreateAssignment = permissionScope === "BOTH" || permissionScope === "ASSIGNMENT";
+  const canCreateNote = permissionScope === "BOTH" || permissionScope === "NOTE";
+
   const fetchLookups = useCallback(async () => {
-    const [tagsRes, groupsRes, classesRes] = await Promise.all([
+    const [tagsRes, groupsRes, classesRes, feedRes] = await Promise.all([
       fetch("/api/content/tags"),
       fetch("/api/content/groups"),
       fetch("/api/content/classes"),
+      fetch("/api/content/feed?limit=1"),
     ]);
     if (tagsRes.ok) setTags((await tagsRes.json()).tags);
     if (groupsRes.ok) setGroups((await groupsRes.json()).groups);
     if (classesRes.ok) setClasses((await classesRes.json()).classes);
+    if (feedRes.ok) {
+      const feedData = await feedRes.json();
+      setPermissionScope(feedData.permissionScope ?? null);
+      // Auto-select the allowed type
+      if (feedData.permissionScope === "NOTE") setType("NOTE");
+    }
+    setPermissionLoaded(true);
   }, []);
 
   useEffect(() => { fetchLookups(); }, [fetchLookups]);
@@ -105,7 +120,7 @@ export default function NewPostPage() {
       setUserSearching(true);
       try {
         const res = await fetch(
-          `/api/management/content/permissions/members?q=${encodeURIComponent(userSearch)}`,
+          `/api/content/members?q=${encodeURIComponent(userSearch)}`,
         );
         if (res.ok) {
           const data = await res.json();
@@ -302,13 +317,32 @@ export default function NewPostPage() {
         </div>
       </div>
 
+      {/* No permission state */}
+      {permissionLoaded && !canCreateAssignment && !canCreateNote && (
+        <div className="flex flex-col items-center gap-3 py-20 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
+            <ClipboardList className="h-8 w-8 text-muted-foreground/40" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">No Content Permission</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Contact your organization&apos;s management to request access.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Type selector — pill style */}
+      {(canCreateAssignment || canCreateNote) && (
       <div className="flex gap-2 mb-5">
         <button
           type="button"
-          onClick={() => setType("ASSIGNMENT")}
+          onClick={() => canCreateAssignment && setType("ASSIGNMENT")}
+          disabled={!canCreateAssignment}
           className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 py-3.5 text-sm font-medium transition-all ${
-            type === "ASSIGNMENT"
+            !canCreateAssignment
+              ? "border-border/20 bg-muted/30 text-muted-foreground/40 cursor-not-allowed opacity-50"
+              : type === "ASSIGNMENT"
               ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/20 dark:text-blue-300"
               : "border-border/40 bg-card text-muted-foreground hover:border-border"
           }`}
@@ -318,9 +352,12 @@ export default function NewPostPage() {
         </button>
         <button
           type="button"
-          onClick={() => setType("NOTE")}
+          onClick={() => canCreateNote && setType("NOTE")}
+          disabled={!canCreateNote}
           className={`flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 py-3.5 text-sm font-medium transition-all ${
-            type === "NOTE"
+            !canCreateNote
+              ? "border-border/20 bg-muted/30 text-muted-foreground/40 cursor-not-allowed opacity-50"
+              : type === "NOTE"
               ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-950/20 dark:text-emerald-300"
               : "border-border/40 bg-card text-muted-foreground hover:border-border"
           }`}
@@ -329,6 +366,7 @@ export default function NewPostPage() {
           Note
         </button>
       </div>
+      )}
 
       {/* Form fields — card style sections */}
       <div className="space-y-4">

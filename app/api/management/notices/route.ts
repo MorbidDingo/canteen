@@ -28,6 +28,15 @@ const createNoticeSchema = z.object({
   targetUserIds: z.array(z.string()).optional(),
   eventDate: z.string().datetime().optional(),
   expiresAt: z.string().datetime().optional(),
+  // Exam-specific fields
+  examStartDate: z.string().datetime().optional(),
+  examEndDate: z.string().datetime().optional(),
+  examSubjects: z.array(z.object({
+    subject: z.string().min(1),
+    date: z.string(),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+  })).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -77,6 +86,9 @@ export async function POST(request: NextRequest) {
         targetUserIds: data.targetUserIds ? JSON.stringify(data.targetUserIds) : null,
         eventDate: data.eventDate ? new Date(data.eventDate) : null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+        examStartDate: data.examStartDate ? new Date(data.examStartDate) : null,
+        examEndDate: data.examEndDate ? new Date(data.examEndDate) : null,
+        examSubjects: data.examSubjects ? JSON.stringify(data.examSubjects) : null,
       })
       .returning();
 
@@ -128,6 +140,9 @@ export async function GET(request: NextRequest) {
         targetUserIds: managementNotice.targetUserIds,
         eventDate: managementNotice.eventDate,
         expiresAt: managementNotice.expiresAt,
+        examStartDate: managementNotice.examStartDate,
+        examEndDate: managementNotice.examEndDate,
+        examSubjects: managementNotice.examSubjects,
         createdAt: managementNotice.createdAt,
         createdByName: user.name,
         ackCount: sql<number>`(
