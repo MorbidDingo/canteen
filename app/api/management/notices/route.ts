@@ -16,12 +16,17 @@ import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 const TARGET_TYPES = ["ALL_PARENTS", "ALL_GENERAL", "ALL_USERS", "SPECIFIC_CLASS", "SPECIFIC_USERS"] as const;
 type TargetType = (typeof TARGET_TYPES)[number];
 
+const NOTICE_CATEGORIES = ["GENERAL", "EXAM", "EVENT", "HOLIDAY_ANNOUNCEMENT"] as const;
+type NoticeCategory = (typeof NOTICE_CATEGORIES)[number];
+
 const createNoticeSchema = z.object({
   title: z.string().min(1).max(200),
   message: z.string().min(1).max(5000),
+  category: z.enum(NOTICE_CATEGORIES).optional().default("GENERAL"),
   targetType: z.enum(TARGET_TYPES),
   targetClass: z.string().optional(),
   targetUserIds: z.array(z.string()).optional(),
+  eventDate: z.string().datetime().optional(),
   expiresAt: z.string().datetime().optional(),
 });
 
@@ -66,9 +71,11 @@ export async function POST(request: NextRequest) {
         createdBy: access.actorUserId,
         title: data.title,
         message: data.message,
+        category: data.category ?? "GENERAL",
         targetType: data.targetType,
         targetClass: data.targetClass ?? null,
         targetUserIds: data.targetUserIds ? JSON.stringify(data.targetUserIds) : null,
+        eventDate: data.eventDate ? new Date(data.eventDate) : null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
       })
       .returning();
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const access = await requireAccess({
       scope: "organization",
@@ -103,14 +110,23 @@ export async function GET(_request: NextRequest) {
     });
     const organizationId = access.activeOrganizationId!;
 
+    const { searchParams } = new URL(request.url);
+    const categoryFilter = searchParams.get("category") as NoticeCategory | null;
+
+    const whereClause = categoryFilter
+      ? and(eq(managementNotice.organizationId, organizationId), eq(managementNotice.category, categoryFilter))
+      : eq(managementNotice.organizationId, organizationId);
+
     const notices = await db
       .select({
         id: managementNotice.id,
         title: managementNotice.title,
         message: managementNotice.message,
+        category: managementNotice.category,
         targetType: managementNotice.targetType,
         targetClass: managementNotice.targetClass,
         targetUserIds: managementNotice.targetUserIds,
+        eventDate: managementNotice.eventDate,
         expiresAt: managementNotice.expiresAt,
         createdAt: managementNotice.createdAt,
         createdByName: user.name,
@@ -120,7 +136,7 @@ export async function GET(_request: NextRequest) {
       })
       .from(managementNotice)
       .leftJoin(user, eq(managementNotice.createdBy, user.id))
-      .where(eq(managementNotice.organizationId, organizationId))
+      .where(whereClause)
       .orderBy(desc(managementNotice.createdAt));
 
     // For each notice, compute estimated total target count
