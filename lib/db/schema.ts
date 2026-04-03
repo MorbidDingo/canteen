@@ -2428,3 +2428,302 @@ export const aiUsageLogRelations = relations(aiUsageLog, ({ one }) => ({
   user: one(user, { fields: [aiUsageLog.userId], references: [user.id] }),
   organization: one(organization, { fields: [aiUsageLog.organizationId], references: [organization.id] }),
 }));
+
+// ─── Timetable Scheduling System ─────────────────────────
+
+export const timetableConfig = pgTable("timetable_config", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default("Default"),
+  periodsPerDay: integer("periods_per_day").notNull().default(8),
+  daysPerWeek: integer("days_per_week").notNull().default(6),
+  periodDurationMinutes: integer("period_duration_minutes").notNull().default(45),
+  startTime: text("start_time").notNull().default("08:00"),
+  breakAfterPeriod: jsonb("break_after_period").$type<number[]>().default([]),
+  breakDurationMinutes: integer("break_duration_minutes").notNull().default(15),
+  lunchAfterPeriod: integer("lunch_after_period").default(4),
+  lunchDurationMinutes: integer("lunch_duration_minutes").notNull().default(30),
+  activeDays: jsonb("active_days").$type<string[]>().default(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableConfigRelations = relations(timetableConfig, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetableConfig.organizationId], references: [organization.id] }),
+  createdByUser: one(user, { fields: [timetableConfig.createdBy], references: [user.id] }),
+  timetables: many(timetable),
+}));
+
+export const timetableTeacher = pgTable("timetable_teacher", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shortCode: text("short_code").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  department: text("department"),
+  maxPeriodsPerDay: integer("max_periods_per_day").default(6),
+  maxPeriodsPerWeek: integer("max_periods_per_week").default(30),
+  preferredSlots: jsonb("preferred_slots").$type<{ day: string; period: number }[]>().default([]),
+  unavailableSlots: jsonb("unavailable_slots").$type<{ day: string; period: number }[]>().default([]),
+  consecutivePeriodLimit: integer("consecutive_period_limit").default(3),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableTeacherRelations = relations(timetableTeacher, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetableTeacher.organizationId], references: [organization.id] }),
+  linkedUser: one(user, { fields: [timetableTeacher.userId], references: [user.id] }),
+  subjectAssignments: many(timetableTeacherSubject),
+  slots: many(timetableSlot),
+}));
+
+export const timetableSubject = pgTable("timetable_subject", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shortCode: text("short_code").notNull(),
+  color: text("color").notNull().default("#6366f1"),
+  periodsPerWeek: integer("periods_per_week").notNull().default(5),
+  requiresLab: boolean("requires_lab").notNull().default(false),
+  isElective: boolean("is_elective").notNull().default(false),
+  preferMorning: boolean("prefer_morning").notNull().default(false),
+  preferAfternoon: boolean("prefer_afternoon").notNull().default(false),
+  maxConsecutive: integer("max_consecutive").default(2),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableSubjectRelations = relations(timetableSubject, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetableSubject.organizationId], references: [organization.id] }),
+  teacherAssignments: many(timetableTeacherSubject),
+  slots: many(timetableSlot),
+}));
+
+export const timetableClassroom = pgTable("timetable_classroom", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shortCode: text("short_code").notNull(),
+  capacity: integer("capacity").notNull().default(40),
+  roomType: text("room_type", { enum: ["REGULAR", "LAB", "AUDITORIUM", "LIBRARY", "SPORTS", "OTHER"] })
+    .notNull()
+    .default("REGULAR"),
+  hasProjector: boolean("has_projector").notNull().default(false),
+  hasAC: boolean("has_ac").notNull().default(false),
+  floor: text("floor"),
+  building: text("building"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableClassroomRelations = relations(timetableClassroom, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetableClassroom.organizationId], references: [organization.id] }),
+  slots: many(timetableSlot),
+}));
+
+export const timetableStudentGroup = pgTable("timetable_student_group", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shortCode: text("short_code").notNull(),
+  grade: text("grade"),
+  section: text("section"),
+  strength: integer("strength").notNull().default(30),
+  homeRoomId: text("home_room_id").references(() => timetableClassroom.id, { onDelete: "set null" }),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableStudentGroupRelations = relations(timetableStudentGroup, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetableStudentGroup.organizationId], references: [organization.id] }),
+  homeRoom: one(timetableClassroom, { fields: [timetableStudentGroup.homeRoomId], references: [timetableClassroom.id] }),
+  slots: many(timetableSlot),
+}));
+
+export const timetableTeacherSubject = pgTable("timetable_teacher_subject", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  teacherId: text("teacher_id")
+    .notNull()
+    .references(() => timetableTeacher.id, { onDelete: "cascade" }),
+  subjectId: text("subject_id")
+    .notNull()
+    .references(() => timetableSubject.id, { onDelete: "cascade" }),
+  studentGroupId: text("student_group_id")
+    .references(() => timetableStudentGroup.id, { onDelete: "set null" }),
+  isPrimary: boolean("is_primary").notNull().default(true),
+}, (table) => ({
+  uniqueAssignment: unique("unique_teacher_subject_group").on(table.teacherId, table.subjectId, table.studentGroupId),
+}));
+
+export const timetableTeacherSubjectRelations = relations(timetableTeacherSubject, ({ one }) => ({
+  teacher: one(timetableTeacher, { fields: [timetableTeacherSubject.teacherId], references: [timetableTeacher.id] }),
+  subject: one(timetableSubject, { fields: [timetableTeacherSubject.subjectId], references: [timetableSubject.id] }),
+  studentGroup: one(timetableStudentGroup, { fields: [timetableTeacherSubject.studentGroupId], references: [timetableStudentGroup.id] }),
+}));
+
+export const timetable = pgTable("timetable", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  configId: text("config_id")
+    .notNull()
+    .references(() => timetableConfig.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  version: integer("version").notNull().default(1),
+  status: text("status", { enum: ["DRAFT", "ACTIVE", "ARCHIVED"] }).notNull().default("DRAFT"),
+  generationMethod: text("generation_method", { enum: ["AI", "MANUAL", "HYBRID"] }).notNull().default("AI"),
+  conflictCount: integer("conflict_count").notNull().default(0),
+  score: doublePrecision("score").default(0),
+  aiExplanation: text("ai_explanation"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  publishedAt: timestamp("published_at"),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableRelations = relations(timetable, ({ one, many }) => ({
+  organization: one(organization, { fields: [timetable.organizationId], references: [organization.id] }),
+  config: one(timetableConfig, { fields: [timetable.configId], references: [timetableConfig.id] }),
+  createdByUser: one(user, { fields: [timetable.createdBy], references: [user.id] }),
+  slots: many(timetableSlot),
+  changeLogs: many(timetableChangeLog),
+}));
+
+export const timetableSlot = pgTable("timetable_slot", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  timetableId: text("timetable_id")
+    .notNull()
+    .references(() => timetable.id, { onDelete: "cascade" }),
+  day: text("day").notNull(),
+  period: integer("period").notNull(),
+  teacherId: text("teacher_id")
+    .references(() => timetableTeacher.id, { onDelete: "set null" }),
+  subjectId: text("subject_id")
+    .references(() => timetableSubject.id, { onDelete: "set null" }),
+  classroomId: text("classroom_id")
+    .references(() => timetableClassroom.id, { onDelete: "set null" }),
+  studentGroupId: text("student_group_id")
+    .references(() => timetableStudentGroup.id, { onDelete: "set null" }),
+  isLocked: boolean("is_locked").notNull().default(false),
+  isManualOverride: boolean("is_manual_override").notNull().default(false),
+  conflictFlags: jsonb("conflict_flags").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableSlotRelations = relations(timetableSlot, ({ one }) => ({
+  timetable: one(timetable, { fields: [timetableSlot.timetableId], references: [timetable.id] }),
+  teacher: one(timetableTeacher, { fields: [timetableSlot.teacherId], references: [timetableTeacher.id] }),
+  subject: one(timetableSubject, { fields: [timetableSlot.subjectId], references: [timetableSubject.id] }),
+  classroom: one(timetableClassroom, { fields: [timetableSlot.classroomId], references: [timetableClassroom.id] }),
+  studentGroup: one(timetableStudentGroup, { fields: [timetableSlot.studentGroupId], references: [timetableStudentGroup.id] }),
+}));
+
+export const timetableConstraint = pgTable("timetable_constraint", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["HARD", "SOFT"] }).notNull(),
+  category: text("category", {
+    enum: [
+      "NO_TEACHER_DOUBLE_BOOKING",
+      "NO_ROOM_DOUBLE_BOOKING",
+      "NO_GROUP_DOUBLE_BOOKING",
+      "ROOM_CAPACITY",
+      "TEACHER_MAX_PERIODS_DAY",
+      "TEACHER_MAX_PERIODS_WEEK",
+      "TEACHER_CONSECUTIVE_LIMIT",
+      "TEACHER_PREFERRED_SLOTS",
+      "TEACHER_UNAVAILABLE_SLOTS",
+      "SUBJECT_PREFERRED_TIME",
+      "SUBJECT_MAX_CONSECUTIVE",
+      "BALANCED_DAILY_LOAD",
+      "MINIMIZE_ROOM_CHANGES",
+      "CUSTOM",
+    ],
+  }).notNull(),
+  description: text("description").notNull(),
+  weight: integer("weight").notNull().default(50),
+  parameters: jsonb("parameters").$type<Record<string, unknown>>().default({}),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableConstraintRelations = relations(timetableConstraint, ({ one }) => ({
+  organization: one(organization, { fields: [timetableConstraint.organizationId], references: [organization.id] }),
+}));
+
+export const timetableChangeLog = pgTable("timetable_change_log", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  timetableId: text("timetable_id")
+    .notNull()
+    .references(() => timetable.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  changeType: text("change_type", {
+    enum: ["SLOT_MOVE", "SLOT_SWAP", "SLOT_CLEAR", "SLOT_ASSIGN", "BULK_CHANGE", "AI_COMMAND", "REGENERATE"],
+  }).notNull(),
+  description: text("description").notNull(),
+  previousState: jsonb("previous_state").$type<Record<string, unknown>>(),
+  newState: jsonb("new_state").$type<Record<string, unknown>>(),
+  aiCommand: text("ai_command"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableChangeLogRelations = relations(timetableChangeLog, ({ one }) => ({
+  timetable: one(timetable, { fields: [timetableChangeLog.timetableId], references: [timetable.id] }),
+  user: one(user, { fields: [timetableChangeLog.userId], references: [user.id] }),
+}));
+
+export const timetableAiPreference = pgTable("timetable_ai_preference", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  preferenceType: text("preference_type", {
+    enum: [
+      "TEACHER_TIME_PREFERENCE",
+      "SUBJECT_DISTRIBUTION",
+      "ROOM_ASSIGNMENT_PATTERN",
+      "ADMIN_SCHEDULING_HABIT",
+      "CONFLICT_RESOLUTION_PATTERN",
+    ],
+  }).notNull(),
+  key: text("key").notNull(),
+  value: jsonb("value").$type<Record<string, unknown>>().notNull(),
+  confidence: doublePrecision("confidence").notNull().default(0.5),
+  learnedFromCount: integer("learned_from_count").notNull().default(1),
+  lastUpdated: timestamp("last_updated").notNull().$defaultFn(() => new Date()),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const timetableAiPreferenceRelations = relations(timetableAiPreference, ({ one }) => ({
+  organization: one(organization, { fields: [timetableAiPreference.organizationId], references: [organization.id] }),
+}));

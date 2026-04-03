@@ -430,3 +430,106 @@ export const READING_MODE_LABELS: Record<ReadingMode, string> = {
 };
 
 import { DEFAULT_BREAK_SLOTS } from "@/lib/break-slots";
+
+// ─── Timetable Scheduling ────────────────────────────────
+
+export const TIMETABLE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+export type TimetableDay = (typeof TIMETABLE_DAYS)[number];
+
+export const TIMETABLE_DAY_LABELS: Record<TimetableDay, string> = {
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+};
+
+export const TIMETABLE_STATUS = {
+  DRAFT: "DRAFT",
+  ACTIVE: "ACTIVE",
+  ARCHIVED: "ARCHIVED",
+} as const;
+
+export type TimetableStatus = (typeof TIMETABLE_STATUS)[keyof typeof TIMETABLE_STATUS];
+
+export const TIMETABLE_STATUS_LABELS: Record<TimetableStatus, string> = {
+  DRAFT: "Draft",
+  ACTIVE: "Active",
+  ARCHIVED: "Archived",
+};
+
+export const TIMETABLE_STATUS_COLORS: Record<TimetableStatus, string> = {
+  DRAFT: "bg-amber-100 text-amber-700",
+  ACTIVE: "bg-emerald-100 text-emerald-700",
+  ARCHIVED: "bg-slate-100 text-slate-600",
+};
+
+export const ROOM_TYPES = {
+  REGULAR: "REGULAR",
+  LAB: "LAB",
+  AUDITORIUM: "AUDITORIUM",
+  LIBRARY: "LIBRARY",
+  SPORTS: "SPORTS",
+  OTHER: "OTHER",
+} as const;
+
+export type RoomType = (typeof ROOM_TYPES)[keyof typeof ROOM_TYPES];
+
+export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
+  REGULAR: "Classroom",
+  LAB: "Laboratory",
+  AUDITORIUM: "Auditorium",
+  LIBRARY: "Library",
+  SPORTS: "Sports",
+  OTHER: "Other",
+};
+
+export const CONSTRAINT_TYPES = {
+  HARD: "HARD",
+  SOFT: "SOFT",
+} as const;
+
+export type ConstraintType = (typeof CONSTRAINT_TYPES)[keyof typeof CONSTRAINT_TYPES];
+
+export const CONSTRAINT_CATEGORIES = {
+  NO_TEACHER_DOUBLE_BOOKING: "NO_TEACHER_DOUBLE_BOOKING",
+  NO_ROOM_DOUBLE_BOOKING: "NO_ROOM_DOUBLE_BOOKING",
+  NO_GROUP_DOUBLE_BOOKING: "NO_GROUP_DOUBLE_BOOKING",
+  ROOM_CAPACITY: "ROOM_CAPACITY",
+  TEACHER_MAX_PERIODS_DAY: "TEACHER_MAX_PERIODS_DAY",
+  TEACHER_MAX_PERIODS_WEEK: "TEACHER_MAX_PERIODS_WEEK",
+  TEACHER_CONSECUTIVE_LIMIT: "TEACHER_CONSECUTIVE_LIMIT",
+  TEACHER_PREFERRED_SLOTS: "TEACHER_PREFERRED_SLOTS",
+  TEACHER_UNAVAILABLE_SLOTS: "TEACHER_UNAVAILABLE_SLOTS",
+  SUBJECT_PREFERRED_TIME: "SUBJECT_PREFERRED_TIME",
+  SUBJECT_MAX_CONSECUTIVE: "SUBJECT_MAX_CONSECUTIVE",
+  BALANCED_DAILY_LOAD: "BALANCED_DAILY_LOAD",
+  MINIMIZE_ROOM_CHANGES: "MINIMIZE_ROOM_CHANGES",
+  CUSTOM: "CUSTOM",
+} as const;
+
+export type ConstraintCategory = (typeof CONSTRAINT_CATEGORIES)[keyof typeof CONSTRAINT_CATEGORIES];
+
+export const CONSTRAINT_CATEGORY_LABELS: Record<ConstraintCategory, string> = {
+  NO_TEACHER_DOUBLE_BOOKING: "No Teacher Double-Booking",
+  NO_ROOM_DOUBLE_BOOKING: "No Room Double-Booking",
+  NO_GROUP_DOUBLE_BOOKING: "No Group Double-Booking",
+  ROOM_CAPACITY: "Room Capacity Check",
+  TEACHER_MAX_PERIODS_DAY: "Teacher Max Periods/Day",
+  TEACHER_MAX_PERIODS_WEEK: "Teacher Max Periods/Week",
+  TEACHER_CONSECUTIVE_LIMIT: "Teacher Consecutive Limit",
+  TEACHER_PREFERRED_SLOTS: "Teacher Preferred Time Slots",
+  TEACHER_UNAVAILABLE_SLOTS: "Teacher Unavailable Slots",
+  SUBJECT_PREFERRED_TIME: "Subject Preferred Time",
+  SUBJECT_MAX_CONSECUTIVE: "Subject Max Consecutive Periods",
+  BALANCED_DAILY_LOAD: "Balanced Daily Load",
+  MINIMIZE_ROOM_CHANGES: "Minimize Room Changes",
+  CUSTOM: "Custom Constraint",
+};
+
+export const DEFAULT_SUBJECT_COLORS = [
+  "#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6",
+  "#8b5cf6", "#ef4444", "#14b8a6", "#f97316", "#06b6d4",
+  "#84cc16", "#e879f9", "#22d3ee", "#a855f7", "#fb923c",
+] as const;
