@@ -8,6 +8,8 @@ import { checkEmbeddingRateLimit, logAiUsage } from "./usage";
 // ─── Supported MIME types for text extraction ────────────────────────
 const SUPPORTED_MIME_TYPES = new Set([
   "text/plain",
+  "text/csv",
+  "application/csv",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
@@ -74,6 +76,8 @@ export async function extractText(
 ): Promise<string> {
   switch (mimeType) {
     case "text/plain":
+    case "text/csv":
+    case "application/csv":
       return buffer.toString("utf-8");
     case "application/pdf":
       return extractTextFromPDF(buffer);
@@ -254,12 +258,11 @@ export async function processAttachmentForEmbedding(
     const chunks = await chunkText(rawText);
     if (chunks.length === 0) return null;
 
-    // 4. Generate embeddings
+    // 4. Generate embeddings (stored as text since pgvector was removed)
     const texts = chunks.map((c) => c.content);
     const embeddings = await generateEmbeddings(texts);
 
     // 5. Store chunks + embeddings in DB
-    // Use raw SQL for vector insertion since Drizzle doesn't support vector type natively
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const embedding = embeddings[i];
@@ -271,25 +274,11 @@ export async function processAttachmentForEmbedding(
         organizationId,
         chunkIndex: chunk.index,
         content: chunk.content,
+        embedding: embeddingStr,
         metadata: {
           filename: filename ?? storageKey.split("/").pop(),
         },
       });
-
-      // Update the embedding column with raw SQL (vector type)
-      const lastInserted = await db
-        .select({ id: contentDocumentChunk.id })
-        .from(contentDocumentChunk)
-        .where(
-          sql`${contentDocumentChunk.attachmentId} = ${attachmentId} AND ${contentDocumentChunk.chunkIndex} = ${chunk.index}`,
-        )
-        .limit(1);
-
-      if (lastInserted[0]) {
-        await db.execute(
-          sql`UPDATE content_document_chunk SET embedding = ${embeddingStr}::vector WHERE id = ${lastInserted[0].id}`,
-        );
-      }
     }
 
     // Estimate tokens used (rough: input tokens for embedding)

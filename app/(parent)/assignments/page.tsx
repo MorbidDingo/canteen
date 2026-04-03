@@ -64,6 +64,7 @@ export default function AssignmentsFeedPage() {
   const [tagFilter, setTagFilter] = useState("all");
   const [tags, setTags] = useState<Tag[]>([]);
   const [canCreate, setCanCreate] = useState(false);
+  const [permissionScope, setPermissionScope] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
@@ -89,6 +90,7 @@ export default function AssignmentsFeedPage() {
       setPosts(data.posts);
       setTotal(data.total);
       setCanCreate(data.canCreate ?? false);
+      setPermissionScope(data.permissionScope ?? null);
     } catch {
       toast.error("Failed to load feed");
     } finally {
