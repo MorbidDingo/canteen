@@ -384,7 +384,7 @@ export default function ManagementNotificationsPage() {
               {searchingUsers && <p className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Searching...</p>}
               {userSearchResults.length > 0 && (
                 <div className="rounded-xl border border-border/60 divide-y overflow-hidden">
-                  {userSearchResults.map((u) => (
+                  {userSearchResults.map((user) => (
                     <button key={user.id} type="button" onClick={() => toggleUser(user)} className={`w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors ${targetUserIds.includes(user.id) ? "bg-amber-50 text-amber-900" : "hover:bg-muted/40"}`}>
                       <div>
                         <p className="font-medium">{user.name}</p>
