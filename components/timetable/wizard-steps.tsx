@@ -307,7 +307,7 @@ export function SubjectsStep({
   const [name, setName] = useState("");
   const [shortCode, setShortCode] = useState("");
   const [periodsPerWeek, setPeriodsPerWeek] = useState(5);
-  const [color, setColor] = useState(DEFAULT_SUBJECT_COLORS[0]);
+  const [color, setColor] = useState<string>(DEFAULT_SUBJECT_COLORS[0]);
   const [saving, setSaving] = useState(false);
 
   const addSubject = async () => {
