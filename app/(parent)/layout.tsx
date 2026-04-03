@@ -782,91 +782,88 @@ function ParentLayoutContent({
 
   return (
     <>
-      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-[#f59e0b] dark:bg-[#b45309]">
-        <div className="mx-auto w-full max-w-6xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
-          {/* Top row: Certe branding + actions */}
+      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-b border-border/40">
+        <div className="mx-auto w-full max-w-2xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
           <div className={cn(
             "flex items-center justify-between gap-3 transition-all duration-200",
-            headerCollapsed ? "py-1.5" : "pb-2",
+            headerCollapsed ? "py-2" : "py-2.5",
           )}>
             <div className="flex min-w-0 items-center gap-1">
-              <div className="relative h-8 min-w-[132px]">
+              <div className="relative h-8 min-w-[100px]">
                 <motion.div
                   className="absolute inset-0 flex items-center"
-                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -6 : 0 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -4 : 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
-                  <CerteWordmark className="text-[1.85rem]" white showPlus={certePlusActive} />
+                  <CerteWordmark className="text-[1.6rem]" showPlus={certePlusActive} />
                 </motion.div>
                 <motion.span
-                  className="absolute inset-0 flex items-center text-[1.5rem] font-sans font-black tracking-[-0.06em] text-white"
-                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 6 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute inset-0 flex items-center text-[1.1rem] font-sans font-semibold tracking-[-0.03em] text-foreground"
+                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 4 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
                   {activeModeLabel}
                 </motion.span>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
-              <div className="flex items-center gap-0.5 rounded-xl border border-white/20 bg-white/20 px-1 py-1 shadow-sm backdrop-blur-sm">
-                <ParentNotificationBell
-                  parentId={session?.user?.id}
-                  externalUnreadCount={notifUnreadCount}
-                  onClick={() => void openNotificationDrawer()}
-                  className="h-9 w-9 rounded-lg"
-                />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <ParentNotificationBell
+                parentId={session?.user?.id}
+                externalUnreadCount={notifUnreadCount}
+                onClick={() => void openNotificationDrawer()}
+                className="h-9 w-9 rounded-xl"
+              />
+              <button
+                type="button"
+                onClick={() => void openPaymentsDrawer()}
+                aria-label="Payments"
+                className="group relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <IoCalendar className="h-[18px] w-[18px]" />
+                {pendingEventsCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">
+                    {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Wallet"
+              >
+                <IoWallet className="h-[18px] w-[18px]" />
+              </button>
+              {parentMode === "canteen" && (
                 <button
                   type="button"
-                  onClick={() => void openPaymentsDrawer()}
-                  aria-label="Payments"
-                  className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
+                  onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
+                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Cart"
                 >
-                  <IoCalendar className="h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-110" />
-                  {pendingEventsCount > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-300">
-                      {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
+                  <IoCart className={cn("h-[18px] w-[18px]", cartBounce && "animate-bounce-subtle")} />
+                  {mounted && cartCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold text-primary-foreground">
+                      {cartCount > 9 ? "9+" : cartCount}
                     </span>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                  aria-label="Wallet"
-                >
-                  <IoWallet className="h-4.5 w-4.5" />
-                </button>
-                {parentMode === "canteen" && (
-                  <button
-                    type="button"
-                    onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
-                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                    aria-label="Cart"
-                  >
-                    <IoCart className={cn("h-4.5 w-4.5", cartBounce && "animate-bounce")} />
-                    {mounted && cartCount > 0 && (
-                      <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[9px] font-bold text-amber-700">
-                        {cartCount > 9 ? "9+" : cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
         </div>
       </header>
 
-      {/* Mode tabs — sticky below header */}
+      {/* Mode switcher — minimal pill bar */}
       <div
         ref={tabsRef}
-        className="sticky z-40 w-full bg-[#f59e0b] dark:bg-[#b45309]"
-        style={{ top: "var(--header-h, 60px)" } as React.CSSProperties}
+        className="sticky z-40 w-full bg-background/80 backdrop-blur-xl"
+        style={{ top: "var(--header-h, 52px)" } as React.CSSProperties}
       >
-        <div className="mx-auto w-full max-w-6xl px-3 md:px-6">
-          <div className="relative flex w-full items-end">
+        <div className="mx-auto w-full max-w-2xl px-4 md:px-6">
+          <div className="flex items-center gap-1 py-2">
             {[
               { mode: "canteen" as ParentMode, href: "/menu", icon: IoRestaurant, label: "Canteen", badge: 0 },
               { mode: "library" as ParentMode, href: "/library-showcase", icon: IoBook, label: "Library", badge: overdueCount },
@@ -879,31 +876,23 @@ function ParentLayoutContent({
                   key={tab.mode}
                   href={tab.href}
                   className={cn(
-                    "relative flex flex-1 flex-col items-center gap-0.5 rounded-t-2xl px-5 py-2.5 transition-all duration-200",
+                    "relative flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-150",
                     isActive
-                      ? "bg-background dark:bg-background z-10"
-                      : "bg-transparent hover:bg-white/20 dark:hover:bg-white/10 text-white/70",
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                   )}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="mode-tab-bg"
-                      className="absolute inset-0 rounded-t-2xl bg-background"
+                      className="absolute inset-0 rounded-full bg-muted dark:bg-muted"
                       transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
                     />
                   )}
-                  <Icon className={cn(
-                    "relative z-10 h-6 w-6",
-                    isActive ? "text-[#d4891a]" : "text-white/80",
-                  )} />
-                  <span className={cn(
-                    "relative z-10 text-[11px] font-semibold leading-none",
-                    isActive ? "text-foreground" : "text-white/80",
-                  )}>
-                    {tab.label}
-                  </span>
+                  <Icon className="relative z-10 h-4 w-4" />
+                  <span className="relative z-10">{tab.label}</span>
                   {tab.badge > 0 && (
-                    <span className="absolute right-2 top-1.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                    <span className="relative z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                       {tab.badge}
                     </span>
                   )}
@@ -934,16 +923,18 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      {/* Gradient dim behind bottom nav */}
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-36 bg-gradient-to-t from-background/90 via-background/60 to-transparent" />
+      {/* Subtle fade behind bottom nav */}
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-28 bg-gradient-to-t from-background via-background/50 to-transparent" />
 
-      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex items-end justify-center gap-4 px-3">
-          {/* iOS-style compact tab bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex items-center justify-center gap-2 px-4">
+          {/* Main tabs — frosted pill */}
           <div className={cn(
-            "w-70 h-16 flex items-stretch justify-between rounded-[72px] border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-            "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-            "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
+            "flex h-14 items-stretch rounded-full border border-border/50 px-1",
+            "bg-background/75 backdrop-blur-2xl backdrop-saturate-150",
+            "dark:border-border/30 dark:bg-background/60",
+            "shadow-[0_4px_24px_rgba(0,0,0,0.06)]",
+            "dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]",
           )}>
             {tabs.filter(item => !item.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
@@ -961,50 +952,49 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-5 py-1.5"
+                  className="relative flex min-w-0 flex-col items-center justify-center px-5"
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute inset-0 rounded-4xl bg-primary/10 dark:bg-primary/20"
+                      className="absolute inset-1 rounded-full bg-primary/8 dark:bg-primary/12"
                       transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
-                    />)
-                  }
+                    />
+                  )}
                   <motion.div
-                    whileTap={{ scale: 0.85 }}
+                    whileTap={{ scale: 0.88 }}
                     className="relative z-10 flex flex-col items-center gap-0.5"
                   >
                     {Icon ? (
                       <Icon
                         className={cn(
-                          "h-[20px] w-[20px] transition-colors duration-200",
-                          isActive ? "text-primary" : "text-muted-foreground/70",
-                          tab.key === "cart" && cartBounce && "animate-bounce",
+                          "h-[20px] w-[20px] transition-colors duration-150",
+                          isActive ? "text-primary" : "text-muted-foreground/60",
                         )}
                       />
                     ) : null}
                     <span className={cn(
-                      "text-[10px] font-medium leading-none transition-colors duration-200",
-                      isActive ? "text-primary" : "text-muted-foreground/70",
+                      "text-[10px] font-medium leading-none transition-colors duration-150",
+                      isActive ? "text-primary" : "text-muted-foreground/60",
                     )}>
                       {tab.label}
                     </span>
                   </motion.div>
 
                   {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
+                    <span className="absolute right-2 top-1.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
                       {overdueCount}
                     </span>
                   )}
 
                   {tab.key === "cart" && mounted && cartCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                    <span className="absolute right-2 top-1.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
                       {cartCount}
                     </span>
                   )}
 
                   {tab.key === "controls" && tab.locked && (
-                    <span className="absolute right-1 top-0 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
+                    <span className="absolute right-2 top-1.5 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
                       +
                     </span>
                   )}
@@ -1013,7 +1003,7 @@ function ParentLayoutContent({
             })}
           </div>
 
-          {/* Separated profile circle button */}
+          {/* Profile circle */}
           {(() => {
             const profileTab = tabs.find(item => item.isProfile);
             if (!profileTab) return null;
@@ -1022,20 +1012,22 @@ function ParentLayoutContent({
               <Link
                 href={profileTab.href}
                 className={cn(
-                  "relative bottom-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-                  "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
-                  isActive && "ring-2 ring-primary/40",
+                  "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/50",
+                  "bg-background/75 backdrop-blur-2xl backdrop-saturate-150",
+                  "dark:border-border/30 dark:bg-background/60",
+                  "shadow-[0_4px_24px_rgba(0,0,0,0.06)]",
+                  "dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]",
+                  isActive && "ring-1.5 ring-primary/30",
                 )}
               >
-                <motion.div whileTap={{ scale: 0.85 }}>
+                <motion.div whileTap={{ scale: 0.88 }}>
                   <Avatar className={cn(
-                    "h-12 w-12 ring-1 transition-all duration-200",
-                    isActive ? "ring-primary/40" : "ring-primary/20",
+                    "h-9 w-9 transition-all duration-150",
+                    isActive ? "ring-1 ring-primary/30" : "",
                   )}>
                     <AvatarFallback className={cn(
-                      "text-[10px] font-bold transition-colors duration-200",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                      "text-[10px] font-semibold transition-colors duration-150",
+                      isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground/80",
                     )}>
                       {mounted ? getInitials(session?.user?.name) : "?"}
                     </AvatarFallback>
