@@ -149,9 +149,9 @@ export default function ManagementExamsPage() {
     return () => clearTimeout(timer);
   }, [userSearchQuery, targetType, searchUsers]);
 
-  const toggleUser = (u: UserSearchResult) => {
+  const toggleUser = (user: UserSearchResult) => {
     setTargetUserIds((prev) =>
-      prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id],
+      prev.includes(user.id) ? prev.filter((id) => id !== user.id) : [...prev, user.id],
     );
   };
 

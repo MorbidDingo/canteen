@@ -1374,11 +1374,12 @@ export default function OperatorPaymentEventsPage() {
 }
 
 function StatsCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  const textColor = accent?.includes("text-emerald") ? "text-emerald-700" : accent?.includes("text-amber") ? "text-amber-700" : "text-slate-900";
   return (
     <Card className="border-slate-200/80 bg-white/90 shadow-sm backdrop-blur">
       <CardContent className="p-3 sm:p-4">
         <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">{label}</p>
-        <p className={`mt-0.5 text-lg font-bold tabular-nums sm:text-xl ${accent ? accent.split(" ").filter((c) => c.startsWith("text-")).join(" ") : "text-slate-900"}`}>{value}</p>
+        <p className={`mt-0.5 text-lg font-bold tabular-nums sm:text-xl ${textColor}`}>{value}</p>
       </CardContent>
     </Card>
   );

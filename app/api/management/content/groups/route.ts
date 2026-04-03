@@ -126,8 +126,8 @@ export async function POST(request: NextRequest) {
           inArray(child.className, addFromClasses),
         ),
       );
-    for (const cp of classParents) {
-      if (cp.parentId) userIdsToAdd.add(cp.parentId);
+    for (const classParent of classParents) {
+      if (classParent.parentId) userIdsToAdd.add(classParent.parentId);
     }
   }
 
@@ -137,8 +137,8 @@ export async function POST(request: NextRequest) {
       .select({ userId: contentGroupMember.userId })
       .from(contentGroupMember)
       .where(inArray(contentGroupMember.groupId, addFromGroupIds));
-    for (const gm of groupMembers) {
-      userIdsToAdd.add(gm.userId);
+    for (const groupMember of groupMembers) {
+      userIdsToAdd.add(groupMember.userId);
     }
   }
 
