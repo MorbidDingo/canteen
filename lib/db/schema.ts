@@ -1935,6 +1935,10 @@ export const managementNotice = pgTable("management_notice", {
   targetUserIds: text("target_user_ids"),                   // JSON string[] when targetType = SPECIFIC_USERS
   eventDate: timestamp("event_date"),                       // optional date for calendar display
   expiresAt: timestamp("expires_at"),
+  // Exam-specific fields
+  examStartDate: timestamp("exam_start_date"),              // exam period start
+  examEndDate: timestamp("exam_end_date"),                  // exam period end
+  examSubjects: text("exam_subjects"),                      // JSON: Array<{ subject: string; date: string; startTime?: string; endTime?: string }>
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
 });
 
