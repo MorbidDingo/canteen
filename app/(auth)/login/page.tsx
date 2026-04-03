@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Eye, EyeOff, Loader2, Monitor, Smartphone, Globe, X } from "lucide-react";
 import { toast } from "sonner";
-import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 
 type DeviceSession = {
   id: string;
@@ -250,7 +250,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md animate-scale-in">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2">
-            <CerteLogo size={60} />
+            <CerteWordmark className="text-3xl" />
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
           <CardDescription>

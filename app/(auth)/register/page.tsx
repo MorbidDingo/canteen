@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import { z } from "zod";
 
 const organizationSchema = z
@@ -166,7 +166,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-2xl animate-scale-in">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2">
-            <CerteLogo size={60} />
+            <CerteWordmark className="text-3xl" />
           </div>
           <CardTitle className="text-2xl">Create an account</CardTitle>
           <CardDescription>

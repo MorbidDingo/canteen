@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CerteLogo, CerteWordmark } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -190,7 +190,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="flex justify-center"
           >
-            <CerteLogo size={90} />
+            <CerteWordmark className="text-5xl" />
           </motion.div>
 
           <motion.h1
@@ -837,8 +837,7 @@ export default function Home() {
       <footer className="border-t px-4 py-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <CerteLogo size={24} />
-            <CerteWordmark className="text-sm" />
+            <CerteWordmark className="text-lg" />
           </div>
           <p>© {new Date().getFullYear()} certe</p>
         </div>

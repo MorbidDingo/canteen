@@ -19,6 +19,7 @@ import {
   Check,
   Clock3,
   LogOut,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -102,6 +103,7 @@ export default function SettingsPage() {
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [subscribing, setSubscribing] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
+  const [certePlusExpanded, setCertePlusExpanded] = useState(false);
   const isGeneralAccount = session?.user?.role === "GENERAL";
   const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
 
@@ -315,7 +317,11 @@ export default function SettingsPage() {
       {/* Certe+ Subscription Card */}
       <Card className="overflow-hidden rounded-2xl border border-amber-200/40 bg-gradient-to-br from-amber-50/80 via-white to-orange-50/60 shadow-[0_4px_24px_rgba(180,120,0,0.08)] dark:border-amber-200/15 dark:from-amber-950/25 dark:via-background dark:to-orange-950/20 dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
         <CardContent className="p-5">
-          <div className="flex items-center justify-between mb-4">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between"
+            onClick={() => setCertePlusExpanded((s) => !s)}
+          >
             <div className="flex items-center gap-2.5">
               <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm">
                 <Sparkles className="h-4 w-4 text-white" />
@@ -329,30 +335,40 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            {certePlusResolved ? (
-              certePlus?.active ? (
-                <Badge className="border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <CheckCircle className="mr-1 h-3 w-3" /> Active
-                </Badge>
+            <div className="flex items-center gap-1.5">
+              {certePlusResolved ? (
+                certePlus?.active ? (
+                  <Badge className="border-emerald-200/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <CheckCircle className="mr-1 h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300/60 text-amber-700 dark:border-amber-400/30 dark:text-amber-300"
+                  >
+                    From 79/week
+                  </Badge>
+                )
               ) : (
                 <Badge
                   variant="outline"
-                  className="border-amber-300/60 text-amber-700 dark:border-amber-400/30 dark:text-amber-300"
+                  className="border-slate-300 text-slate-600"
                 >
-                  From 79/week
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  Checking
                 </Badge>
-              )
-            ) : (
-              <Badge
-                variant="outline"
-                className="border-slate-300 text-slate-600"
-              >
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                Checking
-              </Badge>
-            )}
-          </div>
+              )}
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                  certePlusExpanded && "rotate-180",
+                )}
+              />
+            </div>
+          </button>
 
+          {certePlusExpanded && (
+            <div className="mt-4 border-t border-amber-200/25 dark:border-amber-500/15 pt-4">
           {!certePlusResolved ? (
             <div className="flex items-center gap-2 rounded-xl border border-amber-200/40 bg-white/60 px-3 py-2.5 text-xs text-muted-foreground dark:bg-white/5">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -503,7 +519,21 @@ export default function SettingsPage() {
               </p>
             </div>
           )}
+            </div>
+          )}
         </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Theme</h3>
+            <p className="text-xs text-muted-foreground">
+              Choose your preferred app appearance.
+            </p>
+          </div>
+          <ThemeSelector />
+        </div>
       </Card>
 
       <CardContent className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-0">
@@ -530,18 +560,6 @@ export default function SettingsPage() {
           )}
         </div>
       </CardContent>
-
-      <Card className="overflow-hidden rounded-2xl border border-border/70 bg-card/70 p-4">
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-sm font-semibold">Theme</h3>
-            <p className="text-xs text-muted-foreground">
-              Choose your preferred app appearance.
-            </p>
-          </div>
-          <ThemeSelector />
-        </div>
-      </Card>
 
       <Card className="overflow-hidden rounded-2xl border border-destructive/30 bg-card/70 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

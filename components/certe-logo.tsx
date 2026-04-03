@@ -30,22 +30,28 @@ export function CerteLogo({ size = 40, className, priority = false }: CerteLogoP
 }
 
 /**
- * The certe wordmark — premium display serif with gold gradient.
- * Renders the full brand name "certe" in Cormorant Garamond, suitable for
- * both light and dark modes.
+ * The certe wordmark in a bold geometric sans treatment.
  * When showPlus is true, a small "+" superscript is shown.
  */
-export function CerteWordmark({ className, showPlus }: { className?: string; showPlus?: boolean }) {
+export function CerteWordmark({ className, showPlus, white }: { className?: string; showPlus?: boolean; white?: boolean }) {
   return (
     <span
       className={cn(
-        "font-[family-name:var(--font-brand)] font-semibold tracking-wide bg-gradient-to-r from-[#e8a230] via-[#d4891a] to-[#b87314] bg-clip-text text-transparent select-none",
+        "font-sans font-black tracking-[-0.06em] leading-none select-none",
+        white
+          ? "text-white"
+          : "bg-gradient-to-r from-[#e8a230] via-[#d4891a] to-[#b87314] bg-clip-text text-transparent",
         className,
       )}
     >
-      certe
+      Certe
       {showPlus && (
-        <sup className="text-[0.55em] font-bold ml-[1px] bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent">
+        <sup className={cn(
+          "ml-[1px] text-[0.92em] font-black",
+          white
+            ? "text-white/80"
+            : "bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent",
+        )}>
           +
         </sup>
       )}

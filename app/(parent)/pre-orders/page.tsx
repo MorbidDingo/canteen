@@ -3,13 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -20,14 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { BottomSheet } from "@/components/ui/motion";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -52,8 +37,8 @@ import {
 } from "@/lib/constants";
 import { type BreakSlot, parseBreakSlots } from "@/lib/break-slots";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { CanteenSelector } from "@/components/canteen-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { cn } from "@/lib/utils";
 
 type ChildOption = { id: string; name: string };
 type MenuOption = {
@@ -593,171 +578,137 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
   if (certePlusActive === false) {
     return (
-      <Card className="mx-auto mt-6 max-w-xl">
-        <CardHeader>
-          <CardTitle>Certe+ Required</CardTitle>
-          <CardDescription>
-            Subscription pre-orders are available for Certe+ parents.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/settings">
-            <Button>Open Subscription Settings</Button>
-          </Link>
-        </CardContent>
-      </Card>
+      <div className="mx-auto max-w-lg px-4 py-10 text-center">
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <ShieldCheck className="h-8 w-8 text-primary" />
+        </div>
+        <h2 className="text-xl font-bold tracking-tight">Certe+ Required</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Meal passes are available for Certe+ subscribers.
+        </p>
+        <Link href="/settings">
+          <Button className="mt-5">Upgrade to Certe+</Button>
+        </Link>
+      </div>
     );
   }
 
   return (
-    <div className={embedded ? "space-y-5 pb-28" : "app-shell space-y-5 pb-28"}>
-      {/* ── Premium Hero ──────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 p-5 text-white dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:border dark:border-white/5">
-        <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
-        <p className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold">Certe+ Subscription</p>
-        <h2 className="text-lg font-bold mt-1.5 tracking-tight">Pre-Orders</h2>
-        <p className="text-xs text-white/50 mt-1 leading-relaxed">
-          Meal schedule derived from your active plan.
+    <div className={embedded ? "space-y-6 pb-28" : "mx-auto max-w-2xl px-4 py-5 space-y-6 pb-28"}>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Certe Pass</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Schedule daily meals for your children
         </p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Plan</p>
-            <p className="text-sm font-semibold mt-0.5">{subscriptionPlan || "ACTIVE"}</p>
+      </div>
+
+      {/* Plan summary strip */}
+      <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card p-3.5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
+          <CalendarClock className="h-5 w-5 text-primary" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold">{subscriptionPlan || "Active"}</span>
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+              {periodSchoolDays} days left
+            </span>
           </div>
-          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">School Days</p>
-            <p className="text-sm font-semibold mt-0.5">{periodSchoolDays}</p>
-          </div>
-          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">Start</p>
-            <p className="text-sm font-semibold mt-0.5">{startDate}</p>
-          </div>
-          <div className="rounded-xl bg-white/5 border border-white/8 p-3">
-            <p className="text-[10px] text-white/40 uppercase tracking-wider">End</p>
-            <p className="text-sm font-semibold mt-0.5">{endDate}</p>
-          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {startDate} → {endDate}
+          </p>
         </div>
       </div>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
-          <CardTitle>Create Subscription Pre-Order</CardTitle>
-          <CardDescription>
-            Assign food to children with break windows. Kiosk will auto-place only during matching break time.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pb-0">
-          <div className="mb-4">
-            <LabelText>Canteen</LabelText>
-            <CanteenSelector
-              value={selectedCanteen}
-              onChange={setSelectedCanteen}
-              showAll
-              compact
-              includeInactive
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Ordering from: <span className="font-medium text-foreground">{selectedCanteenLabel}</span>
-            </p>
-          </div>
-        </CardContent>
-        <CardContent className="space-y-4">
+      {/* ── New Pass Form ─────────────────────────────────────── */}
+      <div className="space-y-4">
+        <h2 className="text-base font-semibold">New Pass</h2>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <LabelText>Child</LabelText>
-              <Select value={assignChildId} onValueChange={setAssignChildId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select child" />
-                </SelectTrigger>
-                <SelectContent>
-                  {children.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <LabelText>Break</LabelText>
-              <Select value={assignBreak} onValueChange={setAssignBreak}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select break" />
-                </SelectTrigger>
-                <SelectContent>
-                  {settings.breaks.map((b) => (
-                    <SelectItem key={b} value={b}>
-                      {breakLabelByName.get(b) ?? b}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <LabelText>Child</LabelText>
+            <Select value={assignChildId} onValueChange={setAssignChildId}>
+              <SelectTrigger className="h-10 rounded-xl">
+                <SelectValue placeholder="Select child" />
+              </SelectTrigger>
+              <SelectContent>
+                {children.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              placeholder="Search menu"
-            />
+          <div>
+            <LabelText>Break</LabelText>
+            <Select value={assignBreak} onValueChange={setAssignBreak}>
+              <SelectTrigger className="h-10 rounded-xl">
+                <SelectValue placeholder="Select break" />
+              </SelectTrigger>
+              <SelectContent>
+                {settings.breaks.map((b) => (
+                  <SelectItem key={b} value={b}>{breakLabelByName.get(b) ?? b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+        </div>
 
-          <div className="max-h-56 overflow-auto rounded-md border">
-            {filteredMenu.slice(0, 50).map((item) => (
-              <div key={item.id} className="flex items-center justify-between border-b px-3 py-2 last:border-b-0">
-                <div>
-                  <p className="text-sm font-medium">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {MENU_CATEGORY_LABELS[item.category]} · ₹{item.discountedPrice ?? item.price}
-                  </p>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => addItem(item.id)}>
-                  <Plus className="mr-1 h-3.5 w-3.5" />
-                  Add
-                </Button>
+        {/* Menu search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 rounded-xl pl-9"
+            placeholder="Search menu items…"
+          />
+        </div>
+
+        {/* Menu list */}
+        <div className="max-h-52 overflow-auto rounded-xl border border-border/50">
+          {filteredMenu.slice(0, 50).map((item) => (
+            <div key={item.id} className="flex items-center justify-between border-b border-border/30 px-3 py-2.5 last:border-b-0">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{item.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {MENU_CATEGORY_LABELS[item.category]} · ₹{item.discountedPrice ?? item.price}
+                </p>
               </div>
-            ))}
-          </div>
+              <Button size="sm" variant="ghost" className="h-8 shrink-0 text-primary" onClick={() => addItem(item.id)}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {filteredMenu.length === 0 && (
+            <p className="py-6 text-center text-xs text-muted-foreground">No items found</p>
+          )}
+        </div>
 
+        {/* Allocations */}
+        {allocations.length > 0 && (
           <div className="space-y-2">
             {allocations.map((row) => {
               const menu = menuById.get(row.menuItemId);
               return (
-                <div key={row.id} className="rounded-md border p-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{menu?.name ?? row.menuItemId}</p>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setAllocations((prev) => prev.filter((x) => x.id !== row.id))}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                    <Select value={row.childId} onValueChange={(value) => setAllocations((prev) => prev.map((x) => (x.id === row.id ? { ...x, childId: value } : x)))}>
-                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {children.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={row.breakName} onValueChange={(value) => setAllocations((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
-                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {settings.breaks.map((b) => (
-                          <SelectItem key={b} value={b}>{breakLabelByName.get(b) ?? b}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center justify-between rounded-md border px-2">
+                <div key={row.id} className="rounded-xl border border-border/50 bg-card p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {childById.get(row.childId)} · {breakLabelByName.get(row.breakName) ?? row.breakName}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(row.id, -1)}>
                         <Minus className="h-3.5 w-3.5" />
                       </Button>
-                      <span className="text-sm font-semibold">{row.quantity}</span>
+                      <span className="w-6 text-center text-sm font-semibold tabular-nums">{row.quantity}</span>
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(row.id, 1)}>
                         <Plus className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setAllocations((prev) => prev.filter((x) => x.id !== row.id))}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -765,163 +716,173 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
               );
             })}
           </div>
+        )}
 
-          <div className="rounded-md border p-3 text-sm space-y-1">
-            <p className="text-muted-foreground">Min value per child: ₹{settings.minOrderValue}</p>
-            <p className="text-muted-foreground">
-              Minimum period: {settings.minDays} school days (1 week)
-            </p>
-            <p className="text-muted-foreground">
-              Available from subscription: {periodSchoolDays} school days
-              {subscriptionEndIso ? ` (until ${subscriptionEndIso})` : ""}
-            </p>
+        {/* Cost summary */}
+        {allocations.length > 0 && (
+          <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-1 text-sm">
             {Array.from(summaryByChild.entries()).map(([childId, s]) => (
-              <p key={childId}>
-                {childById.get(childId)}: ₹{Math.round(s.total)}/day
-                {s.belowMin ? " (below min)" : ""}
-                {s.hasBlocks ? " (blocked by controls)" : ""}
-              </p>
+              <div key={childId} className="flex justify-between">
+                <span className="text-muted-foreground">{childById.get(childId)}</span>
+                <span className={cn("font-medium", s.belowMin && "text-amber-600", s.hasBlocks && "text-red-600")}>
+                  ₹{Math.round(s.total)}/day
+                  {s.belowMin ? " (below min)" : ""}
+                </span>
+              </div>
             ))}
-            {allocations.length > 0 && periodSchoolDays >= settings.minDays && (
-              <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs space-y-0.5">
-                <p className="font-medium text-amber-800">Estimated Payment (Wallet)</p>
-                <p className="text-amber-700">Daily total: ₹{dailyTotalBase.toFixed(2)} × {periodSchoolDays} days = ₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</p>
-                <p className="text-muted-foreground">Platform fee (2%): +₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</p>
-                <p className="font-semibold text-foreground">Total: ₹{estimatedTotal.toFixed(2)}</p>
+            {periodSchoolDays >= settings.minDays && estimatedTotal > 0 && (
+              <>
+                <Separator className="my-1.5" />
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">₹{dailyTotalBase.toFixed(0)} × {periodSchoolDays} days + 2% fee</span>
+                  <span className="font-bold">₹{estimatedTotal.toFixed(2)}</span>
+                </div>
                 {walletBalance !== null && (
-                  <p className={walletBalance < estimatedTotal ? "text-red-600 font-medium" : "text-emerald-700"}>
-                    Wallet balance: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— Insufficient, please top up" : "✓"}
+                  <p className={cn("text-xs", walletBalance < estimatedTotal ? "text-red-600" : "text-emerald-600")}>
+                    Wallet: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— top up needed" : "✓"}
                   </p>
                 )}
-              </div>
+              </>
             )}
-            <p className="text-muted-foreground">
-              Maximum active pre-orders: {MAX_ACTIVE_PREORDERS_PER_CHILD} per child.
-            </p>
-            {periodSchoolDays < settings.minDays ? (
-              <p className="text-amber-700">
-                Remaining subscription school days ({periodSchoolDays}) are below minimum required ({settings.minDays}).
-              </p>
-            ) : null}
-            <p className="text-xs text-muted-foreground">
-              Payment is wallet-only. No online payment allowed for pre-orders.
-            </p>
+            <p className="text-xs text-muted-foreground pt-1">Min ₹{settings.minOrderValue}/child · {settings.minDays}+ school days</p>
           </div>
+        )}
 
-          <Button
-            className="w-full"
-            disabled={
-              creating ||
-              allocations.length === 0 ||
-              hasBelowMin ||
-              hasBlocks ||
-              periodSchoolDays < settings.minDays ||
-              periodSchoolDays <= 0 ||
-              (walletBalance !== null && walletBalance < estimatedTotal)
-            }
-            onClick={createPreOrders}
-          >
-            {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pre-Order"}
-          </Button>
-        </CardContent>
-      </Card>
+        <Button
+          className="w-full h-11 rounded-xl"
+          disabled={
+            creating ||
+            allocations.length === 0 ||
+            hasBelowMin ||
+            hasBlocks ||
+            periodSchoolDays < settings.minDays ||
+            periodSchoolDays <= 0 ||
+            (walletBalance !== null && walletBalance < estimatedTotal)
+          }
+          onClick={createPreOrders}
+        >
+          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pass"}
+        </Button>
+      </div>
 
-
-
-      {preOrders.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <CalendarClock className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
-            <p className="text-muted-foreground">No pre-orders yet.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {preOrders.map((po) => (
-            <Card key={po.id}>
-              <CardHeader>
+      {/* ── Active Passes ─────────────────────────────────────── */}
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold">Your Passes</h2>
+        {preOrders.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-center">
+            <CalendarClock className="h-10 w-10 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No passes yet</p>
+          </div>
+        ) : (
+          preOrders.map((po) => (
+            <div key={po.id} className="rounded-2xl border border-border/50 bg-card overflow-hidden">
+              <div className="p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base">{po.childName}</CardTitle>
-                  <Badge variant="outline">{getDisplayStatusLabel(po)}</Badge>
-                </div>
-                <CardDescription>
-                  {po.mode === "SUBSCRIPTION"
-                    ? `Subscription: ${po.scheduledDate} to ${po.subscriptionUntil || "-"}`
-                    : `One Day: ${po.scheduledDate}`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Separator className="mb-2" />
-                <div className="space-y-1">
-                  {po.items.map((item) => (
-                    <p key={item.id} className="text-sm">
-                      {item.name} x {item.quantity} - {item.breakName ? (breakLabelByName.get(item.breakName) ?? item.breakName) : "No break"}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">{po.childName}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {po.mode === "SUBSCRIPTION"
+                        ? `${po.scheduledDate} → ${po.subscriptionUntil || "—"}`
+                        : po.scheduledDate}
                     </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px] font-semibold shrink-0",
+                      po.status === "PENDING" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
+                      po.status === "CANCELLED" && "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
+                    )}
+                  >
+                    {getDisplayStatusLabel(po)}
+                  </Badge>
+                </div>
+
+                <div className="mt-3 space-y-1">
+                  {po.items.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between text-sm">
+                      <span>{item.name} × {item.quantity}</span>
+                      <span className="text-xs text-muted-foreground">{breakLabelByName.get(item.breakName ?? "") ?? item.breakName ?? "—"}</span>
+                    </div>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">Created: {new Date(po.createdAt).toLocaleString("en-IN")}</p>
-                {po.status === "PENDING" ? (
-                  <Button variant="outline" size="sm" className="mt-2 gap-2" onClick={() => openEdit(po)}>
-                    <PencilLine className="h-3.5 w-3.5" />
-                    Edit Food And Break
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              </div>
 
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[85]}>
-        <div className="space-y-4 pb-4">
+              {po.status === "PENDING" && (
+                <div className="border-t border-border/30 px-4 py-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(po)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-primary"
+                  >
+                    <PencilLine className="h-3.5 w-3.5" />
+                    Edit Pass
+                  </button>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── Edit Pass Sheet ─────────────────────────────────────── */}
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[80]}>
+        <div className="flex flex-col gap-4 pb-4">
           <div>
-            <h2 className="text-base font-bold">Edit Pre-Order</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">You can edit food and break only.</p>
+            <h2 className="text-lg font-bold tracking-tight">Edit Pass</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {editingPreOrder?.childName} · Change food items and break slots
+            </p>
           </div>
-          <div className="max-h-[50vh] space-y-2 overflow-auto pr-1">
-            {editRows.map((row) => (
-              <div key={row.id} className="rounded-xl border p-3 space-y-2">
-                {/* Menu item selector — full width */}
-                <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
-                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {menuItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* Break + Quantity row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {Array.from(new Set([...settings.breaks, ...editRows.map((x) => x.breakName)])).map((breakName) => (
-                        <SelectItem key={breakName} value={breakName}>{breakLabelByName.get(breakName) ?? breakName}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center justify-between rounded-xl border px-3 h-9">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>
+
+          <div className="max-h-[45vh] space-y-2.5 overflow-auto overscroll-contain -mx-1 px-1">
+            {editRows.map((row) => {
+              const menu = menuById.get(row.menuItemId);
+              return (
+                <div key={row.id} className="rounded-xl border border-border/50 bg-card p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
+                      <SelectTrigger className="h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {menuItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
+                      <SelectTrigger className="h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from(new Set([...settings.breaks, ...editRows.map((x) => x.breakName)])).map((breakName) => (
+                          <SelectItem key={breakName} value={breakName}>{breakLabelByName.get(breakName) ?? breakName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-center gap-3">
+                    <Button size="icon" variant="outline" className="h-8 w-8 rounded-lg" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>
                       <Minus className="h-3.5 w-3.5" />
                     </Button>
-                    <span className="text-sm font-semibold">{row.quantity}</span>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}>
+                    <span className="w-8 text-center text-sm font-bold tabular-nums">{row.quantity}</span>
+                    <Button size="icon" variant="outline" className="h-8 w-8 rounded-lg" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}>
                       <Plus className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}>
-                  <Trash2 className="mr-1 h-3.5 w-3.5" />
-                  Remove
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
           <Button
             type="button"
             variant="outline"
-            className="w-full"
+            className="w-full rounded-xl"
             onClick={() =>
               setEditRows((prev) => [
                 ...prev,
@@ -935,16 +896,17 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             }
             disabled={menuItems.length === 0}
           >
-            <Plus className="mr-1 h-3.5 w-3.5" />
+            <Plus className="mr-1.5 h-4 w-4" />
             Add Item
           </Button>
+
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setEditOpen(false)} disabled={savingEdit}>
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setEditOpen(false)} disabled={savingEdit}>
               Cancel
             </Button>
-            <Button className="flex-1" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
+            <Button className="flex-1 rounded-xl" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
               {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save Changes
+              Save
             </Button>
           </div>
         </div>

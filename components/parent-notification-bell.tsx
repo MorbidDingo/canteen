@@ -116,7 +116,7 @@ export function ParentNotificationBell({
         className={sharedClassName}
         aria-label="Notifications"
       >
-        <Bell className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+        <Bell className="h-5 w-5 fill-current text-white transition-transform duration-200 group-hover:scale-110" />
         {badge}
       </button>
     );
@@ -129,7 +129,7 @@ export function ParentNotificationBell({
       className={sharedClassName}
       aria-label="Notifications"
     >
-      <Bell className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+      <Bell className="h-5 w-5 fill-current text-white transition-transform duration-200 group-hover:scale-110" />
       {badge}
     </Link>
   );

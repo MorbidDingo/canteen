@@ -15,6 +15,7 @@ interface AddToCartButtonProps {
   available?: boolean;
   canteenId: string;
   canteenName: string;
+  compact?: boolean;
 }
 
 export function AddToCartButton({
@@ -26,6 +27,7 @@ export function AddToCartButton({
   available = true,
   canteenId,
   canteenName,
+  compact = false,
 }: AddToCartButtonProps) {
   const addItem = useCartStore((s) => s.addItem);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -70,7 +72,7 @@ export function AddToCartButton({
     return (
       <Button
         size="sm"
-        className="w-full gap-2"
+        className={cn("w-full gap-2", compact && "h-7 text-xs")}
         variant="outline"
         disabled
       >
@@ -86,20 +88,20 @@ export function AddToCartButton({
           <Button
             size="icon"
             variant="outline"
-            className="h-8 w-8 shrink-0"
+            className={cn("h-8 w-8 shrink-0", compact && "h-6 w-6")}
             onClick={handleDecrement}
           >
-            <Minus className="h-3.5 w-3.5" />
+            <Minus className={cn("h-3.5 w-3.5", compact && "h-3 w-3")} />
           </Button>
-          <span className="font-semibold text-sm tabular-nums">{quantity}</span>
+          <span className={cn("font-semibold text-sm tabular-nums", compact && "text-xs")}>{quantity}</span>
           <Button
             size="icon"
             variant="outline"
-            className="h-8 w-8 shrink-0"
+            className={cn("h-8 w-8 shrink-0", compact && "h-6 w-6")}
             onClick={handleAdd}
             disabled={atMax}
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className={cn("h-3.5 w-3.5", compact && "h-3 w-3")} />
           </Button>
         </div>
         {feedback && (
@@ -123,11 +125,11 @@ export function AddToCartButton({
     <div className="relative w-full">
       <Button
         size="sm"
-        className="w-full gap-2 transition-all duration-200 active:scale-95"
+        className={cn("w-full gap-2 transition-all duration-200 active:scale-95", compact && "h-7 text-xs gap-1")}
         onClick={handleAdd}
       >
-        <ShoppingCart className="h-4 w-4" />
-        Add to Cart
+        <ShoppingCart className={cn("h-4 w-4", compact && "h-3 w-3")} />
+        {compact ? "Add" : "Add to Cart"}
       </Button>
       {feedback && (
         <div

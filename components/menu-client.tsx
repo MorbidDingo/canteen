@@ -4,10 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+} from "@/components/ui/dialog";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import {
   MENU_CATEGORIES,
@@ -38,17 +38,18 @@ import {
   Package,
   Percent,
   Tag,
-  Store,
-  MapPin,
   Play,
   Pause,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { MenuRecommendations } from "./recommendations/menu-recs";
 import { AiQuickBar } from "./ai/ai-quick-bar";
+import { CanteenSelector } from "@/components/canteen-selector";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
   SNACKS: Cookie,
@@ -111,8 +112,10 @@ function MenuItemImage({
 
 function MenuItemMedia({
   item,
+  expanded = false,
 }: {
   item: MenuItem;
+  expanded?: boolean;
 }) {
   const mediaImages = [item.imageUrl, ...(item.additionalImages ?? [])].filter(
     (value): value is string => Boolean(value),
@@ -155,6 +158,49 @@ function MenuItemMedia({
     else nextImage();
   };
 
+  // Collapsed: just the main photo + video button
+  if (!expanded) {
+    return (
+      <>
+        {playingVideo && item.videoUrl ? (
+          <video
+            src={item.videoUrl}
+            autoPlay
+            playsInline
+            controls
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <MenuItemImage
+            src={item.imageUrl}
+            alt={item.name}
+            category={item.category as MenuCategory}
+          />
+        )}
+        {item.videoUrl && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setPlayingVideo((prev) => !prev);
+            }}
+            className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-lg transition-transform hover:scale-110 hover:bg-black/75"
+            aria-label={playingVideo ? "Show images" : "Play video"}
+          >
+            {playingVideo ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-white" />}
+          </button>
+        )}
+        {mediaImages.length > 1 && (
+          <span className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] font-medium text-white backdrop-blur-sm">
+            1/{mediaImages.length}
+          </span>
+        )}
+      </>
+    );
+  }
+
+  // Expanded: full carousel with nav controls
   return (
     <>
       {playingVideo && item.videoUrl ? (
@@ -217,11 +263,7 @@ function MenuItemMedia({
             <>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  prevImage();
-                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); prevImage(); }}
                 className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 md:h-7 md:w-7"
                 aria-label="Previous image"
               >
@@ -229,11 +271,7 @@ function MenuItemMedia({
               </button>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  nextImage();
-                }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); nextImage(); }}
                 className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white hover:bg-black/75 md:h-7 md:w-7"
                 aria-label="Next image"
               >
@@ -247,11 +285,7 @@ function MenuItemMedia({
       {item.videoUrl && (
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setPlayingVideo((prev) => !prev);
-          }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPlayingVideo((prev) => !prev); }}
           className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white shadow-lg transition-transform hover:scale-110 hover:bg-black/75"
           aria-label={playingVideo ? "Show images" : "Play video"}
         >
@@ -303,7 +337,15 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "name-desc", label: "Name: Z -> A" },
 ];
 
-export default function MenuClient({ items }: { items: MenuItem[] }) {
+export default function MenuClient({
+  items,
+  selectedCanteen,
+  onCanteenChange,
+}: {
+  items: MenuItem[];
+  selectedCanteen?: string | null;
+  onCanteenChange?: (v: string | null) => void;
+}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
@@ -313,6 +355,8 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
   const [discountsOnly, setDiscountsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
   const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
+  const [lightboxItem, setLightboxItem] = useState<MenuItem | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const certePlusActive = certePlusStatus?.active === true;
 
@@ -446,8 +490,11 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
 
   return (
     <>
-      {/* ── Search — clean, prominent, always visible ── */}
-      <div className="mb-4 animate-fade-in">
+      {/* ── Search + Canteen selector row — sticky below header+tabs ── */}
+      <div
+        className="sticky z-30 mb-0 bg-background pt-3 pb-2 animate-fade-in"
+        style={{ top: 'calc(var(--header-h, 56px) + var(--tabs-h, 56px))' } as React.CSSProperties}
+      >
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -472,29 +519,32 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
               </button>
             )}
           </div>
-          <Button
-            variant={showFilters ? "secondary" : "outline"}
-            size="icon"
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative shrink-0 h-10 w-10 rounded-xl border-border/60"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            {hasActiveFilters && (
-              <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary" />
-            )}
-          </Button>
+          {/* Canteen selector: icon-only on mobile, full on sm+ */}
+          {onCanteenChange != null && (
+            <>
+              <div className="flex sm:hidden">
+                <CanteenSelector
+                  value={selectedCanteen}
+                  onChange={onCanteenChange}
+                  iconOnly
+                  includeInactive
+                />
+              </div>
+              <div className="hidden sm:flex">
+                <CanteenSelector
+                  value={selectedCanteen}
+                  onChange={onCanteenChange}
+                  compact
+                  includeInactive
+                  className="w-[180px]"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── AI Quick Bar — compact horizontal chip strip for certe+ ── */}
-      {certePlusActive && (
-        <div className="mb-4 animate-fade-in">
-          <AiQuickBar />
-          <MenuRecommendations />
-        </div>
-      )}
-
-      {/* ── Category filter chips — horizontal scroll ── */}
+      {/* ── Category filter chips + filter icon ── */}
       <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none animate-fade-in">
         <button
           type="button"
@@ -529,7 +579,56 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
             </button>
           );
         })}
+        {/* Filter button — always at end of chip row */}
+        <Button
+          variant={showFilters ? "secondary" : "outline"}
+          size="icon"
+          onClick={() => setShowFilters(!showFilters)}
+          className="relative shrink-0 h-7 w-7 rounded-full border-border/60 ml-auto"
+        >
+          <SlidersHorizontal className="h-3 w-3" />
+          {hasActiveFilters && (
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+          )}
+        </Button>
       </div>
+
+      {/* ── Suggested for you — expandable */}
+      {certePlusActive && (
+        <div className="mb-4 animate-fade-in">
+          <button
+            type="button"
+            onClick={() => setShowSuggestions((prev) => !prev)}
+            className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-4 py-3 text-left shadow-sm transition-all hover:border-amber-400/60 dark:border-amber-500/20 dark:from-amber-950/25 dark:via-card dark:to-orange-950/20"
+          >
+            <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-80 animate-shine-sweep dark:via-white/20" />
+            <div className="relative z-10 flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm">
+                <Sparkles className="h-4.5 w-4.5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold tracking-tight">Suggested for you</p>
+                <p className="text-xs text-muted-foreground">
+                  Personalized picks, AI shortcuts, and smarter ordering.
+                </p>
+              </div>
+            </div>
+            <ChevronDown
+              className={cn(
+                "relative z-10 h-4 w-4 shrink-0 text-amber-700 transition-transform duration-200 dark:text-amber-300",
+                showSuggestions && "rotate-180",
+              )}
+            />
+          </button>
+
+          {showSuggestions && (
+            <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <AiQuickBar />
+              <MenuRecommendations />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Discount banner — slim, elegant ── */}
       {discountedItems.length > 0 && !discountsOnly && !dismissDiscountBanner && (
@@ -666,39 +765,78 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
           {filteredItems.map((item, index) => (
             <Card
               key={item.id}
               className={cn(
-                "flex flex-col card-interactive animate-fade-in-up p-0 overflow-hidden group",
+                "flex min-h-[7.4rem] flex-row card-interactive animate-fade-in-up overflow-hidden p-0 group h-auto",
                 !item.available && "opacity-60",
               )}
-              style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
+              style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
             >
-              {/* Image area with consistent aspect ratio */}
-              <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted/40">
+              {/* Content — left side */}
+              <div className="flex min-w-0 flex-1 flex-col justify-between py-3.5 pl-3 pr-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-sm leading-snug line-clamp-1">{item.name}</CardTitle>
+                  <div className="flex items-center gap-1.5">
+                    {item.discountedPrice != null ? (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">₹{item.discountedPrice}</span>
+                        <span className="text-[10px] text-muted-foreground line-through">₹{item.price}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm font-bold">₹{item.price}</span>
+                    )}
+                    {item.discountedPrice != null && item.discountInfo && (
+                      <Badge className="h-4 bg-emerald-600 hover:bg-emerald-600 text-white text-[8px] px-1 py-0 gap-0.5">
+                        <Percent className="h-2 w-2" />
+                        {item.discountInfo.type === "PERCENTAGE"
+                          ? `${item.discountInfo.value}%`
+                          : `₹${item.discountInfo.value}`}
+                      </Badge>
+                    )}
+                    {item.availableUnits != null && item.availableUnits > 0 && (
+                      <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-auto">
+                        {item.availableUnits} left
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1.5">
+                  <AddToCartButton
+                    menuItemId={item.id}
+                    name={item.name}
+                    price={item.price}
+                    discountedPrice={item.discountedPrice}
+                    availableUnits={item.availableUnits}
+                    available={item.available}
+                    canteenId={item.canteenId ?? ""}
+                    canteenName={item.canteenName ?? "Unknown"}
+                    compact
+                  />
+                </div>
+              </div>
+
+              {/* Image — right side, small square; click to open lightbox */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="View photos"
+                onClick={() => setLightboxItem(item)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setLightboxItem(item);
+                  }
+                }}
+                className="relative aspect-square w-28 shrink-0 overflow-hidden bg-muted/40 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:w-32"
+              >
                 <MenuItemMedia item={item} />
-                {/* Category badge on image */}
-                <Badge variant="secondary" className="absolute top-2 left-2 text-[10px] backdrop-blur-sm bg-background/80 shadow-sm">
-                  {MENU_CATEGORY_LABELS[item.category as MenuCategory]}
-                </Badge>
-                {/* Discount badge on image — shifts if video button present */}
-                {item.discountedPrice != null && (
-                  <Badge className={cn(
-                    "absolute bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-0.5 shadow-sm",
-                    item.videoUrl ? "top-10 right-2" : "top-2 right-2",
-                  )}>
-                    <Percent className="h-2.5 w-2.5" />
-                    {item.discountInfo?.type === "PERCENTAGE"
-                      ? `${item.discountInfo.value}%`
-                      : `₹${item.discountInfo?.value}`}
-                  </Badge>
-                )}
                 {/* Sold out overlay */}
                 {item.availableUnits === 0 && item.available && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
-                    <Badge variant="destructive" className="text-xs font-semibold px-3 py-1">
+                    <Badge variant="destructive" className="text-[9px] font-semibold px-1.5 py-0.5">
                       Sold Out
                     </Badge>
                   </div>
@@ -706,68 +844,53 @@ export default function MenuClient({ items }: { items: MenuItem[] }) {
                 {/* Unavailable overlay */}
                 {!item.available && (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
-                    <Badge variant="outline" className="text-xs font-semibold px-3 py-1 border-muted-foreground/40 text-muted-foreground">
-                      Unavailable
+                    <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0.5 border-muted-foreground/40 text-muted-foreground">
+                      N/A
                     </Badge>
                   </div>
                 )}
               </div>
-
-              {/* Content */}
-              <CardHeader className="px-3 pt-2.5 pb-1">
-                <CardTitle className="text-sm sm:text-base leading-snug line-clamp-1">{item.name}</CardTitle>
-                {item.description && (
-                  <CardDescription className="text-xs line-clamp-2 leading-relaxed min-h-[2lh]">
-                    {item.description}
-                  </CardDescription>
-                )}
-                {item.canteenName && (
-                  <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <Store className="h-3 w-3" />
-                    <span className="truncate">{item.canteenName}</span>
-                    {item.canteenLocation ? (
-                      <span className="inline-flex items-center gap-1 truncate">
-                        <MapPin className="h-3 w-3" />
-                        {item.canteenLocation}
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-              </CardHeader>
-
-              <CardContent className="flex-1 px-3 pb-1">
-                <div className="flex items-center gap-2">
-                  {item.discountedPrice != null ? (
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-base sm:text-lg font-bold text-emerald-700 dark:text-emerald-400">₹{item.discountedPrice}</span>
-                      <span className="text-xs text-muted-foreground line-through">₹{item.price}</span>
-                    </div>
-                  ) : (
-                    <span className="text-base sm:text-lg font-bold">₹{item.price}</span>
-                  )}
-                  {item.availableUnits != null && item.availableUnits > 0 && (
-                    <Badge variant="secondary" className="text-[10px] ml-auto">
-                      {item.availableUnits} left
-                    </Badge>
-                  )}
-                </div>
-              </CardContent>
-
-              <CardFooter className="px-3 pb-3 pt-1 mt-auto">
-                <AddToCartButton
-                  menuItemId={item.id}
-                  name={item.name}
-                  price={item.price}
-                  discountedPrice={item.discountedPrice}
-                  availableUnits={item.availableUnits}
-                  available={item.available}
-                  canteenId={item.canteenId ?? ""}
-                  canteenName={item.canteenName ?? "Unknown"}
-                />
-              </CardFooter>
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Photo lightbox */}
+      {lightboxItem && (
+        <Dialog open={!!lightboxItem} onOpenChange={(open) => { if (!open) setLightboxItem(null); }}>
+          <DialogContent className="max-w-[360px] gap-0 overflow-hidden rounded-2xl p-0">
+            <div className="relative aspect-square w-full overflow-hidden bg-muted">
+              <MenuItemMedia item={lightboxItem} expanded />
+            </div>
+            <div className="px-4 py-3">
+              <h3 className="font-semibold text-sm leading-snug">{lightboxItem.name}</h3>
+              {lightboxItem.description && (
+                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{lightboxItem.description}</p>
+              )}
+              <div className="mt-2.5 flex items-center justify-between gap-2">
+                {lightboxItem.discountedPrice != null ? (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">₹{lightboxItem.discountedPrice}</span>
+                    <span className="text-[10px] text-muted-foreground line-through">₹{lightboxItem.price}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm font-bold">₹{lightboxItem.price}</span>
+                )}
+                <AddToCartButton
+                  menuItemId={lightboxItem.id}
+                  name={lightboxItem.name}
+                  price={lightboxItem.price}
+                  discountedPrice={lightboxItem.discountedPrice}
+                  availableUnits={lightboxItem.availableUnits}
+                  available={lightboxItem.available}
+                  canteenId={lightboxItem.canteenId ?? ""}
+                  canteenName={lightboxItem.canteenName ?? "Unknown"}
+                  compact
+                />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
 
     </>

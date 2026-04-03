@@ -179,9 +179,7 @@ export async function GET(request: NextRequest) {
 
   // Must have some content permission
   const perm = await getContentPermission(organizationId, access.actorUserId);
-  if (!perm) {
-    return NextResponse.json({ error: "No content permission" }, { status: 403 });
-  }
+  const hasPermission = perm !== null;
 
   const { searchParams } = new URL(request.url);
   const tagId = searchParams.get("tagId");
@@ -215,5 +213,9 @@ export async function GET(request: NextRequest) {
     .groupBy(contentPost.id)
     .orderBy(sql`${contentPost.createdAt} DESC`);
 
-  return NextResponse.json({ posts });
+  return NextResponse.json({
+    posts,
+    hasPermission,
+    permissionScope: perm?.scope ?? null,
+  });
 }

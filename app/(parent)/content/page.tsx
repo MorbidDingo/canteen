@@ -74,13 +74,20 @@ export default function MyPostsPage() {
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (tagFilter !== "all") params.set("tagId", tagFilter);
 
-      const res = await fetch(`/api/content/posts?${params.toString()}`);
+      const query = params.toString();
+      const endpoint = query ? `/api/content/posts?${query}` : "/api/content/posts";
+      const res = await fetch(endpoint);
       if (res.status === 403) {
         setHasPermission(false);
         return;
       }
       if (!res.ok) throw new Error();
       const data = await res.json();
+      if (data.hasPermission === false) {
+        setHasPermission(false);
+        setPosts([]);
+        return;
+      }
       setPosts(data.posts);
       setHasPermission(true);
     } catch {

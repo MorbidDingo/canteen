@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { IndianRupee } from "lucide-react";
+import { IndianRupee, CheckCircle2, AlertCircle, CreditCard, Landmark, ChevronLeft } from "lucide-react";
 import {
   IoRestaurant,
   IoCart,
@@ -14,24 +14,20 @@ import {
   IoReceipt,
   IoShieldCheckmark,
   IoSparkles,
-  IoChatbubbleEllipses,
   IoNotifications,
   IoReader,
   IoCalendar,
   IoDocumentText,
-  IoAdd,
-  IoList,
+  IoClipboard,
+  IoTicket,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { CerteLogo } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
-import { ChatAssistant } from "@/components/ai/chat-assistant";
-import { LibraryChatAssistant } from "@/components/ai/library-chat-assistant";
 import { CanteenSelector } from "@/components/canteen-selector";
-import { LibrarySelector } from "@/components/library-selector";
 import { motion, BottomSheet } from "@/components/ui/motion";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import { useRealtimeData } from "@/lib/events";
@@ -80,6 +76,34 @@ type NoticeItem = {
   acknowledged: boolean;
 };
 
+type PaymentEventItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  amount: number;
+  dueDate: string | null;
+  status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+  kioskMode: boolean;
+  paymentAccountId: string | null;
+  paymentAccountLabel: string | null;
+  paymentAccountMethod: string | null;
+  paymentAccountUpiId: string | null;
+  paymentAccountHolderName: string | null;
+  paymentAccountNumber: string | null;
+  paymentAccountIfsc: string | null;
+  paymentAccountBankName: string | null;
+  children: Array<{ id: string; name: string; grNumber: string | null; paid: boolean; receipt: { receiptNumber: string } | null }>;
+};
+
+type ReceiptItem = {
+  id: string;
+  eventId: string;
+  paymentMode: string;
+  amount: number;
+  receiptNumber: string;
+  paidAt: string;
+};
+
 function getParentMode(pathname: string, requestedMode: string | null): ParentMode {
   if (pathname.startsWith("/library")) return "library";
   if (pathname.startsWith("/content") || pathname.startsWith("/assignments") || pathname.startsWith("/calendar")) return "content";
@@ -97,7 +121,7 @@ function getParentMode(pathname: string, requestedMode: string | null): ParentMo
   return "canteen";
 }
 
-function getActiveTab(pathname: string): string {
+function getActiveTab(pathname: string, searchParams?: URLSearchParams): string {
   if (pathname === "/library-showcase") return "showcase";
   if (pathname.startsWith("/library-reader")) return "reader";
   if (["/settings", "/children", "/wallet", "/notifications", "/messaging-settings"].includes(pathname)) {
@@ -105,9 +129,14 @@ function getActiveTab(pathname: string): string {
   }
   if (pathname === "/controls") return "controls";
   if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "calendar";
-  if (pathname === "/orders" || pathname === "/pre-orders") return "orders";
+  if (pathname === "/orders") return "orders";
+  if (pathname === "/pre-orders") return "preorders";
   if (pathname === "/cart") return "cart";
-  if (pathname === "/assignments" || pathname.startsWith("/assignments/")) return "feed";
+  if (pathname === "/assignments" || pathname.startsWith("/assignments/")) {
+    const type = searchParams?.get("type");
+    if (type === "NOTE") return "notes";
+    return "feed";
+  }
   if (pathname === "/content") return "home";
   if (pathname === "/content/new") return "new";
   if (pathname.startsWith("/content/") && pathname.endsWith("/submissions")) return "home";
@@ -135,13 +164,18 @@ function ParentLayoutContent({
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
 
   const [mounted, setMounted] = useState(false);
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
   const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [libraryChatOpen, setLibraryChatOpen] = useState(false);
+  const [paymentsDrawerOpen, setPaymentsDrawerOpen] = useState(false);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentEvents, setPaymentEvents] = useState<PaymentEventItem[]>([]);
+  const [paymentReceipts, setPaymentReceipts] = useState<ReceiptItem[]>([]);
+  const [selectedPaymentEvent, setSelectedPaymentEvent] = useState<PaymentEventItem | null>(null);
+
   const [isMobile, setIsMobile] = useState(false);
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
@@ -158,17 +192,18 @@ function ParentLayoutContent({
     "certe:selected-library-id",
   );
   const prevCartCount = useRef(cartCount);
+  const headerRef = useRef<HTMLElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const requestedMode = searchParams.get("mode");
   const parentMode = getParentMode(pathname, requestedMode);
-  const activeTab = getActiveTab(pathname);
-  const pageHasInlineContextSelector =
-    pathname === "/menu" || pathname === "/library-history" || pathname === "/library-showcase";
-  // Show context selector in header only where it adds value: order history + cart
-  // Controls, settings, wallet, children, notifications — no canteen/library context needed
-  const showHeaderContextSelector =
-    !pageHasInlineContextSelector &&
-    pathname === "/cart";
+  const activeTab = getActiveTab(pathname, searchParams);
+  const activeModeLabel = parentMode === "canteen"
+    ? "Canteen"
+    : parentMode === "library"
+      ? "Library"
+      : "Notes";
+  const showHeaderContextSelector = false; // canteen selector moved into MenuClient
 
   const withParentMode = useCallback(
     (href: string) => {
@@ -283,7 +318,36 @@ function ParentLayoutContent({
     }
   }, [blurFocusedElement]);
 
-  const markNotifAsRead = useCallback(async (notificationId: string) => {
+  const openPaymentsDrawer = useCallback(async () => {
+    blurFocusedElement();
+    setPaymentsDrawerOpen(true);
+    setPaymentsLoading(true);
+    try {
+      const res = await fetch("/api/parent/payment-events", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json() as { events: PaymentEventItem[]; receipts: ReceiptItem[] };
+      setPaymentEvents(data.events ?? []);
+      setPaymentReceipts(data.receipts ?? []);
+      const pending = (data.events ?? []).filter(
+        (e) => e.status === "ACTIVE" && e.children.some((c) => !c.paid),
+      ).length;
+      setPendingEventsCount(pending);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [blurFocusedElement]);
+
+  const getNotifRoute = useCallback((type: string): string => {
+    if (type.startsWith("ORDER") || type === "KIOSK_ORDER_GIVEN" || type === "KIOSK_ORDER_PICKED") return "/orders";
+    if (type.startsWith("WALLET") || type === "WALLET_TOPUP") return "/wallet?mode=canteen";
+    if (type.startsWith("PRE_ORDER")) return "/pre-orders";
+    if (type.startsWith("GATE") || type === "GATE_ENTRY" || type === "GATE_EXIT") return "/notifications?mode=canteen";
+    if (type.startsWith("ATTENDANCE")) return "/notifications?mode=canteen";
+    if (type.startsWith("LIBRARY")) return "/library-history";
+    return "/notifications?mode=canteen";
+  }, []);
+
+  const markNotifAsRead = useCallback(async (notificationId: string, type?: string) => {
     setNotifItems((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n)),
     );
@@ -292,7 +356,11 @@ function ParentLayoutContent({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notificationId }),
     });
-  }, []);
+    if (type) {
+      setNotificationDrawerOpen(false);
+      router.push(getNotifRoute(type));
+    }
+  }, [getNotifRoute, router]);
 
   const markAllNotifsRead = useCallback(async () => {
     setNotifItems((prev) =>
@@ -326,6 +394,33 @@ function ParentLayoutContent({
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Track header + tabs height for sticky offset CSS vars
+  useEffect(() => {
+    const setVars = () => {
+      const hH = headerRef.current?.offsetHeight ?? 0;
+      const tH = tabsRef.current?.offsetHeight ?? 0;
+      document.documentElement.style.setProperty("--header-h", `${hH}px`);
+      document.documentElement.style.setProperty("--tabs-h", `${tH}px`);
+    };
+    const ro = new ResizeObserver(setVars);
+    if (headerRef.current) ro.observe(headerRef.current);
+    if (tabsRef.current) ro.observe(tabsRef.current);
+    setVars();
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleScroll = () => {
+      setHeaderCollapsed(window.scrollY > 28);
+    };
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -404,8 +499,6 @@ function ParentLayoutContent({
     setCartDrawerOpen(false);
     setWalletDrawerOpen(false);
     setNotificationDrawerOpen(false);
-    setChatOpen(false);
-    setLibraryChatOpen(false);
   }, [pathname]);
 
   const getInitials = (name?: string | null) => {
@@ -425,6 +518,160 @@ function ParentLayoutContent({
     label: string;
     locked: boolean;
     isProfile?: boolean;
+  };
+
+  const renderPaymentEventDetail = (event: PaymentEventItem) => (
+    <div className="space-y-4">
+      {event.description && (
+        <p className="text-sm text-muted-foreground">{event.description}</p>
+      )}
+      <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
+        <div>
+          <p className="text-xs text-muted-foreground">Amount per child</p>
+          <p className="text-2xl font-bold flex items-center gap-1">
+            <IndianRupee className="h-5 w-5" />
+            {event.amount.toFixed(2)}
+          </p>
+        </div>
+        {event.dueDate && (
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Due date</p>
+            <p className={cn("text-sm font-semibold", new Date(event.dueDate) < new Date() && !event.children.every(c => c.paid) ? "text-destructive" : "")}>
+              {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {event.paymentAccountId && (
+        <div className="rounded-xl border p-4 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pay To</p>
+          <div className="flex items-center gap-2">
+            {event.paymentAccountMethod === "UPI"
+              ? <CreditCard className="h-5 w-5 text-violet-500" />
+              : <Landmark className="h-5 w-5 text-blue-500" />}
+            <p className="font-semibold text-sm">{event.paymentAccountLabel}</p>
+          </div>
+          {event.paymentAccountMethod === "UPI" && event.paymentAccountUpiId && (
+            <p className="text-sm font-mono bg-muted/50 rounded-lg px-3 py-2">{event.paymentAccountUpiId}</p>
+          )}
+          {event.paymentAccountMethod === "BANK_ACCOUNT" && (
+            <div className="space-y-1 text-sm">
+              {event.paymentAccountHolderName && <div className="flex justify-between"><span className="text-muted-foreground">Account Holder</span><span className="font-medium">{event.paymentAccountHolderName}</span></div>}
+              {event.paymentAccountNumber && <div className="flex justify-between"><span className="text-muted-foreground">Account No.</span><span className="font-mono font-medium">{event.paymentAccountNumber}</span></div>}
+              {event.paymentAccountIfsc && <div className="flex justify-between"><span className="text-muted-foreground">IFSC</span><span className="font-mono font-medium">{event.paymentAccountIfsc}</span></div>}
+              {event.paymentAccountBankName && <div className="flex justify-between"><span className="text-muted-foreground">Bank</span><span className="font-medium">{event.paymentAccountBankName}</span></div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {event.kioskMode && (
+        <div className="rounded-xl border border-dashed p-3 text-sm text-center text-muted-foreground">
+          Collected at school via kiosk tap.
+        </div>
+      )}
+
+      {event.children.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Children</p>
+          {event.children.map((c) => (
+            <div key={c.id} className={cn(
+              "flex items-center justify-between rounded-xl px-3 py-2.5 border",
+              c.paid ? "bg-green-50/70 border-green-200 dark:bg-green-950/20 dark:border-green-800/40" : "bg-card border-border",
+            )}>
+              <div>
+                <p className="text-sm font-medium">{c.name}</p>
+                {c.grNumber && <p className="text-xs text-muted-foreground">GR: {c.grNumber}</p>}
+              </div>
+              {c.paid ? (
+                <span className="flex items-center gap-1 text-xs font-semibold text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Paid
+                  {c.receipt && <span className="text-[10px] text-muted-foreground ml-1">{c.receipt.receiptNumber}</span>}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground border rounded-full px-2 py-0.5">Pending</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPaymentEventList = () => {
+    const activeEvents = paymentEvents.filter((e) => e.status === "ACTIVE");
+    const pastEvents = paymentEvents.filter((e) => e.status !== "ACTIVE");
+
+    if (paymentEvents.length === 0 && paymentReceipts.length === 0) {
+      return (
+        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+          <IoCalendar className="mx-auto h-6 w-6 text-muted-foreground/30" />
+          <p className="mt-1.5 text-xs text-muted-foreground">No payment events yet</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {activeEvents.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Pending</p>
+            {activeEvents.map((event) => {
+              const overdue = event.dueDate ? new Date(event.dueDate) < new Date() : false;
+              const paid = event.children.every((c) => c.paid);
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => setSelectedPaymentEvent(event)}
+                  className={cn(
+                    "w-full text-left rounded-2xl border p-3.5 transition-all hover:border-primary/30",
+                    overdue && !paid ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-card/70",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold truncate">{event.title}</p>
+                      {event.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{event.description}</p>}
+                      {event.dueDate && (
+                        <p className={cn("text-[11px] mt-1", overdue && !paid ? "text-destructive font-medium" : "text-muted-foreground")}>
+                          Due {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                          {overdue && !paid && " · Overdue"}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className={cn("text-lg font-bold", paid ? "text-green-600 dark:text-green-400" : "")}>₹{event.amount.toFixed(0)}</p>
+                      {paid && <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5 justify-end"><CheckCircle2 className="h-3 w-3" />Paid</span>}
+                      {!paid && overdue && <AlertCircle className="h-4 w-4 text-destructive ml-auto" />}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {pastEvents.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">History</p>
+            {pastEvents.map((event) => (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => setSelectedPaymentEvent(event)}
+                className="w-full text-left rounded-2xl border border-border/40 bg-card/50 p-3.5 transition-all hover:border-primary/20"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium truncate">{event.title}</p>
+                  <p className="text-sm font-semibold text-muted-foreground shrink-0">₹{event.amount.toFixed(0)}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderNotificationList = () => (
@@ -481,7 +728,7 @@ function ParentLayoutContent({
             <button
               key={n.id}
               type="button"
-              onClick={() => void markNotifAsRead(n.id)}
+              onClick={() => void markNotifAsRead(n.id, n.type)}
               className={cn(
                 "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
                 n.readAt
@@ -511,9 +758,8 @@ function ParentLayoutContent({
   const tabs: TabItem[] = useMemo(() => {
     if (parentMode === "content") {
       return [
-        { key: "feed" as const, href: "/assignments", icon: IoList, label: "Feed", locked: false },
-        { key: "home" as const, href: "/content", icon: IoDocumentText, label: "Posts", locked: false },
-        { key: "new" as const, href: "/content/new", icon: IoAdd, label: "Create", locked: false },
+        { key: "feed" as const, href: "/assignments?type=ASSIGNMENT", icon: IoClipboard, label: "Assignments", locked: false },
+        { key: "notes" as const, href: "/assignments?type=NOTE", icon: IoDocumentText, label: "Notes", locked: false },
         { key: "calendar" as const, href: "/calendar", icon: IoCalendar, label: "Calendar", locked: false },
         { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
       ];
@@ -522,8 +768,7 @@ function ParentLayoutContent({
       return [
         { key: "home" as const, href: "/menu", icon: IoRestaurant, label: "Menu", locked: false },
         { key: "orders" as const, href: "/orders", icon: IoReceipt, label: "Orders", locked: false },
-        { key: "cart" as const, href: "/cart", icon: IoCart, label: "Cart", locked: false },
-        { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
+        { key: "preorders" as const, href: "/pre-orders", icon: IoTicket, label: "Pass", locked: false },
         { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
       ];
     }
@@ -531,168 +776,166 @@ function ParentLayoutContent({
       { key: "showcase" as const, href: "/library-showcase", icon: IoSparkles, label: "Showcase", locked: false },
       { key: "reader" as const, href: "/library-reader", icon: IoReader, label: "Reader", locked: false },
       { key: "home" as const, href: "/library-history", icon: IoBook, label: "History", locked: false },
-      { key: "controls" as const, href: withParentMode("/controls"), icon: IoShieldCheckmark, label: "Controls", locked: !certePlusActive },
       { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
     ];
   }, [certePlusActive, parentMode, withParentMode]);
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto w-full max-w-6xl px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6 md:py-2">
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/" className="flex min-w-0 items-center gap-1.5">
-              <CerteLogo size={24} />
-              <span className="hidden text-sm font-extrabold tracking-tight text-foreground sm:inline">
-                certe
-              </span>
-              {certePlusActive && (
-                <span className="text-base font-bold tracking-wide text-primary">
-                  +
-                </span>
-              )}
-            </Link>
+      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-[#f59e0b] dark:bg-[#b45309]">
+        <div className="mx-auto w-full max-w-6xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
+          {/* Top row: Certe branding + actions */}
+          <div className={cn(
+            "flex items-center justify-between gap-3 transition-all duration-200",
+            headerCollapsed ? "py-1.5" : "pb-2",
+          )}>
+            <div className="flex min-w-0 items-center gap-1">
+              <div className="relative h-8 min-w-[132px]">
+                <motion.div
+                  className="absolute inset-0 flex items-center"
+                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -6 : 0 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                >
+                  <CerteWordmark className="text-[1.85rem]" white showPlus={certePlusActive} />
+                </motion.div>
+                <motion.span
+                  className="absolute inset-0 flex items-center text-[1.5rem] font-sans font-black tracking-[-0.06em] text-white"
+                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 6 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                >
+                  {activeModeLabel}
+                </motion.span>
+              </div>
+            </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              {/* Notification + Events pill */}
-              <div className="flex items-center gap-0.5 rounded-xl border border-border/60 bg-muted/55 px-1 py-1 shadow-sm">
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/20 bg-white/20 px-1 py-1 shadow-sm backdrop-blur-sm">
                 <ParentNotificationBell
                   parentId={session?.user?.id}
                   externalUnreadCount={notifUnreadCount}
                   onClick={() => void openNotificationDrawer()}
-                  className="h-10 w-10 rounded-lg"
+                  className="h-9 w-9 rounded-lg"
                 />
-                <Link
-                  href="/events"
-                  aria-label="Payment Events"
-                  className="group relative inline-flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-accent"
+                <button
+                  type="button"
+                  onClick={() => void openPaymentsDrawer()}
+                  aria-label="Payments"
+                  className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
                 >
-                  <IoCalendar className="h-5 w-5 transition-transform duration-200 group-hover:scale-110" />
+                  <IoCalendar className="h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-110" />
                   {pendingEventsCount > 0 && (
                     <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-300">
                       {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
                     </span>
                   )}
-                </Link>
-              </div>
-
-              {/* AI Chat button — orange, visible in canteen/library only (content has per-post AI) */}
-              {parentMode !== "content" && (
+                </button>
                 <button
                   type="button"
-                  aria-label={parentMode === "library" ? "Open Library Assistant" : "Open AI assistant"}
-                  onClick={() => {
-                    if (parentMode === "library") {
-                      setLibraryChatOpen((v) => !v);
-                    } else {
-                      setChatOpen((v) => !v);
-                    }
-                  }}
-                  className={cn(
-                    "inline-flex h-11 w-11 items-center justify-center rounded-xl shadow-sm transition-all",
-                    parentMode === "library"
-                      ? libraryChatOpen
-                        ? "bg-[#b87314] text-white"
-                        : "bg-[#d4891a] text-white hover:bg-[#b87314]"
-                      : chatOpen
-                      ? "bg-[#b87314] text-white"
-                      : "bg-[#d4891a] text-white hover:bg-[#b87314]",
-                  )}
+                  onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
+                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
+                  aria-label="Wallet"
                 >
-                  <IoChatbubbleEllipses className="h-5 w-5" />
+                  <IoWallet className="h-4.5 w-4.5" />
                 </button>
-              )}
+                {parentMode === "canteen" && (
+                  <button
+                    type="button"
+                    onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
+                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
+                    aria-label="Cart"
+                  >
+                    <IoCart className={cn("h-4.5 w-4.5", cartBounce && "animate-bounce")} />
+                    {mounted && cartCount > 0 && (
+                      <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[9px] font-bold text-amber-700">
+                        {cartCount > 9 ? "9+" : cartCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="mt-2 flex items-center justify-between gap-3">
-            {/* Mode switcher — premium pill design */}
-            <div className="flex items-center rounded-xl border border-border/60 bg-muted/55 p-0.5 shadow-sm">
-              <Link
-                href="/menu"
-                className={cn(
-                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
-                  parentMode === "canteen"
-                    ? "bg-background text-foreground shadow-sm px-3"
-                    : "text-muted-foreground hover:text-foreground px-2",
-                )}
-              >
-                <IoRestaurant className={cn("h-4 w-4 transition-colors", parentMode === "canteen" ? "text-primary" : "")} />
-                {parentMode === "canteen" && <span className="text-[11px] font-semibold">Canteen</span>}
-              </Link>
-
-              <Link
-                href="/library-reader"
-                className={cn(
-                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
-                  parentMode === "library"
-                    ? "bg-background text-foreground shadow-sm px-3"
-                    : "text-muted-foreground hover:text-foreground px-2",
-                )}
-              >
-                <IoBook className={cn("h-4 w-4 transition-colors", parentMode === "library" ? "text-primary" : "")} />
-                {parentMode === "library" && <span className="text-[11px] font-semibold">Library</span>}
-                {overdueCount > 0 && (
-                  <span className="absolute -right-1 -top-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
-                    {overdueCount}
-                  </span>
-                )}
-              </Link>
-
-              <Link
-                href="/content"
-                className={cn(
-                  "relative inline-flex h-7 items-center justify-center gap-1.5 rounded-lg transition-all duration-200",
-                  parentMode === "content"
-                    ? "bg-background text-foreground shadow-sm px-3"
-                    : "text-muted-foreground hover:text-foreground px-2",
-                )}
-              >
-                <IoDocumentText className={cn("h-4 w-4 transition-colors", parentMode === "content" ? "text-primary" : "")} />
-                {parentMode === "content" && <span className="text-[11px] font-semibold">Notes</span>}
-              </Link>
-            </div>
-
-            <div className="flex min-w-0 items-center gap-2">
-              {showHeaderContextSelector && parentMode === "canteen" && pathname !== "/cart" && (
-                <CanteenSelector
-                  value={selectedCanteen}
-                  onChange={setSelectedCanteen}
-                  showAll
-                  compact
-                  className="w-[148px] sm:w-[180px]"
-                />
-              )}
-
-              {showHeaderContextSelector && parentMode === "library" && (
-                <LibrarySelector
-                  value={selectedLibrary}
-                  onChange={setSelectedLibrary}
-                  showAll
-                  compact
-                  className="w-[148px] sm:w-[180px]"
-                />
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  blurFocusedElement();
-                  setWalletDrawerOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-card/80 px-2.5 py-1 text-xs font-semibold text-foreground shadow-sm transition-all hover:bg-card"
-              >
-                <IndianRupee className="h-3 w-3 text-primary" />
-                <span>{totalWalletBalance.toFixed(2)}</span>
-              </button>
-            </div>
-          </div>
         </div>
       </header>
 
-      <div className="app-mobile-safe-bottom">
+      {/* Mode tabs — sticky below header */}
+      <div
+        ref={tabsRef}
+        className="sticky z-40 w-full bg-[#f59e0b] dark:bg-[#b45309]"
+        style={{ top: "var(--header-h, 60px)" } as React.CSSProperties}
+      >
+        <div className="mx-auto w-full max-w-6xl px-3 md:px-6">
+          <div className="relative flex w-full items-end">
+            {[
+              { mode: "canteen" as ParentMode, href: "/menu", icon: IoRestaurant, label: "Canteen", badge: 0 },
+              { mode: "library" as ParentMode, href: "/library-showcase", icon: IoBook, label: "Library", badge: overdueCount },
+              { mode: "content" as ParentMode, href: "/assignments", icon: IoDocumentText, label: "Notes", badge: 0 },
+            ].map((tab) => {
+              const isActive = parentMode === tab.mode;
+              const Icon = tab.icon;
+              return (
+                <Link
+                  key={tab.mode}
+                  href={tab.href}
+                  className={cn(
+                    "relative flex flex-1 flex-col items-center gap-0.5 rounded-t-2xl px-5 py-2.5 transition-all duration-200",
+                    isActive
+                      ? "bg-background dark:bg-background z-10"
+                      : "bg-transparent hover:bg-white/20 dark:hover:bg-white/10 text-white/70",
+                  )}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="mode-tab-bg"
+                      className="absolute inset-0 rounded-t-2xl bg-background"
+                      transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
+                    />
+                  )}
+                  <Icon className={cn(
+                    "relative z-10 h-6 w-6",
+                    isActive ? "text-[#d4891a]" : "text-white/80",
+                  )} />
+                  <span className={cn(
+                    "relative z-10 text-[11px] font-semibold leading-none",
+                    isActive ? "text-foreground" : "text-white/80",
+                  )}>
+                    {tab.label}
+                  </span>
+                  {tab.badge > 0 && (
+                    <span className="absolute right-2 top-1.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                      {tab.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Context selector row - canteen mode only, below tabs */}
+      {showHeaderContextSelector && (
+        <div className="w-full bg-background px-3 py-2 md:px-6">
+          <div className="mx-auto flex max-w-6xl items-center gap-2">
+            <CanteenSelector
+              value={selectedCanteen}
+              onChange={setSelectedCanteen}
+              showAll={false}
+              includeInactive
+              compact
+              className="w-[180px] sm:w-[220px]"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="app-mobile-safe-bottom pb-28">
         {children}
       </div>
+
+      {/* Gradient dim behind bottom nav */}
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-36 bg-gradient-to-t from-background/90 via-background/60 to-transparent" />
 
       <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         <div className="mx-auto flex items-end justify-center gap-4 px-3">
@@ -724,9 +967,9 @@ function ParentLayoutContent({
                     <motion.div
                       layoutId="tab-pill"
                       className="absolute inset-0 rounded-4xl bg-primary/10 dark:bg-primary/20"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
+                      transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
+                    />)
+                  }
                   <motion.div
                     whileTap={{ scale: 0.85 }}
                     className="relative z-10 flex flex-col items-center gap-0.5"
@@ -794,7 +1037,7 @@ function ParentLayoutContent({
                       "text-[10px] font-bold transition-colors duration-200",
                       isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
                     )}>
-                      {getInitials(session?.user?.name)}
+                      {mounted ? getInitials(session?.user?.name) : "?"}
                     </AvatarFallback>
                   </Avatar>
                 </motion.div>
@@ -1010,6 +1253,69 @@ function ParentLayoutContent({
                   }}
                 >
                   View All Notifications
+                </Button>
+              </div>
+            </div>
+          </BottomSheet>
+
+          {/* Payments Drawer (mobile) */}
+          <BottomSheet
+            open={paymentsDrawerOpen}
+            onClose={() => { setPaymentsDrawerOpen(false); setSelectedPaymentEvent(null); }}
+            snapPoints={[88]}
+            bare
+          >
+            <div className="flex h-full flex-col">
+              <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3">
+                {selectedPaymentEvent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPaymentEvent(null)}
+                      className="mr-1 -ml-1 rounded-lg p-1.5 hover:bg-muted transition-colors"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <h3 className="text-base font-semibold truncate">{selectedPaymentEvent.title}</h3>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="flex items-center gap-2 text-base font-semibold">
+                      <IoCalendar className="h-4 w-4 text-primary" />
+                      Payments
+                    </h3>
+                    {pendingEventsCount > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                        {pendingEventsCount}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-3">
+                {paymentsLoading ? (
+                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                    Loading payments...
+                  </div>
+                ) : selectedPaymentEvent ? (
+                  renderPaymentEventDetail(selectedPaymentEvent)
+                ) : (
+                  renderPaymentEventList()
+                )}
+              </div>
+
+              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                <Button
+                  className="w-full gap-2"
+                  variant="outline"
+                  onClick={() => {
+                    setPaymentsDrawerOpen(false);
+                    setSelectedPaymentEvent(null);
+                    void router.push("/events");
+                  }}
+                >
+                  View Full History
                 </Button>
               </div>
             </div>
@@ -1246,6 +1552,81 @@ function ParentLayoutContent({
               </div>
             </SheetContent>
           </Sheet>
+
+          {/* Payments Drawer (desktop) */}
+          <Sheet
+            open={paymentsDrawerOpen}
+            onOpenChange={(open) => {
+              if (!open) { setSelectedPaymentEvent(null); }
+              if (open) blurFocusedElement();
+              setPaymentsDrawerOpen(open);
+            }}
+          >
+            <SheetContent
+              side="right"
+              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+            >
+              <div className="flex h-full flex-col">
+                <SheetHeader className="border-b border-border/60">
+                  <div className="flex items-center gap-2">
+                    {selectedPaymentEvent ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPaymentEvent(null)}
+                          className="-ml-1 mr-1 rounded-lg p-1.5 hover:bg-muted transition-colors"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <SheetTitle className="text-base font-semibold truncate">{selectedPaymentEvent.title}</SheetTitle>
+                      </>
+                    ) : (
+                      <>
+                        <SheetTitle className="flex items-center gap-2 text-base">
+                          <IoCalendar className="h-4 w-4 text-primary" />
+                          Payments
+                        </SheetTitle>
+                        {pendingEventsCount > 0 && (
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                            {pendingEventsCount}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <SheetDescription className="sr-only">
+                    {selectedPaymentEvent ? selectedPaymentEvent.title : "School payment events"}
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  {paymentsLoading ? (
+                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
+                      Loading payments...
+                    </div>
+                  ) : selectedPaymentEvent ? (
+                    renderPaymentEventDetail(selectedPaymentEvent)
+                  ) : (
+                    renderPaymentEventList()
+                  )}
+                </div>
+
+                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                  <Button
+                    className="w-full gap-2"
+                    variant="outline"
+                    onClick={() => {
+                      setPaymentsDrawerOpen(false);
+                      setSelectedPaymentEvent(null);
+                      void router.push("/events");
+                    }}
+                  >
+                    View Full History
+                  </Button>
+                </SheetFooter>
+              </div>
+            </SheetContent>
+          </Sheet>
         </>
       )}
 
@@ -1276,9 +1657,6 @@ function ParentLayoutContent({
           </Button>
         </div>
       </BottomSheet>
-
-      <ChatAssistant open={chatOpen} onOpenChange={setChatOpen} />
-      <LibraryChatAssistant open={libraryChatOpen} onOpenChange={setLibraryChatOpen} />
 
       {/* Notice Detail Dialog */}
       <Dialog open={activeNotice !== null} onOpenChange={(open) => { if (!open) setActiveNotice(null); }}>

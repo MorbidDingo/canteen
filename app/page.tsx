@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { CerteLogo } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import { useSession } from "@/lib/auth-client";
 
 type OrgContextDevice = {
@@ -82,7 +82,7 @@ export default function RootSplashPage() {
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center gap-4 px-4">
-      <CerteLogo size={110} />
+      <CerteWordmark className="text-5xl" />
       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
     </div>
   );

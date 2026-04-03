@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Loader2, ArrowLeft, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { CerteLogo } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       <Card className="w-full max-w-md animate-scale-in">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2">
-            <CerteLogo size={60} />
+            <CerteWordmark className="text-3xl" />
           </div>
           <CardTitle className="text-2xl">Forgot Password</CardTitle>
           <CardDescription>

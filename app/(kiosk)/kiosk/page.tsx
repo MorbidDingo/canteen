@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { CerteLogo } from "@/components/certe-logo";
+import { CerteWordmark } from "@/components/certe-logo";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -617,7 +617,7 @@ export default function KioskPage() {
               {browseTimer}s
             </Badge>
 
-            <CerteLogo size={48} />
+            <CerteWordmark className="text-2xl" />
             <Link href="/kiosk/offline">
               <Button variant="outline" size="sm">Offline Ops</Button>
             </Link>

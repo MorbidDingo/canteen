@@ -139,11 +139,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
   .dark body {
-    background-image:
-      radial-gradient(circle at 10% -10%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 42%),
-      radial-gradient(circle at 92% 0%, color-mix(in oklab, var(--accent) 45%, transparent), transparent 34%),
-      linear-gradient(180deg, color-mix(in oklab, var(--background) 94%, var(--foreground) 6%) 0%, var(--background) 50%);
-    background-attachment: fixed;
+    background-image: none;
   }
   h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
@@ -226,6 +222,15 @@
   50% { transform: translateY(-4px); }
 }
 
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-220%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
 .animate-fade-in-up {
   animation: fade-in-up 0.5s ease-out both;
 }
@@ -244,6 +249,10 @@
 
 .animate-bounce-subtle {
   animation: bounce-subtle 0.4s ease-out;
+}
+
+.animate-shine-sweep {
+  animation: shine-sweep 2.4s linear infinite;
 }
 
 /* Staggered animation delays for lists */

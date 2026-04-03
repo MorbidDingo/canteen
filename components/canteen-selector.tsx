@@ -20,9 +20,10 @@ interface CanteenSelectorProps {
   className?: string;
   compact?: boolean;
   includeInactive?: boolean;
+  iconOnly?: boolean;
 }
 
-export function CanteenSelector({ value, onChange, showAll = false, className, compact = false, includeInactive = false }: CanteenSelectorProps) {
+export function CanteenSelector({ value, onChange, showAll = false, className, compact = false, includeInactive = false, iconOnly = false }: CanteenSelectorProps) {
   const [canteens, setCanteens] = useState<Canteen[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -85,6 +86,52 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
     ? canteens.find((c) => c.id === value)?.name
     : showAll ? "All canteens" : undefined;
 
+  // Icon-only trigger (mobile compact variant)
+  if (iconOnly) {
+    return (
+      <Select
+        value={value ?? (showAll ? "__all__" : "")}
+        onValueChange={(v) => onChange(v === "__all__" ? null : v)}
+      >
+        <SelectTrigger
+          className={`h-9 w-9 shrink-0 rounded-full border-border/60 bg-background/80 p-0 shadow-sm backdrop-blur-sm [&>svg:last-child]:hidden ${className ?? ""}`}
+        >
+          <Store className="mx-auto h-4 w-4 text-[#d4891a]" />
+        </SelectTrigger>
+        <SelectContent position="popper" align="start" className="rounded-xl max-w-[calc(100vw-2rem)]">
+          {showAll && (
+            <SelectItem value="__all__" className="rounded-lg">
+              <div className="flex items-center gap-2">
+                <span className="font-medium">All canteens</span>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                  {canteens.length}
+                </Badge>
+              </div>
+            </SelectItem>
+          )}
+          {canteens.map((c) => (
+            <SelectItem key={c.id} value={c.id} className="rounded-lg">
+              <div className="flex items-center gap-1.5">
+                <span>{c.name}</span>
+                {includeInactive && c.status !== "ACTIVE" && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    Closed
+                  </Badge>
+                )}
+                {c.location && (
+                  <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    {c.location}
+                  </span>
+                )}
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
   return (
     <Select
       value={value ?? (showAll ? "__all__" : "")}
@@ -102,7 +149,7 @@ export function CanteenSelector({ value, onChange, showAll = false, className, c
           <span className="truncate">{selectedLabel ?? "Select canteen"}</span>
         </div>
       </SelectTrigger>
-      <SelectContent position="popper" className="rounded-xl">
+      <SelectContent position="popper" align="start" className="rounded-xl max-w-[calc(100vw-2rem)]">
         {showAll && (
           <SelectItem value="__all__" className="rounded-lg">
             <div className="flex items-center gap-2">
