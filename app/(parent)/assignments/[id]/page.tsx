@@ -52,6 +52,7 @@ type Submission = {
 
 type SubmissionAttachment = {
   id: string;
+  storageBackend: string;
   storageKey: string;
   mimeType: string;
   size: number;
@@ -177,7 +178,7 @@ export default function PostDetailPage() {
     return diff > 0 && diff < 48 * 60 * 60 * 1000;
   }
 
-  function getFileName(att: Attachment) {
+  function getFileName(att: { storageKey: string; originalFileName?: string | null }) {
     if (att.originalFileName) return att.originalFileName;
     return att.storageKey.split("/").pop()?.split("?")[0] || "file";
   }
