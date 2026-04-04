@@ -509,7 +509,6 @@ export default function SettingsPage() {
           )}
             </div>
           )}
-        </CardContent>
       </Card>
 
       <Card className="overflow-hidden rounded-2xl border border-border/40 bg-card p-5">
