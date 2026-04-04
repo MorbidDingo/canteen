@@ -523,20 +523,19 @@ function ParentLayoutContent({
   const renderPaymentEventDetail = (event: PaymentEventItem) => (
     <div className="space-y-4">
       {event.description && (
-        <p className="text-sm text-muted-foreground">{event.description}</p>
+        <p className="text-[13px] text-muted-foreground">{event.description}</p>
       )}
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
+      <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3.5">
         <div>
-          <p className="text-xs text-muted-foreground">Amount per child</p>
-          <p className="text-2xl font-bold flex items-center gap-1">
-            <IndianRupee className="h-5 w-5" />
-            {event.amount.toFixed(2)}
+          <p className="text-xs text-muted-foreground">Amount</p>
+          <p className="text-2xl font-semibold tabular-nums mt-0.5">
+            <span className="text-base text-muted-foreground">₹</span>{event.amount.toFixed(0)}
           </p>
         </div>
         {event.dueDate && (
           <div className="text-right">
-            <p className="text-xs text-muted-foreground">Due date</p>
-            <p className={cn("text-sm font-semibold", new Date(event.dueDate) < new Date() && !event.children.every(c => c.paid) ? "text-destructive" : "")}>
+            <p className="text-xs text-muted-foreground">Due</p>
+            <p className={cn("text-sm font-medium mt-0.5", new Date(event.dueDate) < new Date() && !event.children.every(c => c.paid) ? "text-destructive" : "")}>
               {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
             </p>
           </div>
@@ -605,9 +604,8 @@ function ParentLayoutContent({
 
     if (paymentEvents.length === 0 && paymentReceipts.length === 0) {
       return (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-          <IoCalendar className="mx-auto h-6 w-6 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No payment events yet</p>
+        <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center">
+          <p className="text-xs text-muted-foreground">No payment events yet</p>
         </div>
       );
     }
@@ -616,7 +614,7 @@ function ParentLayoutContent({
       <div className="space-y-3">
         {activeEvents.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Pending</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">Pending</p>
             {activeEvents.map((event) => {
               const overdue = event.dueDate ? new Date(event.dueDate) < new Date() : false;
               const paid = event.children.every((c) => c.paid);
@@ -626,25 +624,23 @@ function ParentLayoutContent({
                   type="button"
                   onClick={() => setSelectedPaymentEvent(event)}
                   className={cn(
-                    "w-full text-left rounded-2xl border p-3.5 transition-all hover:border-primary/30",
-                    overdue && !paid ? "border-destructive/40 bg-destructive/5" : "border-border/60 bg-card/70",
+                    "w-full text-left rounded-xl p-4 transition-all",
+                    overdue && !paid ? "bg-destructive/5" : "bg-muted/40 hover:bg-muted/60",
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold truncate">{event.title}</p>
-                      {event.description && <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{event.description}</p>}
+                      <p className="text-sm font-medium truncate">{event.title}</p>
                       {event.dueDate && (
-                        <p className={cn("text-[11px] mt-1", overdue && !paid ? "text-destructive font-medium" : "text-muted-foreground")}>
+                        <p className={cn("text-[11px] mt-0.5", overdue && !paid ? "text-destructive" : "text-muted-foreground")}>
                           Due {new Date(event.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                           {overdue && !paid && " · Overdue"}
                         </p>
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={cn("text-lg font-bold", paid ? "text-green-600 dark:text-green-400" : "")}>₹{event.amount.toFixed(0)}</p>
+                      <p className={cn("text-base font-semibold tabular-nums", paid ? "text-green-600 dark:text-green-400" : "")}>₹{event.amount.toFixed(0)}</p>
                       {paid && <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5 justify-end"><CheckCircle2 className="h-3 w-3" />Paid</span>}
-                      {!paid && overdue && <AlertCircle className="h-4 w-4 text-destructive ml-auto" />}
                     </div>
                   </div>
                 </button>
@@ -654,17 +650,17 @@ function ParentLayoutContent({
         )}
         {pastEvents.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">History</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">History</p>
             {pastEvents.map((event) => (
               <button
                 key={event.id}
                 type="button"
                 onClick={() => setSelectedPaymentEvent(event)}
-                className="w-full text-left rounded-2xl border border-border/40 bg-card/50 p-3.5 transition-all hover:border-primary/20"
+                className="w-full text-left rounded-xl bg-muted/25 hover:bg-muted/40 p-4 transition-all"
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium truncate">{event.title}</p>
-                  <p className="text-sm font-semibold text-muted-foreground shrink-0">₹{event.amount.toFixed(0)}</p>
+                  <p className="text-sm font-medium tabular-nums text-muted-foreground shrink-0">₹{event.amount.toFixed(0)}</p>
                 </div>
               </button>
             ))}
@@ -677,30 +673,29 @@ function ParentLayoutContent({
   const renderNotificationList = () => (
     <>
       {notifLoading ? (
-        <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-          Loading notifications...
+        <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+          Loading...
         </div>
       ) : noticeItems.length === 0 && notifItems.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-6 text-center">
-          <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
-          <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
+        <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center">
+          <p className="text-xs text-muted-foreground">Nothing yet</p>
         </div>
       ) : (
         <div className="space-y-1">
-          {/* Management notices – shown first with premium styling */}
+          {/* Management notices */}
           {noticeItems.map((n) => (
             <div
               key={n.id}
               className={cn(
-                "rounded-xl border px-3 py-2.5 transition-colors",
+                "rounded-xl px-3.5 py-3 transition-colors",
                 n.acknowledged
-                  ? "border-border/40 bg-card/50"
-                  : "border-violet-200 bg-violet-50/70 dark:border-violet-800/50 dark:bg-violet-950/20",
+                  ? "bg-transparent"
+                  : "bg-muted/50",
               )}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-semibold text-violet-900 dark:text-violet-100")}>
+                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-medium")}>
                     {n.title}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{n.message}</p>
@@ -708,17 +703,17 @@ function ParentLayoutContent({
                     <button
                       type="button"
                       onClick={() => setActiveNotice(n)}
-                      className="text-[11px] font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 underline-offset-2 hover:underline"
+                      className="text-[11px] font-medium text-foreground/70 hover:text-foreground underline-offset-2 hover:underline"
                     >
-                      Open to view full
+                      View
                     </button>
-                    <span className="text-[10px] text-muted-foreground/60">
+                    <span className="text-[10px] text-muted-foreground/50">
                       · {new Date(n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                     </span>
                   </div>
                 </div>
                 {!n.acknowledged && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 )}
               </div>
             </div>
@@ -730,22 +725,22 @@ function ParentLayoutContent({
               type="button"
               onClick={() => void markNotifAsRead(n.id, n.type)}
               className={cn(
-                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                "w-full text-left rounded-xl px-3.5 py-3 transition-colors",
                 n.readAt
-                  ? "hover:bg-card/70"
-                  : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
+                  ? "hover:bg-muted/40"
+                  : "bg-muted/40 hover:bg-muted/60",
               )}
             >
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                  <p className={cn("text-sm leading-tight", !n.readAt && "font-medium")}>{n.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+                  <p className="mt-0.5 text-[10px] text-muted-foreground/60">
                     {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
                 {!n.readAt && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 )}
               </div>
             </button>
@@ -782,91 +777,88 @@ function ParentLayoutContent({
 
   return (
     <>
-      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-[#f59e0b] dark:bg-[#b45309]">
-        <div className="mx-auto w-full max-w-6xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
-          {/* Top row: Certe branding + actions */}
+      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-b border-border/40">
+        <div className="mx-auto w-full max-w-2xl px-4 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
           <div className={cn(
             "flex items-center justify-between gap-3 transition-all duration-200",
-            headerCollapsed ? "py-1.5" : "pb-2",
+            headerCollapsed ? "py-2" : "py-2.5",
           )}>
             <div className="flex min-w-0 items-center gap-1">
-              <div className="relative h-8 min-w-[132px]">
+              <div className="relative h-8 min-w-[100px]">
                 <motion.div
                   className="absolute inset-0 flex items-center"
-                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -6 : 0 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -4 : 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
-                  <CerteWordmark className="text-[1.85rem]" white showPlus={certePlusActive} />
+                  <CerteWordmark className="text-[1.6rem]" showPlus={certePlusActive} />
                 </motion.div>
                 <motion.span
-                  className="absolute inset-0 flex items-center text-[1.5rem] font-sans font-black tracking-[-0.06em] text-white"
-                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 6 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute inset-0 flex items-center text-[1.1rem] font-sans font-semibold tracking-[-0.03em] text-foreground"
+                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 4 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                 >
                   {activeModeLabel}
                 </motion.span>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
-              <div className="flex items-center gap-0.5 rounded-xl border border-white/20 bg-white/20 px-1 py-1 shadow-sm backdrop-blur-sm">
-                <ParentNotificationBell
-                  parentId={session?.user?.id}
-                  externalUnreadCount={notifUnreadCount}
-                  onClick={() => void openNotificationDrawer()}
-                  className="h-9 w-9 rounded-lg"
-                />
+            <div className="flex shrink-0 items-center gap-0.5">
+              <ParentNotificationBell
+                parentId={session?.user?.id}
+                externalUnreadCount={notifUnreadCount}
+                onClick={() => void openNotificationDrawer()}
+                className="h-9 w-9 rounded-xl"
+              />
+              <button
+                type="button"
+                onClick={() => void openPaymentsDrawer()}
+                aria-label="Payments"
+                className="group relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <IoCalendar className="h-[18px] w-[18px]" />
+                {pendingEventsCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-0.5 text-[9px] font-bold leading-none text-white">
+                    {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Wallet"
+              >
+                <IoWallet className="h-[18px] w-[18px]" />
+              </button>
+              {parentMode === "canteen" && (
                 <button
                   type="button"
-                  onClick={() => void openPaymentsDrawer()}
-                  aria-label="Payments"
-                  className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
+                  onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
+                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="Cart"
                 >
-                  <IoCalendar className="h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-110" />
-                  {pendingEventsCount > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-300">
-                      {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
+                  <IoCart className={cn("h-[18px] w-[18px]", cartBounce && "animate-bounce-subtle")} />
+                  {mounted && cartCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold text-primary-foreground">
+                      {cartCount > 9 ? "9+" : cartCount}
                     </span>
                   )}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                  aria-label="Wallet"
-                >
-                  <IoWallet className="h-4.5 w-4.5" />
-                </button>
-                {parentMode === "canteen" && (
-                  <button
-                    type="button"
-                    onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
-                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                    aria-label="Cart"
-                  >
-                    <IoCart className={cn("h-4.5 w-4.5", cartBounce && "animate-bounce")} />
-                    {mounted && cartCount > 0 && (
-                      <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[9px] font-bold text-amber-700">
-                        {cartCount > 9 ? "9+" : cartCount}
-                      </span>
-                    )}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
         </div>
       </header>
 
-      {/* Mode tabs — sticky below header */}
+      {/* Mode switcher — minimal pill bar */}
       <div
         ref={tabsRef}
-        className="sticky z-40 w-full bg-[#f59e0b] dark:bg-[#b45309]"
-        style={{ top: "var(--header-h, 60px)" } as React.CSSProperties}
+        className="sticky z-40 w-full bg-background/80 backdrop-blur-xl"
+        style={{ top: "var(--header-h, 52px)" } as React.CSSProperties}
       >
-        <div className="mx-auto w-full max-w-6xl px-3 md:px-6">
-          <div className="relative flex w-full items-end">
+        <div className="mx-auto w-full max-w-2xl px-4 md:px-6">
+          <div className="flex items-center gap-1 py-2">
             {[
               { mode: "canteen" as ParentMode, href: "/menu", icon: IoRestaurant, label: "Canteen", badge: 0 },
               { mode: "library" as ParentMode, href: "/library-showcase", icon: IoBook, label: "Library", badge: overdueCount },
@@ -879,31 +871,23 @@ function ParentLayoutContent({
                   key={tab.mode}
                   href={tab.href}
                   className={cn(
-                    "relative flex flex-1 flex-col items-center gap-0.5 rounded-t-2xl px-5 py-2.5 transition-all duration-200",
+                    "relative flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-150",
                     isActive
-                      ? "bg-background dark:bg-background z-10"
-                      : "bg-transparent hover:bg-white/20 dark:hover:bg-white/10 text-white/70",
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
                   )}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="mode-tab-bg"
-                      className="absolute inset-0 rounded-t-2xl bg-background"
+                      className="absolute inset-0 rounded-full bg-muted dark:bg-muted"
                       transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
                     />
                   )}
-                  <Icon className={cn(
-                    "relative z-10 h-6 w-6",
-                    isActive ? "text-[#d4891a]" : "text-white/80",
-                  )} />
-                  <span className={cn(
-                    "relative z-10 text-[11px] font-semibold leading-none",
-                    isActive ? "text-foreground" : "text-white/80",
-                  )}>
-                    {tab.label}
-                  </span>
+                  <Icon className="relative z-10 h-4 w-4" />
+                  <span className="relative z-10">{tab.label}</span>
                   {tab.badge > 0 && (
-                    <span className="absolute right-2 top-1.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+                    <span className="relative z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
                       {tab.badge}
                     </span>
                   )}
@@ -934,16 +918,18 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      {/* Gradient dim behind bottom nav */}
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-36 bg-gradient-to-t from-background/90 via-background/60 to-transparent" />
+      {/* Subtle fade behind bottom nav */}
+      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-28 bg-gradient-to-t from-background via-background/50 to-transparent" />
 
-      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex items-end justify-center gap-4 px-3">
-          {/* iOS-style compact tab bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex items-center justify-center gap-2 px-4">
+          {/* Main tabs — frosted pill */}
           <div className={cn(
-            "w-70 h-16 flex items-stretch justify-between rounded-[72px] border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-            "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-            "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
+            "flex h-14 items-stretch rounded-full border border-border/50 px-1",
+            "bg-background/75 backdrop-blur-2xl backdrop-saturate-150",
+            "dark:border-border/30 dark:bg-background/60",
+            "shadow-[0_4px_24px_rgba(0,0,0,0.06)]",
+            "dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]",
           )}>
             {tabs.filter(item => !item.isProfile).map((tab) => {
               const isActive = activeTab === tab.key;
@@ -961,50 +947,49 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   onClick={handleClick}
-                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-5 py-1.5"
+                  className="relative flex min-w-0 flex-col items-center justify-center px-5"
                 >
                   {isActive && (
                     <motion.div
                       layoutId="tab-pill"
-                      className="absolute inset-0 rounded-4xl bg-primary/10 dark:bg-primary/20"
+                      className="absolute inset-1 rounded-full bg-primary/8 dark:bg-primary/12"
                       transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
-                    />)
-                  }
+                    />
+                  )}
                   <motion.div
-                    whileTap={{ scale: 0.85 }}
+                    whileTap={{ scale: 0.88 }}
                     className="relative z-10 flex flex-col items-center gap-0.5"
                   >
                     {Icon ? (
                       <Icon
                         className={cn(
-                          "h-[20px] w-[20px] transition-colors duration-200",
-                          isActive ? "text-primary" : "text-muted-foreground/70",
-                          tab.key === "cart" && cartBounce && "animate-bounce",
+                          "h-[20px] w-[20px] transition-colors duration-150",
+                          isActive ? "text-primary" : "text-muted-foreground/60",
                         )}
                       />
                     ) : null}
                     <span className={cn(
-                      "text-[10px] font-medium leading-none transition-colors duration-200",
-                      isActive ? "text-primary" : "text-muted-foreground/70",
+                      "text-[10px] font-medium leading-none transition-colors duration-150",
+                      isActive ? "text-primary" : "text-muted-foreground/60",
                     )}>
                       {tab.label}
                     </span>
                   </motion.div>
 
                   {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
+                    <span className="absolute right-2 top-1.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
                       {overdueCount}
                     </span>
                   )}
 
                   {tab.key === "cart" && mounted && cartCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
+                    <span className="absolute right-2 top-1.5 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
                       {cartCount}
                     </span>
                   )}
 
                   {tab.key === "controls" && tab.locked && (
-                    <span className="absolute right-1 top-0 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
+                    <span className="absolute right-2 top-1.5 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
                       +
                     </span>
                   )}
@@ -1013,7 +998,7 @@ function ParentLayoutContent({
             })}
           </div>
 
-          {/* Separated profile circle button */}
+          {/* Profile circle */}
           {(() => {
             const profileTab = tabs.find(item => item.isProfile);
             if (!profileTab) return null;
@@ -1022,20 +1007,22 @@ function ParentLayoutContent({
               <Link
                 href={profileTab.href}
                 className={cn(
-                  "relative bottom-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-                  "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
-                  isActive && "ring-2 ring-primary/40",
+                  "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border/50",
+                  "bg-background/75 backdrop-blur-2xl backdrop-saturate-150",
+                  "dark:border-border/30 dark:bg-background/60",
+                  "shadow-[0_4px_24px_rgba(0,0,0,0.06)]",
+                  "dark:shadow-[0_4px_24px_rgba(0,0,0,0.3)]",
+                  isActive && "ring-1.5 ring-primary/30",
                 )}
               >
-                <motion.div whileTap={{ scale: 0.85 }}>
+                <motion.div whileTap={{ scale: 0.88 }}>
                   <Avatar className={cn(
-                    "h-12 w-12 ring-1 transition-all duration-200",
-                    isActive ? "ring-primary/40" : "ring-primary/20",
+                    "h-9 w-9 transition-all duration-150",
+                    isActive ? "ring-1 ring-primary/30" : "",
                   )}>
                     <AvatarFallback className={cn(
-                      "text-[10px] font-bold transition-colors duration-200",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
+                      "text-[10px] font-semibold transition-colors duration-150",
+                      isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground/80",
                     )}>
                       {mounted ? getInitials(session?.user?.name) : "?"}
                     </AvatarFallback>
@@ -1056,22 +1043,19 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="space-y-1 border-b border-border/60 px-5 py-3">
-                <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <IoCart className="h-4 w-4 text-primary" />
-                  Cart
-                </h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="px-5 py-4">
+                <h3 className="text-lg font-semibold tracking-tight">Cart</h3>
+                <p className="text-[13px] text-muted-foreground">
                   {cartCount > 0
-                    ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
-                    : "Your cart is empty. Add something from the menu."}
+                    ? `${cartCount} item${cartCount > 1 ? "s" : ""}`
+                    : "Empty"}
                 </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto px-5">
                 {cartItems.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    No items yet. Tap Menu to start an order.
+                  <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                    Add items from the menu.
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1081,15 +1065,13 @@ function ParentLayoutContent({
                       return (
                         <div
                           key={item.menuItemId}
-                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-semibold">{item.name}</p>
-                              <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
-                            </div>
-                            <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">× {item.quantity}</p>
                           </div>
+                          <p className="text-sm font-medium tabular-nums">{`₹${lineTotal.toFixed(0)}`}</p>
                         </div>
                       );
                     })}
@@ -1097,13 +1079,14 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="space-y-2 border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
-                  <span className="text-sm text-muted-foreground">Subtotal</span>
-                  <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
-                </div>
+              <div className="space-y-2 px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {cartCount > 0 && (
+                  <div className="flex items-center justify-between px-1 pb-1">
+                    <span className="text-[13px] text-muted-foreground">Subtotal</span>
+                    <span className="text-base font-semibold tabular-nums">{`₹${cartTotal.toFixed(0)}`}</span>
+                  </div>
+                )}
                 <Button
-                  variant="premium"
                   className="w-full"
                   disabled={cartCount === 0}
                   onClick={() => {
@@ -1111,7 +1094,7 @@ function ParentLayoutContent({
                     void router.push("/cart");
                   }}
                 >
-                  Open Full Cart
+                  View Cart
                 </Button>
                 {cartCount > 0 && (
                   <Button
@@ -1119,7 +1102,7 @@ function ParentLayoutContent({
                     className="w-full text-destructive hover:text-destructive"
                     onClick={clearCart}
                   >
-                    Clear Cart
+                    Clear
                   </Button>
                 )}
               </div>
@@ -1133,41 +1116,36 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="space-y-1 border-b border-border/60 px-5 py-3">
-                <h3 className="flex items-center gap-2 text-base font-semibold">
-                  <IoWallet className="h-4 w-4 text-primary" />
-                  Family Wallet
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Quick balance snapshot across all child wallets.
-                </p>
+              <div className="px-5 py-4">
+                <h3 className="text-lg font-semibold tracking-tight">Wallet</h3>
+                <p className="text-[13px] text-muted-foreground">Family balance overview</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto px-5">
                 {walletsLoading ? (
-                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                    Loading wallet balances...
+                  <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                    Loading...
                   </div>
                 ) : walletError ? (
-                  <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                  <div className="space-y-3 rounded-2xl bg-destructive/5 p-5">
                     <p className="text-sm text-destructive">{walletError}</p>
                     <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
                       Retry
                     </Button>
                   </div>
                 ) : wallets.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    No wallet found yet. Add a child to activate family wallet.
+                  <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                    Add a child to activate wallet.
                   </div>
                 ) : (
                   <>
-                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {walletOwnerName}&apos;s Family Balance
+                    <div className="mb-4 rounded-2xl bg-muted/40 p-5">
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        {walletOwnerName}&apos;s Balance
                       </p>
-                      <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
-                        <IndianRupee className="h-5 w-5 text-primary" />
-                        {totalWalletBalance.toFixed(2)}
+                      <p className="mt-2 flex items-baseline gap-1 text-3xl font-semibold tabular-nums">
+                        <span className="text-lg text-muted-foreground">₹</span>
+                        {totalWalletBalance.toFixed(0)}
                       </p>
                     </div>
 
@@ -1175,19 +1153,12 @@ function ParentLayoutContent({
                       {wallets.map((wallet) => (
                         <div
                           key={wallet.childId}
-                          className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                          className="flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-4 py-3"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold">{wallet.childName}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {walletOwnerName}&apos;s available balance
-                              </p>
-                            </div>
-                            <p className="text-sm font-semibold text-primary">
-                              {`INR ${wallet.balance.toFixed(2)}`}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium">{wallet.childName}</p>
+                          <p className="text-sm font-medium tabular-nums text-foreground">
+                            ₹{wallet.balance.toFixed(0)}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -1195,16 +1166,14 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
-                  variant="premium"
+                  className="w-full"
                   onClick={() => {
                     setWalletDrawerOpen(false);
                     void router.push(withParentMode("/wallet"));
                   }}
                 >
-                  <IoSparkles className="h-4 w-4" />
                   Open Wallet
                 </Button>
               </div>
@@ -1219,19 +1188,16 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-                <div className="space-y-0.5">
-                  <h3 className="flex items-center gap-2 text-base font-semibold">
-                    <IoNotifications className="h-4 w-4 text-orange-500" />
-                    Notifications
-                  </h3>
-                  <p className="text-xs text-muted-foreground">{notifUnreadCount} unread</p>
+              <div className="flex items-center justify-between px-5 py-4">
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight">Notifications</h3>
+                  <p className="text-[13px] text-muted-foreground">{notifUnreadCount} unread</p>
                 </div>
                 {notifUnreadCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-xs text-orange-600 hover:bg-orange-50 hover:text-orange-700"
+                    className="text-xs text-muted-foreground"
                     onClick={() => void markAllNotifsRead()}
                   >
                     Mark all read
@@ -1239,20 +1205,20 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto px-4">
                 {renderNotificationList()}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
+                  className="w-full"
                   variant="outline"
                   onClick={() => {
                     setNotificationDrawerOpen(false);
                     void router.push(withParentMode("/notifications"));
                   }}
                 >
-                  View All Notifications
+                  View All
                 </Button>
               </div>
             </div>
@@ -1266,7 +1232,7 @@ function ParentLayoutContent({
             bare
           >
             <div className="flex h-full flex-col">
-              <div className="flex items-center gap-2 border-b border-border/60 px-5 py-3">
+              <div className="flex items-center gap-2 px-5 py-4">
                 {selectedPaymentEvent ? (
                   <>
                     <button
@@ -1276,14 +1242,11 @@ function ParentLayoutContent({
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
-                    <h3 className="text-base font-semibold truncate">{selectedPaymentEvent.title}</h3>
+                    <h3 className="text-lg font-semibold tracking-tight truncate">{selectedPaymentEvent.title}</h3>
                   </>
                 ) : (
                   <>
-                    <h3 className="flex items-center gap-2 text-base font-semibold">
-                      <IoCalendar className="h-4 w-4 text-primary" />
-                      Payments
-                    </h3>
+                    <h3 className="text-lg font-semibold tracking-tight">Payments</h3>
                     {pendingEventsCount > 0 && (
                       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                         {pendingEventsCount}
@@ -1293,10 +1256,10 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-3">
+              <div className="flex-1 overflow-y-auto px-4">
                 {paymentsLoading ? (
-                  <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                    Loading payments...
+                  <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                    Loading...
                   </div>
                 ) : selectedPaymentEvent ? (
                   renderPaymentEventDetail(selectedPaymentEvent)
@@ -1305,9 +1268,9 @@ function ParentLayoutContent({
                 )}
               </div>
 
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <Button
-                  className="w-full gap-2"
+                  className="w-full"
                   variant="outline"
                   onClick={() => {
                     setPaymentsDrawerOpen(false);
@@ -1315,7 +1278,7 @@ function ParentLayoutContent({
                     void router.push("/events");
                   }}
                 >
-                  View Full History
+                  View History
                 </Button>
               </div>
             </div>
@@ -1332,25 +1295,22 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoCart className="h-4 w-4 text-primary" />
-                    Cart
-                  </SheetTitle>
-                  <SheetDescription>
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Cart</SheetTitle>
+                  <SheetDescription className="text-[13px]">
                     {cartCount > 0
-                      ? `${cartCount} item${cartCount > 1 ? "s" : ""} ready for checkout`
-                      : "Your cart is empty. Add something from the menu."}
+                      ? `${cartCount} item${cartCount > 1 ? "s" : ""}`
+                      : "Empty"}
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-6">
                   {cartItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      No items yet. Tap Menu to start an order.
+                    <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                      Add items from the menu.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1360,15 +1320,13 @@ function ParentLayoutContent({
                         return (
                           <div
                             key={item.menuItemId}
-                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                            className="flex items-center justify-between gap-3 rounded-xl bg-muted/40 px-4 py-3"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">{item.name}</p>
-                                <p className="text-xs text-muted-foreground">Qty {item.quantity}</p>
-                              </div>
-                              <p className="text-sm font-semibold">{`INR ${lineTotal.toFixed(2)}`}</p>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{item.name}</p>
+                              <p className="text-xs text-muted-foreground">× {item.quantity}</p>
                             </div>
+                            <p className="text-sm font-medium tabular-nums">{`₹${lineTotal.toFixed(0)}`}</p>
                           </div>
                         );
                       })}
@@ -1376,14 +1334,15 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between rounded-xl border border-border/70 bg-background px-3 py-2">
-                      <span className="text-sm text-muted-foreground">Subtotal</span>
-                      <span className="text-sm font-semibold">{`INR ${cartTotal.toFixed(2)}`}</span>
-                    </div>
+                <SheetFooter className="px-6 py-5">
+                  <div className="space-y-2 w-full">
+                    {cartCount > 0 && (
+                      <div className="flex items-center justify-between px-1 pb-1">
+                        <span className="text-[13px] text-muted-foreground">Subtotal</span>
+                        <span className="text-base font-semibold tabular-nums">{`₹${cartTotal.toFixed(0)}`}</span>
+                      </div>
+                    )}
                     <Button
-                      variant="premium"
                       className="w-full"
                       disabled={cartCount === 0}
                       onClick={() => {
@@ -1391,7 +1350,7 @@ function ParentLayoutContent({
                         void router.push("/cart");
                       }}
                     >
-                      Open Full Cart
+                      View Cart
                     </Button>
                     {cartCount > 0 && (
                       <Button
@@ -1399,7 +1358,7 @@ function ParentLayoutContent({
                         className="w-full text-destructive hover:text-destructive"
                         onClick={clearCart}
                       >
-                        Clear Cart
+                        Clear
                       </Button>
                     )}
                   </div>
@@ -1417,44 +1376,39 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoWallet className="h-4 w-4 text-primary" />
-                    Family Wallet
-                  </SheetTitle>
-                  <SheetDescription>
-                    Quick balance snapshot across all child wallets.
-                  </SheetDescription>
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Wallet</SheetTitle>
+                  <SheetDescription className="text-[13px]">Family balance overview</SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-6">
                   {walletsLoading ? (
-                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                      Loading wallet balances...
+                    <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </div>
                   ) : walletError ? (
-                    <div className="space-y-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+                    <div className="space-y-3 rounded-2xl bg-destructive/5 p-5">
                       <p className="text-sm text-destructive">{walletError}</p>
                       <Button variant="outline" size="sm" onClick={() => void fetchWallets()}>
                         Retry
                       </Button>
                     </div>
                   ) : wallets.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                      No wallet found yet. Add a child to activate family wallet.
+                    <div className="rounded-2xl border border-dashed border-border/40 p-8 text-center text-sm text-muted-foreground">
+                      Add a child to activate wallet.
                     </div>
                   ) : (
                     <>
-                    <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          {walletOwnerName}&apos;s Family Balance
+                    <div className="mb-4 rounded-2xl bg-muted/40 p-5">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {walletOwnerName}&apos;s Balance
                         </p>
-                        <p className="mt-1 flex items-center gap-1 text-2xl font-bold">
-                          <IndianRupee className="h-5 w-5 text-primary" />
-                          {totalWalletBalance.toFixed(2)}
+                        <p className="mt-2 flex items-baseline gap-1 text-3xl font-semibold tabular-nums">
+                          <span className="text-lg text-muted-foreground">₹</span>
+                          {totalWalletBalance.toFixed(0)}
                         </p>
                       </div>
 
@@ -1462,19 +1416,12 @@ function ParentLayoutContent({
                         {wallets.map((wallet) => (
                           <div
                             key={wallet.childId}
-                            className="rounded-2xl border border-border/60 bg-card/70 p-3"
+                            className="flex items-center justify-between gap-3 rounded-xl bg-muted/30 px-4 py-3"
                           >
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold">{wallet.childName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {walletOwnerName}&apos;s available balance
-                                </p>
-                              </div>
-                              <p className="text-sm font-semibold text-primary">
-                                {`INR ${wallet.balance.toFixed(2)}`}
-                              </p>
-                            </div>
+                            <p className="text-sm font-medium">{wallet.childName}</p>
+                            <p className="text-sm font-medium tabular-nums text-foreground">
+                              ₹{wallet.balance.toFixed(0)}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -1482,16 +1429,14 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <Button
-                    className="w-full gap-2"
-                    variant="premium"
+                    className="w-full"
                     onClick={() => {
                       setWalletDrawerOpen(false);
                       void router.push(withParentMode("/wallet"));
                     }}
                   >
-                    <IoSparkles className="h-4 w-4" />
                     Open Wallet
                   </Button>
                 </SheetFooter>
@@ -1509,43 +1454,40 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="space-y-1 border-b border-border/60">
-                  <SheetTitle className="flex items-center gap-2 text-base">
-                    <IoNotifications className="h-4 w-4 text-orange-500" />
-                    Notifications
-                  </SheetTitle>
-                  <SheetDescription>
-                    {notifUnreadCount} unread notification{notifUnreadCount !== 1 ? "s" : ""}
+                <SheetHeader className="px-6 py-5">
+                  <SheetTitle className="text-lg font-semibold tracking-tight">Notifications</SheetTitle>
+                  <SheetDescription className="text-[13px]">
+                    {notifUnreadCount} unread
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto px-4">
                   {renderNotificationList()}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <div className="space-y-2 w-full">
                     {notifUnreadCount > 0 && (
                       <Button
                         variant="ghost"
-                        className="w-full text-xs text-orange-600"
+                        className="w-full text-xs text-muted-foreground"
                         onClick={() => void markAllNotifsRead()}
                       >
                         Mark all as read
                       </Button>
                     )}
                     <Button
-                      className="w-full gap-2"
+                      className="w-full"
                       variant="outline"
                       onClick={() => {
                         setNotificationDrawerOpen(false);
                         void router.push(withParentMode("/notifications"));
                       }}
                     >
-                      View All Notifications
+                      View All
                     </Button>
                   </div>
                 </SheetFooter>
@@ -1564,10 +1506,10 @@ function ParentLayoutContent({
           >
             <SheetContent
               side="right"
-              className="w-[92vw] border-l border-white/15 bg-background/95 p-0 backdrop-blur-2xl sm:max-w-md"
+              className="w-[92vw] border-l border-border/30 bg-background p-0 sm:max-w-md"
             >
               <div className="flex h-full flex-col">
-                <SheetHeader className="border-b border-border/60">
+                <SheetHeader className="px-6 py-5">
                   <div className="flex items-center gap-2">
                     {selectedPaymentEvent ? (
                       <>
@@ -1578,14 +1520,11 @@ function ParentLayoutContent({
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </button>
-                        <SheetTitle className="text-base font-semibold truncate">{selectedPaymentEvent.title}</SheetTitle>
+                        <SheetTitle className="text-lg font-semibold tracking-tight truncate">{selectedPaymentEvent.title}</SheetTitle>
                       </>
                     ) : (
                       <>
-                        <SheetTitle className="flex items-center gap-2 text-base">
-                          <IoCalendar className="h-4 w-4 text-primary" />
-                          Payments
-                        </SheetTitle>
+                        <SheetTitle className="text-lg font-semibold tracking-tight">Payments</SheetTitle>
                         {pendingEventsCount > 0 && (
                           <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
                             {pendingEventsCount}
@@ -1599,10 +1538,10 @@ function ParentLayoutContent({
                   </SheetDescription>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex-1 overflow-y-auto px-5">
                   {paymentsLoading ? (
-                    <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
-                      Loading payments...
+                    <div className="rounded-2xl bg-muted/30 p-8 text-center text-sm text-muted-foreground">
+                      Loading...
                     </div>
                   ) : selectedPaymentEvent ? (
                     renderPaymentEventDetail(selectedPaymentEvent)
@@ -1611,9 +1550,9 @@ function ParentLayoutContent({
                   )}
                 </div>
 
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
+                <SheetFooter className="px-6 py-5">
                   <Button
-                    className="w-full gap-2"
+                    className="w-full"
                     variant="outline"
                     onClick={() => {
                       setPaymentsDrawerOpen(false);
@@ -1621,7 +1560,7 @@ function ParentLayoutContent({
                       void router.push("/events");
                     }}
                   >
-                    View Full History
+                    View History
                   </Button>
                 </SheetFooter>
               </div>
@@ -1634,20 +1573,19 @@ function ParentLayoutContent({
         open={showControlsSheet}
         onClose={() => setShowControlsSheet(false)}
       >
-        <div className="flex flex-col items-center gap-4 py-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <IoShieldCheckmark className="h-7 w-7 text-primary" />
+        <div className="flex flex-col items-center gap-5 py-6">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <IoShieldCheckmark className="h-6 w-6 text-foreground" />
           </div>
           <div className="text-center">
-            <h3 className="text-lg font-bold">Unlock Controls</h3>
-            <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
-              Set spend limits and block items with Certe Plus.
+            <h3 className="text-lg font-semibold tracking-tight">Unlock Controls</h3>
+            <p className="mt-1 max-w-[260px] text-[13px] text-muted-foreground">
+              Set spend limits and block items with Certe+
             </p>
           </div>
           <Button
-            variant="premium"
             size="lg"
-            className="w-full max-w-[280px]"
+            className="w-full max-w-[260px]"
             onClick={() => {
               setShowControlsSheet(false);
               void router.push(withParentMode("/settings"));
@@ -1662,12 +1600,12 @@ function ParentLayoutContent({
       <Dialog open={activeNotice !== null} onOpenChange={(open) => { if (!open) setActiveNotice(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base leading-snug pr-4">
+            <DialogTitle className="text-base font-semibold leading-snug pr-4">
               {activeNotice?.title ?? "Notice"}
             </DialogTitle>
             <DialogDescription className="sr-only">Notice from management</DialogDescription>
           </DialogHeader>
-          <div className="rounded-xl border border-violet-100 bg-violet-50/50 dark:border-violet-900/30 dark:bg-violet-950/20 p-4">
+          <div className="rounded-xl bg-muted/40 p-5">
             <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
               {activeNotice?.message}
             </p>
@@ -1681,7 +1619,7 @@ function ParentLayoutContent({
           <DialogFooter>
             {activeNotice && !activeNotice.acknowledged ? (
               <Button
-                className="w-full gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+                className="w-full"
                 onClick={() => { if (activeNotice) void acknowledgeNotice(activeNotice.id); }}
               >
                 Acknowledge

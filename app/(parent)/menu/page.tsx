@@ -147,7 +147,7 @@ export default function MenuPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="fixed bottom-[calc(5.4rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 md:hidden pointer-events-auto"
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 right-5 z-40 md:hidden pointer-events-auto"
           >
             <button
               type="button"
@@ -155,16 +155,16 @@ export default function MenuPage() {
                 e.stopPropagation();
                 router.push("/cart");
               }}
-              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 py-3.5 text-primary-foreground shadow-lg"
+              className="flex w-full items-center justify-between rounded-2xl bg-foreground px-5 py-3.5 text-background shadow-lg"
             >
               <div className="flex items-center gap-2.5">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="text-sm font-semibold">
+                <ShoppingCart className="h-4.5 w-4.5" />
+                <span className="text-sm font-medium">
                   {cartCount} {cartCount === 1 ? "item" : "items"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">₹{cartTotal.toFixed(0)}</span>
+                <span className="text-sm font-semibold">₹{cartTotal.toFixed(0)}</span>
                 <ArrowRight className="h-4 w-4" />
               </div>
             </button>
