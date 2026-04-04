@@ -97,6 +97,7 @@ export async function GET() {
         reasons: ["Complete meal option"],
         canteenId: null,
         canteenName: null,
+        imageUrl: null,
       }));
     nutritionRecs.push(...supplements);
   }

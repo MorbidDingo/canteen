@@ -286,7 +286,7 @@ export default function NewPostPage() {
       }
 
       toast.success(asDraft ? "Draft saved" : "Post published");
-      router.push("/content");
+      router.push("/assignments");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create post");
     } finally {
@@ -311,7 +311,7 @@ export default function NewPostPage() {
       <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 pb-3 pt-4">
         <button
           type="button"
-          onClick={() => router.push("/content")}
+          onClick={() => router.push("/assignments")}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/50 transition-colors active:scale-95"
         >
           <ArrowLeft className="h-4 w-4" />
