@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
@@ -11,6 +11,8 @@ import {
   StickyNote,
   Calendar,
   Plus,
+  ClipboardList,
+  X,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
@@ -74,6 +76,7 @@ function groupByDate(posts: FeedPost[]): { label: string; posts: FeedPost[] }[] 
 
 export default function AssignmentsFeedPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { data: session } = useSession();
   const urlType = searchParams.get("type") === "NOTE" ? "NOTE" : "ASSIGNMENT";
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -85,6 +88,7 @@ export default function AssignmentsFeedPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const limit = 20;
 
   const fetchFeed = useCallback(async () => {
@@ -182,15 +186,16 @@ export default function AssignmentsFeedPage() {
 
         {/* Create button — only when user has content permission */}
         {canCreate && (
-          <Link
-            href={`/content/new?type=${activeTab}`}
+          <button
+            type="button"
+            onClick={() => setCreateMenuOpen(true)}
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90",
               tags.length === 0 && "ml-auto",
             )}
           >
             <Plus className="h-4 w-4" />
-          </Link>
+          </button>
         )}
       </div>
 
@@ -205,6 +210,16 @@ export default function AssignmentsFeedPage() {
           <p className="mt-3 text-[15px] text-muted-foreground">
             No {activeTab === "ASSIGNMENT" ? "assignments" : "notes"} yet
           </p>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setCreateMenuOpen(true)}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create {activeTab === "ASSIGNMENT" ? "Assignment" : "Note"}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
@@ -315,6 +330,59 @@ export default function AssignmentsFeedPage() {
           </div>
         </div>
       </BottomSheet>
+
+      {/* Create post bottom sheet */}
+      <BottomSheet open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} snapPoints={[30]}>
+        <div className="space-y-3 p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Create new</p>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMenuOpen(false);
+                router.push("/content/new?type=ASSIGNMENT");
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                <ClipboardList className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold">New Assignment</p>
+                <p className="text-[12px] text-muted-foreground">Create a task with a due date</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateMenuOpen(false);
+                router.push("/content/new?type=NOTE");
+              }}
+              className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
+                <StickyNote className="h-5 w-5 text-orange-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold">New Note</p>
+                <p className="text-[12px] text-muted-foreground">Share an announcement or info</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Floating create button */}
+      {canCreate && !createMenuOpen && (
+        <button
+          type="button"
+          onClick={() => setCreateMenuOpen(true)}
+          className="fixed bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 hover:bg-primary/90"
+          aria-label="Create post"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
     </div>
   );
 }

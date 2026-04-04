@@ -350,6 +350,10 @@ function ParentLayoutContent({
     }
   }, [blurFocusedElement]);
 
+  const PAYMENT_NOTIF_TYPES = useMemo(() => new Set([
+    "PAYMENT_EVENT_CREATED", "PAYMENT_EVENT_REMINDER", "PAYMENT_COMPLETED",
+  ]), []);
+
   const getNotifRoute = useCallback((type: string): string => {
     if (type.startsWith("ORDER") || type === "KIOSK_ORDER_GIVEN" || type === "KIOSK_ORDER_PICKED") return "/orders";
     if (type.startsWith("WALLET") || type === "WALLET_TOPUP") return "/wallet?mode=canteen";
@@ -371,9 +375,13 @@ function ParentLayoutContent({
     });
     if (type) {
       setNotificationDrawerOpen(false);
-      router.push(getNotifRoute(type));
+      if (PAYMENT_NOTIF_TYPES.has(type)) {
+        void openPaymentsDrawer();
+      } else {
+        router.push(getNotifRoute(type));
+      }
     }
-  }, [getNotifRoute, router]);
+  }, [getNotifRoute, router, PAYMENT_NOTIF_TYPES, openPaymentsDrawer]);
 
   const markAllNotifsRead = useCallback(async () => {
     setNotifItems((prev) =>
@@ -716,12 +724,22 @@ function ParentLayoutContent({
               )}
             >
               <div className="flex items-start gap-2">
+                {PAYMENT_NOTIF_TYPES.has(n.type) && (
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                    <IndianRupee className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground/70">
-                    {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <p className="text-[10px] text-muted-foreground/70">
+                      {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    {PAYMENT_NOTIF_TYPES.has(n.type) && (
+                      <span className="text-[10px] font-medium text-primary">View payment →</span>
+                    )}
+                  </div>
                 </div>
                 {!n.readAt && (
                   <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />

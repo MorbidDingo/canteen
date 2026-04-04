@@ -7,7 +7,7 @@ import {
   readingBookmark,
 } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, count, desc, sql } from "drizzle-orm";
+import { and, eq, count, desc, sql, gte } from "drizzle-orm";
 
 /**
  * GET /api/library/reader/stats
@@ -55,7 +55,7 @@ export async function GET() {
     .limit(10);
 
   // Trending books — sessions started in the last 7 days
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const trendingBooks = await db
     .select({
       bookId: readableBook.id,
