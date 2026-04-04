@@ -311,23 +311,8 @@ export default function CalendarPage() {
               const evDate = new Date(ev.date);
               const dayStr = evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
               const isAssignment = ev.type === "assignment";
-              const Wrapper = isAssignment ? Link : "div";
-              const wrapperProps = isAssignment
-                ? { href: `/assignments/${ev.id}` as string }
-                : {};
-
-              return (
-                <Wrapper
-                  key={ev.id}
-                  {...(wrapperProps as Record<string, string>)}
-                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
-                  onClick={() => {
-                    if (!isAssignment) {
-                      const key = toDateKey(evDate);
-                      setSelectedDate(key);
-                    }
-                  }}
-                >
+              const innerContent = (
+                <>
                   {/* Colour accent bar */}
                   <div className={cn("h-10 w-1 rounded-full shrink-0", DOT_COLORS[ev.type])} />
                   <div className="min-w-0 flex-1">
@@ -341,7 +326,28 @@ export default function CalendarPage() {
                       )}
                     </p>
                   </div>
-                </Wrapper>
+                </>
+              );
+
+              return isAssignment ? (
+                <Link
+                  key={ev.id}
+                  href={`/assignments/${ev.id}`}
+                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                >
+                  {innerContent}
+                </Link>
+              ) : (
+                <div
+                  key={ev.id}
+                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                  onClick={() => {
+                    const key = toDateKey(evDate);
+                    setSelectedDate(key);
+                  }}
+                >
+                  {innerContent}
+                </div>
               );
             })}
           </div>
