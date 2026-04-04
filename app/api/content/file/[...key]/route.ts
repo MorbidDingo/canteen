@@ -77,10 +77,13 @@ export async function GET(
     // Build download filename: postTitle-originalFileName
     let downloadName: string | undefined;
     if (wantDownload) {
-      const ext = att.storageKey.split(".").pop()?.split("?")[0] || "";
-      const fileName = att.storageKey.split("/").pop()?.split("?")[0] || "file";
-      const safeTitle = (post.title || "attachment").replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_");
-      downloadName = `${safeTitle}-${fileName}`;
+      if (att.originalFileName) {
+        downloadName = att.originalFileName;
+      } else {
+        const fileName = att.storageKey.split("/").pop()?.split("?")[0] || "file";
+        const safeTitle = (post.title || "attachment").replace(/[^a-zA-Z0-9 ]/g, "").trim().replace(/\s+/g, "_");
+        downloadName = `${safeTitle}-${fileName}`;
+      }
     }
 
     return redirectToFile(att.storageBackend, att.storageKey, downloadName);

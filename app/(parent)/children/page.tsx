@@ -1,38 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import {
-  Users,
-  Plus,
-  CreditCard,
-  Wallet,
-  Loader2,
-  User,
-  Pencil,
-  ArrowLeft,
-} from "lucide-react";
+import { Plus, Loader2, ChevronRight } from "lucide-react";
+import { BottomSheet } from "@/components/ui/motion";
 
 type Child = {
   id: string;
@@ -45,15 +20,11 @@ type Child = {
 };
 
 export default function ChildrenPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const parentMode = searchParams.get("mode") === "library" ? "library" : "canteen";
-  const settingsHref = `/settings?mode=${parentMode}`;
   const isGeneralAccount = session?.user?.role === "GENERAL";
   const [children, setChildren] = useState<Child[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -71,7 +42,7 @@ export default function ChildrenPage() {
         setChildren(data);
       }
     } catch {
-      toast.error("Failed to load children");
+      toast.error("Failed to load members");
     } finally {
       setLoading(false);
     }
@@ -81,37 +52,17 @@ export default function ChildrenPage() {
     fetchChildren();
   }, [fetchChildren]);
 
-  if (isGeneralAccount) {
-    return (
-      <div className="app-shell-compact">
-        <Card>
-          <CardHeader>
-            <CardTitle>General Account</CardTitle>
-            <CardDescription>
-              General and teacher accounts do not use child profiles.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" onClick={() => router.push(settingsHref)}>
-              Back to Settings
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   const resetForm = () => {
     setFormData({ name: "", grNumber: "", className: "", section: "" });
     setEditingChild(null);
   };
 
-  const openAddDialog = () => {
+  const openAdd = () => {
     resetForm();
-    setDialogOpen(true);
+    setSheetOpen(true);
   };
 
-  const openEditDialog = (child: Child) => {
+  const openEdit = (child: Child) => {
     setEditingChild(child);
     setFormData({
       name: child.name,
@@ -119,7 +70,7 @@ export default function ChildrenPage() {
       className: child.className || "",
       section: child.section || "",
     });
-    setDialogOpen(true);
+    setSheetOpen(true);
   };
 
   const handleSubmit = async () => {
@@ -146,8 +97,8 @@ export default function ChildrenPage() {
         return;
       }
 
-      toast.success(editingChild ? "Child updated!" : "Child added!");
-      setDialogOpen(false);
+      toast.success(editingChild ? "Updated!" : "Member added!");
+      setSheetOpen(false);
       resetForm();
       fetchChildren();
     } catch {
@@ -157,6 +108,18 @@ export default function ChildrenPage() {
     }
   };
 
+  if (isGeneralAccount) {
+    return (
+      <div className="px-5 pt-2">
+        <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            General and teacher accounts do not use member profiles.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
@@ -165,167 +128,135 @@ export default function ChildrenPage() {
     );
   }
 
-  return (
-    <div className="app-shell-compact space-y-6">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="-ml-2 w-fit gap-1.5"
-        onClick={() => router.push(settingsHref)}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Settings
-      </Button>
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
 
-      <div className="app-header-card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="app-title flex items-center gap-2">
-            <Users className="h-6 w-6 text-[#d4891a]" />
-            My Children
-          </h1>
-          <p className="app-subtitle">
-            Manage your children&apos;s profiles and view their wallet balance
+  return (
+    <div className="px-5 space-y-5 pt-2">
+      {/* Member list */}
+      {children.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            No members added yet. Tap &quot;+&quot; to add your first member.
           </p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openAddDialog} className="w-full gap-2 sm:w-auto">
-              <Plus className="h-4 w-4" />
-              Add Child
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {editingChild ? "Edit Child" : "Add Child"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder="e.g. Arjun Sharma"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="grNumber">GR Number</Label>
-                <Input
-                  id="grNumber"
-                  value={formData.grNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, grNumber: e.target.value })
-                  }
-                  placeholder="e.g. GR-2024-001"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="className">Class</Label>
-                  <Input
-                    id="className"
-                    value={formData.className}
-                    onChange={(e) =>
-                      setFormData({ ...formData, className: e.target.value })
-                    }
-                    placeholder="e.g. Class 5"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="section">Section</Label>
-                  <Input
-                    id="section"
-                    value={formData.section}
-                    onChange={(e) =>
-                      setFormData({ ...formData, section: e.target.value })
-                    }
-                    placeholder="e.g. A"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleSubmit}
-                disabled={saving}
-                className="w-full"
-              >
-                {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                {editingChild ? "Update" : "Add Child"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {children.length === 0 ? (
-        <Card>
-          <CardContent className="pt-8 pb-8 text-center">
-            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">
-              No children added yet. Add your first child to get started.
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {children.map((child) => (
-            <Card key={child.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <User className="h-5 w-5 text-[#d4891a]" />
-                    {child.name}
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => openEditDialog(child)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
-                <CardDescription>
-                  {child.className}
-                  {child.section ? ` — Section ${child.section}` : ""}{" "}
-                  {child.grNumber ? `• GR: ${child.grNumber}` : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Separator className="mb-3" />
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Wallet className="h-4 w-4 text-[#2eab57]" />
-                    <span className="text-muted-foreground">Balance:</span>
-                    <span className="font-bold text-[#2eab57]">
-                      ₹{child.walletBalance.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {child.rfidCardId ? (
-                      <Badge className="bg-[#2eab57]/15 text-[#1e7a3c] gap-1">
-                        <CreditCard className="h-3 w-3" />
-                        Card Linked
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="text-muted-foreground gap-1"
-                      >
-                        <CreditCard className="h-3 w-3" />
-                        No Card
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <button
+              key={child.id}
+              type="button"
+              onClick={() => openEdit(child)}
+              className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all active:scale-[0.98]"
+            >
+              {/* Avatar circle */}
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <span className="text-[13px] font-bold text-primary">
+                  {getInitials(child.name)}
+                </span>
+              </div>
+
+              {/* Info */}
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-semibold truncate">{child.name}</p>
+                <p className="text-[12px] text-muted-foreground truncate">
+                  {[
+                    child.className,
+                    child.section ? `Sec ${child.section}` : null,
+                    child.grNumber ? `GR: ${child.grNumber}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" Â· ") || "No details"}
+                </p>
+              </div>
+
+              {/* Balance + chevron */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[14px] font-semibold tabular-nums text-emerald-600">
+                  â‚¹{child.walletBalance.toFixed(0)}
+                </span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </button>
           ))}
         </div>
       )}
+
+      {/* Add member button */}
+      <button
+        type="button"
+        onClick={openAdd}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border py-4 text-[14px] font-medium text-primary transition-colors hover:bg-primary/5"
+      >
+        <Plus className="h-4 w-4" />
+        Add Member
+      </button>
+
+      {/* Add / Edit Sheet */}
+      <BottomSheet
+        open={sheetOpen}
+        onClose={() => { setSheetOpen(false); resetForm(); }}
+        snapPoints={[55]}
+      >
+        <div className="space-y-4 pb-4">
+          <p className="text-base font-semibold">
+            {editingChild ? "Edit Member" : "Add Member"}
+          </p>
+
+          <div className="space-y-2">
+            <Label htmlFor="name">Full Name *</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="e.g. Arjun Sharma"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="grNumber">GR Number</Label>
+            <Input
+              id="grNumber"
+              value={formData.grNumber}
+              onChange={(e) => setFormData({ ...formData, grNumber: e.target.value })}
+              placeholder="e.g. GR-2024-001"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="className">Class</Label>
+              <Input
+                id="className"
+                value={formData.className}
+                onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                placeholder="e.g. Class 5"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="section">Section</Label>
+              <Input
+                id="section"
+                value={formData.section}
+                onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                placeholder="e.g. A"
+              />
+            </div>
+          </div>
+          <Button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="w-full h-12 rounded-xl text-[15px] font-semibold"
+            variant="premium"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {editingChild ? "Update" : "Add Member"}
+          </Button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

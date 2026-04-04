@@ -28,6 +28,7 @@ export interface ScoredRecommendation {
   reasons: string[];
   canteenId: string | null;
   canteenName: string | null;
+  imageUrl: string | null;
 }
 
 interface ItemSimilarity {
@@ -161,6 +162,7 @@ export async function getRecommendations(
       reasons,
       canteenId: item.canteenId,
       canteenName: item.canteenName,
+      imageUrl: item.imageUrl,
     });
   }
 
@@ -383,6 +385,7 @@ interface AvailableItem {
   price: number;
   canteenId: string | null;
   canteenName: string | null;
+  imageUrl: string | null;
 }
 
 async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
@@ -395,6 +398,7 @@ async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
       availableUnits: menuItem.availableUnits,
       canteenId: menuItem.canteenId,
       canteenName: canteen.name,
+      imageUrl: menuItem.imageUrl,
     })
     .from(menuItem)
     .leftJoin(canteen, eq(menuItem.canteenId, canteen.id))
@@ -415,5 +419,6 @@ async function getAvailableMenuItems(orgId: string): Promise<AvailableItem[]> {
       price: r.price,
       canteenId: r.canteenId ?? null,
       canteenName: r.canteenName ?? null,
+      imageUrl: r.imageUrl ?? null,
     }));
 }

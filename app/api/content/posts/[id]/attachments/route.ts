@@ -119,6 +119,7 @@ export async function POST(
       postId,
       storageBackend,
       storageKey,
+      originalFileName: file.name,
       mimeType,
       size: file.size,
     })

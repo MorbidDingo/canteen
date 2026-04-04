@@ -5,19 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Wallet as WalletIcon,
-  ArrowUpCircle,
-  ArrowDownCircle,
-  RotateCcw,
   Loader2,
   Plus,
   ArrowLeft,
@@ -467,14 +461,6 @@ export default function WalletPage() {
     }
   };
 
-  const txIcon = (type: WalletTransactionType) => {
-    switch (type) {
-      case "TOP_UP": return <ArrowUpCircle  className="h-4 w-4 text-emerald-500" />;
-      case "DEBIT":  return <ArrowDownCircle className="h-4 w-4 text-destructive" />;
-      case "REFUND": return <RotateCcw       className="h-4 w-4 text-primary" />;
-    }
-  };
-
   // ── Shared card face ──────────────────────────────────────────────────────
   const cardInner = (w: ChildWallet) => (
     <div className="relative px-6 py-5 flex flex-col justify-between"
@@ -527,17 +513,11 @@ export default function WalletPage() {
 
   if (wallets.length === 0) {
     return (
-      <div className="app-shell-compact space-y-4">
-        <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit gap-1.5"
-          onClick={() => router.push(settingsHref)}>
-          <ArrowLeft className="h-4 w-4" /> Back to Settings
-        </Button>
-        <Card>
-          <CardContent className="pt-8 pb-8 text-center">
-            <WalletIcon className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">No wallet found. Add a child first to activate family wallet.</p>
-          </CardContent>
-        </Card>
+      <div className="px-5 pt-2">
+        <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+          <WalletIcon className="h-8 w-8 text-muted-foreground/30 mx-auto" />
+          <p className="mt-2 text-sm text-muted-foreground">No wallet found. Add a member first to activate family wallet.</p>
+        </div>
       </div>
     );
   }
@@ -547,20 +527,8 @@ export default function WalletPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="app-shell-compact space-y-6">
+    <div className="px-5 space-y-6 pt-2">
       <style dangerouslySetInnerHTML={{ __html: WALLET_CSS }} />
-
-      <Button type="button" variant="ghost" size="sm" className="-ml-2 w-fit gap-1.5"
-        onClick={() => router.push(settingsHref)}>
-        <ArrowLeft className="h-4 w-4" /> Back to Settings
-      </Button>
-
-      <div className="app-header-card">
-        <h1 className="app-title flex items-center gap-2">
-          <WalletIcon className="h-6 w-6 text-primary" /> Wallet
-        </h1>
-        <p className="app-subtitle">Manage your family wallet and add money online</p>
-      </div>
 
       {/* ── Card section ──────────────────────────────────────────────────── */}
       <div className="space-y-3">
@@ -712,19 +680,19 @@ export default function WalletPage() {
 
             <div className="grid grid-cols-4 gap-2">
               {QUICK_AMOUNTS.map((amt) => (
-                <Button
+                <button
                   key={amt}
-                  variant={topUpAmount === String(amt) ? "default" : "outline"}
-                  size="sm"
+                  type="button"
                   onClick={() => setTopUpAmount(String(amt))}
-                  className={
+                  className={cn(
+                    "h-9 rounded-full text-[13px] font-medium transition-colors",
                     topUpAmount === String(amt)
-                      ? "bg-primary text-primary-foreground border-0"
-                      : ""
-                  }
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/50 text-foreground hover:bg-muted",
+                  )}
                 >
                   ₹{amt}
-                </Button>
+                </button>
               ))}
             </div>
 
@@ -759,54 +727,46 @@ export default function WalletPage() {
       <WalletForecastWidget />
 
       {/* ── Transaction history ────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
-            Recent Transactions
-            {selectedWallet && (
-              <span className="text-muted-foreground font-normal text-sm">— Family Wallet</span>
-            )}
-          </CardTitle>
-          <CardDescription>Last 50 transactions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {txLoading ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : transactions.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-6">No transactions yet</p>
-          ) : (
-            <div className="space-y-3">
-              {transactions.map((tx) => (
-                <div key={tx.id}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {txIcon(tx.type)}
-                      <div>
-                        <p className="text-sm font-medium">{WALLET_TRANSACTION_LABELS[tx.type]}</p>
-                        {tx.description && (
-                          <p className="text-xs text-muted-foreground">{tx.description}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(tx.createdAt).toLocaleString("en-IN")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-semibold ${tx.type === "DEBIT" ? "text-destructive" : "text-emerald-500"}`}>
-                        {tx.type === "DEBIT" ? "-" : "+"}₹{tx.amount.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Bal: ₹{tx.balanceAfter.toFixed(2)}</p>
-                    </div>
-                  </div>
-                  <Separator className="mt-3" />
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-3">Recent Transactions</p>
+        {txLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+            <WalletIcon className="mx-auto h-6 w-6 text-muted-foreground/30" />
+            <p className="mt-1.5 text-xs text-muted-foreground">No transactions yet</p>
+          </div>
+        ) : (
+          <div className="space-y-0">
+            {transactions.map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between py-3 border-b border-border/30 last:border-0">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-medium">
+                    {tx.type === "DEBIT" ? "−" : "+"}₹{tx.amount.toFixed(0)}{" "}
+                    <span className="text-muted-foreground font-normal">
+                      {WALLET_TRANSACTION_LABELS[tx.type]}
+                      {tx.description ? ` · ${tx.description}` : ""}
+                    </span>
+                  </p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">
+                    {new Date(tx.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    {" · "}
+                    {new Date(tx.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <p className={cn(
+                  "text-[15px] font-semibold tabular-nums shrink-0 ml-3",
+                  tx.type === "DEBIT" ? "text-destructive" : "text-emerald-500",
+                )}>
+                  {tx.type === "DEBIT" ? "−" : "+"}₹{tx.amount.toFixed(0)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

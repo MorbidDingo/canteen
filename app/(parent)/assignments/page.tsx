@@ -1,33 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ClipboardList,
-  StickyNote,
-  Clock,
-  CheckCircle2,
   Loader2,
-  RefreshCw,
-  ChevronRight,
-  User,
   Paperclip,
-  Image as ImageIcon,
-  FileText,
-  Film,
+  StickyNote,
+  Calendar,
+  Plus,
 } from "lucide-react";
+import { BottomSheet } from "@/components/ui/motion";
+import { cn } from "@/lib/utils";
 
 type FeedAttachment = {
   id: string;
@@ -51,8 +37,42 @@ type FeedPost = {
 
 type Tag = { id: string; name: string; color: string | null };
 
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}
+
+function isDueSoon(dueAt: string) {
+  const diff = new Date(dueAt).getTime() - Date.now();
+  return diff > 0 && diff < 48 * 60 * 60 * 1000;
+}
+
+function isPastDue(dueAt: string) {
+  return new Date(dueAt).getTime() < Date.now();
+}
+
+/** Group posts by relative date label */
+function groupByDate(posts: FeedPost[]): { label: string; posts: FeedPost[] }[] {
+  const groups: Map<string, FeedPost[]> = new Map();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  for (const post of posts) {
+    const d = new Date(post.createdAt);
+    d.setHours(0, 0, 0, 0);
+    let label: string;
+    if (d.getTime() === today.getTime()) label = "Today";
+    else if (d.getTime() === yesterday.getTime()) label = "Yesterday";
+    else label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(post);
+  }
+
+  return Array.from(groups, ([label, posts]) => ({ label, posts }));
+}
+
 export default function AssignmentsFeedPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const urlType = searchParams.get("type") === "NOTE" ? "NOTE" : "ASSIGNMENT";
@@ -62,9 +82,9 @@ export default function AssignmentsFeedPage() {
   const [tagFilter, setTagFilter] = useState("all");
   const [tags, setTags] = useState<Tag[]>([]);
   const [canCreate, setCanCreate] = useState(false);
-  const [permissionScope, setPermissionScope] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [tagSheetOpen, setTagSheetOpen] = useState(false);
   const limit = 20;
 
   const fetchFeed = useCallback(async () => {
@@ -83,7 +103,6 @@ export default function AssignmentsFeedPage() {
       setPosts(data.posts);
       setTotal(data.total);
       setCanCreate(data.canCreate ?? false);
-      setPermissionScope(data.permissionScope ?? null);
     } catch {
       toast.error("Failed to load feed");
     } finally {
@@ -101,266 +120,201 @@ export default function AssignmentsFeedPage() {
   useEffect(() => { fetchFeed(); }, [fetchFeed]);
   useEffect(() => { fetchTags(); }, [fetchTags]);
   useEffect(() => { setPage(1); }, [activeTab, tagFilter]);
-
-  // Sync activeTab with URL param when navigating via bottom nav
-  useEffect(() => {
-    setActiveTab(urlType);
-  }, [urlType]);
+  useEffect(() => { setActiveTab(urlType); }, [urlType]);
 
   // Sort: user's own posts first, then by date
   const userName = session?.user?.name ?? "";
-  const sortedPosts = [...posts].sort((a, b) => {
+  const sortedPosts = useMemo(() => [...posts].sort((a, b) => {
     const aOwn = a.authorName === userName ? 0 : 1;
     const bOwn = b.authorName === userName ? 0 : 1;
     if (aOwn !== bOwn) return aOwn - bOwn;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+  }), [posts, userName]);
 
-  function formatDate(d: string) {
-    return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-  }
-
-  function isDueSoon(dueAt: string) {
-    const diff = new Date(dueAt).getTime() - Date.now();
-    return diff > 0 && diff < 48 * 60 * 60 * 1000;
-  }
-
-  function isPastDue(dueAt: string) {
-    return new Date(dueAt).getTime() < Date.now();
-  }
-
-  function getAttachmentSummary(attachments: FeedAttachment[]) {
-    const images = attachments.filter((a) => a.mimeType.startsWith("image/"));
-    const pdfs = attachments.filter((a) => a.mimeType === "application/pdf");
-    const videos = attachments.filter((a) => a.mimeType.startsWith("video/"));
-    const others = attachments.filter(
-      (a) => !a.mimeType.startsWith("image/") && a.mimeType !== "application/pdf" && !a.mimeType.startsWith("video/"),
-    );
-    return { images, pdfs, videos, others, total: attachments.length };
-  }
-
+  const grouped = useMemo(() => groupByDate(sortedPosts), [sortedPosts]);
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-5 pb-28">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {activeTab === "ASSIGNMENT" ? "Assignments" : "Notes"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Stay up to date with your class
-          </p>
-        </div>
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={fetchFeed} disabled={loading}>
-          <RefreshCw className={`h-4.5 w-4.5 ${loading ? "animate-spin" : ""}`} />
-        </Button>
+    <div className="space-y-6 px-5 pt-2 pb-24 sm:px-8">
+
+      {/* Tab pills */}
+      <div className="flex items-center gap-2 pt-3">
+        {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              "h-8 rounded-full px-4 text-[13px] font-medium transition-colors",
+              activeTab === tab
+                ? "bg-foreground text-background"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
+          </button>
+        ))}
+
+        {/* Filter ghost button — only if tags exist */}
+        {tags.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setTagSheetOpen(true)}
+            className={cn(
+              "ml-auto h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+              tagFilter !== "all" ? "text-primary" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            Filter{tagFilter !== "all" ? " ·" : ""}
+          </button>
+        )}
+
+        {/* Calendar shortcut */}
+        <Link
+          href="/calendar"
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40",
+            tags.length === 0 && !canCreate && "ml-auto",
+          )}
+        >
+          <Calendar className="h-4 w-4" />
+        </Link>
+
+        {/* Create button — only when user has content permission */}
+        {canCreate && (
+          <Link
+            href={`/content/new?type=${activeTab}`}
+            className={cn(
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90",
+              tags.length === 0 && "ml-auto",
+            )}
+          >
+            <Plus className="h-4 w-4" />
+          </Link>
+        )}
       </div>
 
-      {/* Tag filter */}
-      {tags.length > 0 && (
-        <div className="mt-3">
-          <Select value={tagFilter} onValueChange={setTagFilter}>
-            <SelectTrigger className="h-10 w-[160px] text-sm">
-              <SelectValue placeholder="All Tags" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Tags</SelectItem>
-              {tags.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
       {/* Feed list */}
-      <div className="mt-4">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : sortedPosts.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-center">
-            <div className={`flex h-16 w-16 items-center justify-center rounded-2xl ${
-              activeTab === "ASSIGNMENT"
-                ? "bg-blue-50 dark:bg-blue-950/20"
-                : "bg-emerald-50 dark:bg-emerald-950/20"
-            }`}>
-              {activeTab === "ASSIGNMENT" ? (
-                <ClipboardList className="h-8 w-8 text-blue-400" />
-              ) : (
-                <StickyNote className="h-8 w-8 text-emerald-400" />
-              )}
-            </div>
-            <div>
-              <p className="text-base font-medium">
-                No {activeTab === "ASSIGNMENT" ? "assignments" : "notes"} yet
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : sortedPosts.length === 0 ? (
+        <div className="py-16 text-center">
+          <StickyNote className="mx-auto h-10 w-10 text-muted-foreground/20" />
+          <p className="mt-3 text-[15px] text-muted-foreground">
+            No {activeTab === "ASSIGNMENT" ? "assignments" : "notes"} yet
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <section key={group.label} className="space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                {group.label}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Check back later for updates
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {sortedPosts.map((post) => {
-              const summary = getAttachmentSummary(post.attachments);
 
-              return (
-                <article
-                  key={post.id}
-                  className="group rounded-2xl border border-border/40 bg-card overflow-hidden transition-all hover:border-border/80 hover:shadow-sm"
-                >
-                  <Link href={`/assignments/${post.id}`}>
-                    <div className="p-4">
-                      {/* Top row */}
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                          post.type === "ASSIGNMENT"
-                            ? "bg-blue-50 dark:bg-blue-950/20"
-                            : "bg-emerald-50 dark:bg-emerald-950/20"
-                        }`}>
-                          {post.type === "ASSIGNMENT" ? (
-                            <ClipboardList className="h-4.5 w-4.5 text-blue-500" />
-                          ) : (
-                            <StickyNote className="h-4.5 w-4.5 text-emerald-500" />
-                          )}
-                        </div>
+              <div className="space-y-3">
+                {group.posts.map((post) => (
+                  <Link key={post.id} href={`/assignments/${post.id}`}>
+                    <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30">
+                      {/* Title */}
+                      <p className="line-clamp-2 text-[16px] font-semibold leading-snug">{post.title}</p>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-base font-semibold leading-snug line-clamp-2">
-                              {post.title}
-                            </h3>
-                            <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/30 transition-colors group-hover:text-muted-foreground" />
-                          </div>
+                      {/* Body preview */}
+                      {post.body && (
+                        <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{post.body}</p>
+                      )}
 
-                          {/* Author + date */}
-                          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <User className="h-3.5 w-3.5" />
-                            <span className="truncate">{post.authorName}</span>
+                      {/* Meta line */}
+                      <div className="mt-1.5 flex items-center gap-1 text-[12px]">
+                        {post.dueAt && (
+                          <>
+                            <span className={cn(
+                              "font-medium",
+                              isPastDue(post.dueAt) ? "text-destructive" : isDueSoon(post.dueAt) ? "text-primary" : "text-muted-foreground",
+                            )}>
+                              {isPastDue(post.dueAt) ? "Overdue" : `Due ${formatDate(post.dueAt)}`}
+                            </span>
                             <span className="text-muted-foreground/40">·</span>
-                            <span>{formatDate(post.createdAt)}</span>
-                          </div>
-
-                          {/* Body preview */}
-                          {post.body && (
-                            <p className="mt-2 text-sm leading-relaxed text-muted-foreground line-clamp-2">
-                              {post.body}
-                            </p>
-                          )}
-
-                          {/* Attachment indicators */}
-                          {summary.total > 0 && (
-                            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                              {summary.images.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-                                  <ImageIcon className="h-3 w-3" />
-                                  {summary.images.length}
-                                </span>
-                              )}
-                              {summary.pdfs.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-                                  <FileText className="h-3 w-3" />
-                                  {summary.pdfs.length} PDF{summary.pdfs.length > 1 ? "s" : ""}
-                                </span>
-                              )}
-                              {summary.videos.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-                                  <Film className="h-3 w-3" />
-                                  {summary.videos.length}
-                                </span>
-                              )}
-                              {summary.others.length > 0 && (
-                                <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-                                  <Paperclip className="h-3 w-3" />
-                                  {summary.others.length}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Badges */}
-                          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            {post.dueAt && (
-                              <Badge
-                                variant="secondary"
-                                className={`gap-1 px-2 py-0.5 text-[11px] font-medium ${
-                                  isPastDue(post.dueAt)
-                                    ? "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400"
-                                    : isDueSoon(post.dueAt)
-                                    ? "bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400"
-                                    : "bg-muted/60 text-muted-foreground"
-                                }`}
-                              >
-                                <Clock className="h-3 w-3" />
-                                {isPastDue(post.dueAt) ? "Overdue" : `Due ${formatDate(post.dueAt)}`}
-                              </Badge>
-                            )}
-                            {post.type === "ASSIGNMENT" && (
-                              <Badge
-                                variant="secondary"
-                                className={`gap-1 px-2 py-0.5 text-[11px] font-medium ${
-                                  post.hasSubmitted
-                                    ? "bg-green-50 text-green-600 dark:bg-green-950/20 dark:text-green-400"
-                                    : "bg-muted/60 text-muted-foreground"
-                                }`}
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                {post.hasSubmitted ? "Submitted" : "Pending"}
-                              </Badge>
-                            )}
-                            {post.tags.map((tag) => (
-                              <Badge
-                                key={tag.id}
-                                variant="outline"
-                                className="px-2 py-0.5 text-[11px] font-normal"
-                                style={tag.color ? { borderColor: tag.color, color: tag.color } : undefined}
-                              >
-                                {tag.name}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
+                          </>
+                        )}
+                        {post.attachments.length > 0 && (
+                          <>
+                            <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+                              <Paperclip className="h-3 w-3" />
+                              {post.attachments.length}
+                            </span>
+                            <span className="text-muted-foreground/40">·</span>
+                          </>
+                        )}
+                        <span className="text-muted-foreground">{post.authorName}</span>
                       </div>
                     </div>
                   </Link>
-                </article>
-              );
-            })}
-          </div>
-        )}
+                ))}
+              </div>
+            </section>
+          ))}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-5 flex items-center justify-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <span className="text-sm tabular-nums text-muted-foreground">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        )}
-      </div>
+          {/* Pagination — ghost text links */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 pt-2">
+              {page > 1 && (
+                <button
+                  type="button"
+                  className="text-[13px] font-medium text-primary"
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  ← Previous
+                </button>
+              )}
+              <span className="text-[12px] tabular-nums text-muted-foreground">{page}/{totalPages}</span>
+              {page < totalPages && (
+                <button
+                  type="button"
+                  className="text-[13px] font-medium text-primary"
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
+      {/* Tag filter bottom sheet */}
+      <BottomSheet open={tagSheetOpen} onClose={() => setTagSheetOpen(false)} snapPoints={[35]}>
+        <div className="space-y-4 p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Filter by tag</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => { setTagFilter("all"); setTagSheetOpen(false); }}
+              className={cn(
+                "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                tagFilter === "all" ? "bg-foreground text-background" : "bg-muted/40 text-muted-foreground",
+              )}
+            >
+              All
+            </button>
+            {tags.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { setTagFilter(t.id); setTagSheetOpen(false); }}
+                className={cn(
+                  "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                  tagFilter === t.id ? "bg-foreground text-background" : "bg-muted/40 text-muted-foreground",
+                )}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

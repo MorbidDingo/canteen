@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { readableBook, bookChapter, certeSubscription, gutenbergCatalog } from "@/lib/db/schema";
+import { readableBook, bookChapter, gutenbergCatalog } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, gte, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import {
   fetchBookContent,
   parseIntoChapters,
@@ -31,27 +31,6 @@ export async function GET(request: NextRequest) {
 
   const session = access.session;
   const organizationId = access.activeOrganizationId!;
-
-  // Certe+ subscription check
-  const now = new Date();
-  const [activeSub] = await db
-    .select({ id: certeSubscription.id })
-    .from(certeSubscription)
-    .where(
-      and(
-        eq(certeSubscription.parentId, session.user.id),
-        eq(certeSubscription.status, "ACTIVE"),
-        gte(certeSubscription.endDate, now),
-      ),
-    )
-    .limit(1);
-
-  if (!activeSub) {
-    return NextResponse.json(
-      { error: "Certe+ subscription required", code: "CERTE_PLUS_REQUIRED" },
-      { status: 403 },
-    );
-  }
 
   // Check if org already has public domain books seeded
   const existingPublicBooks = await db

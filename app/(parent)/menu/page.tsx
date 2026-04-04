@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { UtensilsCrossed, Loader2, ShoppingCart, ArrowRight } from "lucide-react";
+import { UtensilsCrossed, Loader2, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
@@ -106,28 +106,28 @@ export default function MenuPage() {
   return (
     <div className="app-shell">
       {menuMeta.selectedCanteenClosed ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h2 className="text-lg font-semibold">This canteen is currently closed</h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/20 mb-4" />
+          <h2 className="text-xl font-semibold tracking-tight">Canteen closed</h2>
+          <p className="text-[13px] text-muted-foreground mt-1 max-w-[260px]">
             {menuMeta.selectedCanteenName
-              ? `${menuMeta.selectedCanteenName} is not serving right now. Please select another canteen.`
+              ? `${menuMeta.selectedCanteenName} is not serving right now.`
               : "Please select another active canteen."}
           </p>
         </div>
       ) : !menuMeta.hasActiveCanteens ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h2 className="text-lg font-semibold">All canteens are closed</h2>
-          <p className="text-sm text-muted-foreground">
-            No active canteens are serving at the moment. Please check again later.
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/20 mb-4" />
+          <h2 className="text-xl font-semibold tracking-tight">All canteens closed</h2>
+          <p className="text-[13px] text-muted-foreground mt-1">
+            No canteens are serving at the moment.
           </p>
         </div>
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h2 className="text-lg font-semibold">No items available</h2>
-          <p className="text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <UtensilsCrossed className="h-12 w-12 text-muted-foreground/20 mb-4" />
+          <h2 className="text-xl font-semibold tracking-tight">No items available</h2>
+          <p className="text-[13px] text-muted-foreground mt-1">
             The menu is currently empty. Check back later!
           </p>
         </div>
@@ -139,15 +139,15 @@ export default function MenuPage() {
         />
       )}
 
-      {/* Floating View Cart bar — appears when cart has items */}
+      {/* Floating cart bar */}
       <AnimatePresence>
         {cartCount > 0 && (
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="fixed bottom-[calc(5.4rem+env(safe-area-inset-bottom))] left-4 right-4 z-40 md:hidden pointer-events-auto"
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 right-5 z-40 md:hidden pointer-events-auto"
           >
             <button
               type="button"
@@ -155,16 +155,13 @@ export default function MenuPage() {
                 e.stopPropagation();
                 router.push("/cart");
               }}
-              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 py-3.5 text-primary-foreground shadow-lg"
+              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 h-14 text-primary-foreground shadow-xl active:scale-[0.98] transition-transform"
             >
-              <div className="flex items-center gap-2.5">
-                <ShoppingCart className="h-5 w-5" />
-                <span className="text-sm font-semibold">
-                  {cartCount} {cartCount === 1 ? "item" : "items"}
-                </span>
-              </div>
+              <span className="text-[14px] font-semibold">
+                {cartCount} {cartCount === 1 ? "item" : "items"}
+              </span>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">₹{cartTotal.toFixed(0)}</span>
+                <span className="text-[16px] font-bold tabular-nums">₹{cartTotal.toFixed(0)}</span>
                 <ArrowRight className="h-4 w-4" />
               </div>
             </button>

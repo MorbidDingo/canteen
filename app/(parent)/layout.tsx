@@ -2,32 +2,27 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
+import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { IndianRupee, CheckCircle2, AlertCircle, CreditCard, Landmark, ChevronLeft } from "lucide-react";
+import { IndianRupee, CheckCircle2, AlertCircle, CreditCard, Landmark, ChevronLeft, ChevronRight, Moon, Sun, Store, BookOpen, MapPin, Check, ChevronDown } from "lucide-react";
 import {
   IoRestaurant,
   IoCart,
   IoBook,
   IoWallet,
-  IoReceipt,
   IoShieldCheckmark,
   IoSparkles,
   IoNotifications,
-  IoReader,
   IoCalendar,
   IoDocumentText,
-  IoClipboard,
-  IoTicket,
+  IoSettings,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { CerteWordmark } from "@/components/certe-logo";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
-import { CanteenSelector } from "@/components/canteen-selector";
 import { motion, BottomSheet } from "@/components/ui/motion";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import { useRealtimeData } from "@/lib/events";
@@ -47,6 +42,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useTheme } from "next-themes";
 
 type ParentMode = "canteen" | "library" | "content";
 type WalletSnapshot = {
@@ -121,28 +117,49 @@ function getParentMode(pathname: string, requestedMode: string | null): ParentMo
   return "canteen";
 }
 
-function getActiveTab(pathname: string, searchParams?: URLSearchParams): string {
-  if (pathname === "/library-showcase") return "showcase";
-  if (pathname.startsWith("/library-reader")) return "reader";
-  if (["/settings", "/children", "/wallet", "/notifications", "/messaging-settings"].includes(pathname)) {
-    return "settings";
+function getActiveBottomTab(pathname: string): "food" | "library" | "notes" | "pass" | "settings" {
+  if (pathname === "/pre-orders" || pathname.startsWith("/pre-orders/")) {
+    return "pass";
   }
-  if (pathname === "/controls") return "controls";
-  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "calendar";
-  if (pathname === "/orders") return "orders";
-  if (pathname === "/pre-orders") return "preorders";
-  if (pathname === "/cart") return "cart";
+  if (pathname === "/menu" || pathname === "/orders" || pathname === "/cart" ||
+      pathname.startsWith("/orders/")) {
+    return "food";
+  }
+  if (pathname === "/library-showcase" || pathname.startsWith("/library-reader") || pathname === "/library-history") {
+    return "library";
+  }
+  if (pathname === "/assignments" || pathname.startsWith("/assignments/") ||
+      pathname === "/calendar" || pathname.startsWith("/calendar/") ||
+      pathname === "/content" || pathname.startsWith("/content/")) {
+    return "notes";
+  }
+  return "settings";
+}
+
+function getPageTitle(pathname: string, searchParams?: URLSearchParams): string {
+  if (pathname === "/menu") return "Menu";
+  if (pathname === "/orders") return "Orders";
+  if (pathname === "/cart") return "Cart";
+  if (pathname === "/pre-orders") return "Pass";
+  if (pathname === "/library-showcase") return "Library";
+  if (pathname.startsWith("/library-reader")) return "Reader";
+  if (pathname === "/library-history") return "History";
   if (pathname === "/assignments" || pathname.startsWith("/assignments/")) {
     const type = searchParams?.get("type");
-    if (type === "NOTE") return "notes";
-    return "feed";
+    return type === "NOTE" ? "Board" : "Board";
   }
-  if (pathname === "/content") return "home";
-  if (pathname === "/content/new") return "new";
-  if (pathname.startsWith("/content/") && pathname.endsWith("/submissions")) return "home";
-  if (pathname.startsWith("/content/")) return "home";
-  if (pathname === "/library-history") return "home";
-  return "home";
+  if (pathname === "/calendar" || pathname.startsWith("/calendar/")) return "Calendar";
+  if (pathname === "/content") return "Content";
+  if (pathname.startsWith("/content/")) return "Content";
+  if (pathname === "/settings") return "Settings";
+  if (pathname === "/children") return "Members";
+  if (pathname === "/wallet") return "Wallet";
+  if (pathname === "/controls") return "Controls";
+  if (pathname === "/notifications") return "Notifications";
+  if (pathname === "/messaging-settings") return "Messages";
+  if (pathname === "/timetable") return "Timetable";
+  if (pathname === "/events" || pathname.startsWith("/events/")) return "Events";
+  return "Home";
 }
 
 function ParentLayoutContent({
@@ -161,11 +178,12 @@ function ParentLayoutContent({
 
   const [overdueCount, setOverdueCount] = useState(0);
   const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
+  const certePlusStatus = useCertePlusStore((s) => s.status);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
 
   const [mounted, setMounted] = useState(false);
-  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const [cartBounce, setCartBounce] = useState(false);
+  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [showControlsSheet, setShowControlsSheet] = useState(false);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [walletDrawerOpen, setWalletDrawerOpen] = useState(false);
@@ -191,27 +209,22 @@ function ParentLayoutContent({
   const { value: selectedLibrary, setValue: setSelectedLibrary } = usePersistedSelection(
     "certe:selected-library-id",
   );
+
+  // Venue picker state
+  const [venuePickerOpen, setVenuePickerOpen] = useState(false);
+  const [canteens, setCanteens] = useState<{ id: string; name: string; location: string | null }[]>([]);
+  const [libraries, setLibraries] = useState<{ id: string; name: string; location: string | null }[]>([]);
+  const [venuesLoaded, setVenuesLoaded] = useState(false);
+
   const prevCartCount = useRef(cartCount);
-  const headerRef = useRef<HTMLElement>(null);
-  const tabsRef = useRef<HTMLDivElement>(null);
 
   const requestedMode = searchParams.get("mode");
   const parentMode = getParentMode(pathname, requestedMode);
-  const activeTab = getActiveTab(pathname, searchParams);
-  const activeModeLabel = parentMode === "canteen"
-    ? "Canteen"
-    : parentMode === "library"
-      ? "Library"
-      : "Notes";
-  const showHeaderContextSelector = false; // canteen selector moved into MenuClient
-
-  const withParentMode = useCallback(
-    (href: string) => {
-      const separator = href.includes("?") ? "&" : "?";
-      return `${href}${separator}mode=${parentMode}`;
-    },
-    [parentMode],
-  );
+  const bottomTab = getActiveBottomTab(pathname);
+  const pageTitle = getPageTitle(pathname, searchParams);
+  const showVenueChip = pathname === "/menu" || pathname === "/library-showcase";
+  const venueType = pathname === "/menu" ? "canteen" : "library";
+  const { theme, setTheme } = useTheme();
 
   const cartTotal = useMemo(
     () =>
@@ -385,42 +398,23 @@ function ParentLayoutContent({
     });
   }, []);
 
+  // Types shown only in notifications (payment events only; rest go to calendar)
+  const NOTIF_TYPES_KEEP = new Set([
+    "PAYMENT_EVENT_CREATED", "PAYMENT_EVENT_REMINDER", "PAYMENT_COMPLETED",
+  ]);
+
+  const activityNotifs = useMemo(
+    () => notifItems.filter((n) => NOTIF_TYPES_KEEP.has(n.type)),
+    [notifItems],
+  );
+
   const notifUnreadCount = useMemo(
-    () =>
-      notifItems.filter((n) => !n.readAt).length +
-      noticeItems.filter((n) => !n.acknowledged).length,
-    [notifItems, noticeItems],
+    () => activityNotifs.filter((n) => !n.readAt).length,
+    [activityNotifs],
   );
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-  // Track header + tabs height for sticky offset CSS vars
-  useEffect(() => {
-    const setVars = () => {
-      const hH = headerRef.current?.offsetHeight ?? 0;
-      const tH = tabsRef.current?.offsetHeight ?? 0;
-      document.documentElement.style.setProperty("--header-h", `${hH}px`);
-      document.documentElement.style.setProperty("--tabs-h", `${tH}px`);
-    };
-    const ro = new ResizeObserver(setVars);
-    if (headerRef.current) ro.observe(headerRef.current);
-    if (tabsRef.current) ro.observe(tabsRef.current);
-    setVars();
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleScroll = () => {
-      setHeaderCollapsed(window.scrollY > 28);
-    };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -499,7 +493,38 @@ function ParentLayoutContent({
     setCartDrawerOpen(false);
     setWalletDrawerOpen(false);
     setNotificationDrawerOpen(false);
+    setProfileSheetOpen(false);
+    setVenuePickerOpen(false);
   }, [pathname]);
+
+  // Fetch canteens & libraries once for venue picker
+  useEffect(() => {
+    if (venuesLoaded) return;
+    Promise.all([
+      fetch("/api/org/canteens", { cache: "no-store" }).then((r) => r.ok ? r.json() : { canteens: [] }),
+      fetch("/api/org/libraries", { cache: "no-store" }).then((r) => r.ok ? r.json() : { libraries: [] }),
+    ]).then(([cData, lData]) => {
+      const c = ((cData as { canteens: { id: string; name: string; location: string | null; status: string }[] }).canteens ?? [])
+        .filter((v) => v.status === "ACTIVE")
+        .map(({ id, name, location }) => ({ id, name, location }));
+      const l = ((lData as { libraries: { id: string; name: string; location: string | null; status: string }[] }).libraries ?? [])
+        .filter((v) => v.status === "ACTIVE")
+        .map(({ id, name, location }) => ({ id, name, location }));
+      setCanteens(c);
+      setLibraries(l);
+      setVenuesLoaded(true);
+      // Auto-select first if none set
+      if (!selectedCanteen && c.length > 0) setSelectedCanteen(c[0].id);
+      if (!selectedLibrary && l.length > 0) setSelectedLibrary(l[0].id);
+    }).catch(() => { setVenuesLoaded(true); });
+  }, [venuesLoaded, selectedCanteen, selectedLibrary, setSelectedCanteen, setSelectedLibrary]);
+
+  const currentVenueName = useMemo(() => {
+    if (venueType === "canteen") {
+      return canteens.find((c) => c.id === selectedCanteen)?.name ?? "Select cafeteria";
+    }
+    return libraries.find((l) => l.id === selectedLibrary)?.name ?? "Select library";
+  }, [venueType, canteens, libraries, selectedCanteen, selectedLibrary]);
 
   const getInitials = (name?: string | null) => {
     if (!name) return "?";
@@ -511,15 +536,6 @@ function ParentLayoutContent({
       .slice(0, 2);
   };
 
-  type TabItem = {
-    key: string;
-    href: string;
-    icon: React.ElementType | null;
-    label: string;
-    locked: boolean;
-    isProfile?: boolean;
-  };
-
   const renderPaymentEventDetail = (event: PaymentEventItem) => (
     <div className="space-y-4">
       {event.description && (
@@ -527,7 +543,7 @@ function ParentLayoutContent({
       )}
       <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
         <div>
-          <p className="text-xs text-muted-foreground">Amount per child</p>
+          <p className="text-xs text-muted-foreground">Amount per member</p>
           <p className="text-2xl font-bold flex items-center gap-1">
             <IndianRupee className="h-5 w-5" />
             {event.amount.toFixed(2)}
@@ -574,7 +590,7 @@ function ParentLayoutContent({
 
       {event.children.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Children</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Members</p>
           {event.children.map((c) => (
             <div key={c.id} className={cn(
               "flex items-center justify-between rounded-xl px-3 py-2.5 border",
@@ -680,51 +696,14 @@ function ParentLayoutContent({
         <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Loading notifications...
         </div>
-      ) : noticeItems.length === 0 && notifItems.length === 0 ? (
+      ) : activityNotifs.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
           <p className="mt-1.5 text-xs text-muted-foreground">No notifications yet</p>
         </div>
       ) : (
         <div className="space-y-1">
-          {/* Management notices – shown first with premium styling */}
-          {noticeItems.map((n) => (
-            <div
-              key={n.id}
-              className={cn(
-                "rounded-xl border px-3 py-2.5 transition-colors",
-                n.acknowledged
-                  ? "border-border/40 bg-card/50"
-                  : "border-violet-200 bg-violet-50/70 dark:border-violet-800/50 dark:bg-violet-950/20",
-              )}
-            >
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-semibold text-violet-900 dark:text-violet-100")}>
-                    {n.title}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{n.message}</p>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveNotice(n)}
-                      className="text-[11px] font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 underline-offset-2 hover:underline"
-                    >
-                      Open to view full
-                    </button>
-                    <span className="text-[10px] text-muted-foreground/60">
-                      · {new Date(n.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                    </span>
-                  </div>
-                </div>
-                {!n.acknowledged && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
-                )}
-              </div>
-            </div>
-          ))}
-          {/* Regular notifications */}
-          {notifItems.map((n) => (
+          {activityNotifs.map((n) => (
             <button
               key={n.id}
               type="button"
@@ -755,304 +734,344 @@ function ParentLayoutContent({
     </>
   );
 
-  const tabs: TabItem[] = useMemo(() => {
-    if (parentMode === "content") {
-      return [
-        { key: "feed" as const, href: "/assignments?type=ASSIGNMENT", icon: IoClipboard, label: "Assignments", locked: false },
-        { key: "notes" as const, href: "/assignments?type=NOTE", icon: IoDocumentText, label: "Notes", locked: false },
-        { key: "calendar" as const, href: "/calendar", icon: IoCalendar, label: "Calendar", locked: false },
-        { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
-      ];
-    }
-    if (parentMode === "canteen") {
-      return [
-        { key: "home" as const, href: "/menu", icon: IoRestaurant, label: "Menu", locked: false },
-        { key: "orders" as const, href: "/orders", icon: IoReceipt, label: "Orders", locked: false },
-        { key: "preorders" as const, href: "/pre-orders", icon: IoTicket, label: "Pass", locked: false },
-        { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
-      ];
-    }
-    return [
-      { key: "showcase" as const, href: "/library-showcase", icon: IoSparkles, label: "Showcase", locked: false },
-      { key: "reader" as const, href: "/library-reader", icon: IoReader, label: "Reader", locked: false },
-      { key: "home" as const, href: "/library-history", icon: IoBook, label: "History", locked: false },
-      { key: "settings" as const, href: withParentMode("/settings"), icon: null, label: "Me", locked: false, isProfile: true },
-    ];
-  }, [certePlusActive, parentMode, withParentMode]);
+  const bottomTabs = useMemo(() => [
+    { key: "food" as const, href: "/menu", icon: IoRestaurant, label: "Food" },
+    { key: "library" as const, href: "/library-showcase", icon: IoBook, label: "Library" },
+    { key: "pass" as const, href: "/pre-orders", icon: IoShieldCheckmark, label: "Pass" },
+    { key: "notes" as const, href: "/assignments", icon: IoDocumentText, label: "Board" },
+  ], []);
 
   return (
     <>
-      <header ref={headerRef} className="sticky top-0 z-50 w-full bg-[#f59e0b] dark:bg-[#b45309]">
-        <div className="mx-auto w-full max-w-6xl px-3 pt-[max(0.5rem,env(safe-area-inset-top))] md:px-6">
-          {/* Top row: Certe branding + actions */}
-          <div className={cn(
-            "flex items-center justify-between gap-3 transition-all duration-200",
-            headerCollapsed ? "py-1.5" : "pb-2",
-          )}>
-            <div className="flex min-w-0 items-center gap-1">
-              <div className="relative h-8 min-w-[132px]">
-                <motion.div
-                  className="absolute inset-0 flex items-center"
-                  animate={{ opacity: headerCollapsed ? 0 : 1, y: headerCollapsed ? -6 : 0 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                >
-                  <CerteWordmark className="text-[1.85rem]" white showPlus={certePlusActive} />
-                </motion.div>
-                <motion.span
-                  className="absolute inset-0 flex items-center text-[1.5rem] font-sans font-black tracking-[-0.06em] text-white"
-                  animate={{ opacity: headerCollapsed ? 1 : 0, y: headerCollapsed ? 0 : 6 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                >
-                  {activeModeLabel}
-                </motion.span>
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5">
-              <div className="flex items-center gap-0.5 rounded-xl border border-white/20 bg-white/20 px-1 py-1 shadow-sm backdrop-blur-sm">
-                <ParentNotificationBell
-                  parentId={session?.user?.id}
-                  externalUnreadCount={notifUnreadCount}
-                  onClick={() => void openNotificationDrawer()}
-                  className="h-9 w-9 rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => void openPaymentsDrawer()}
-                  aria-label="Payments"
-                  className="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                >
-                  <IoCalendar className="h-4.5 w-4.5 transition-transform duration-200 group-hover:scale-110" />
-                  {pendingEventsCount > 0 && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold leading-none text-primary-foreground ring-2 ring-background animate-in zoom-in-75 duration-300">
-                      {pendingEventsCount > 9 ? "9+" : pendingEventsCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
-                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                  aria-label="Wallet"
-                >
-                  <IoWallet className="h-4.5 w-4.5" />
-                </button>
-                {parentMode === "canteen" && (
-                  <button
-                    type="button"
-                    onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
-                    className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-white transition-colors hover:bg-white/15"
-                    aria-label="Cart"
-                  >
-                    <IoCart className={cn("h-4.5 w-4.5", cartBounce && "animate-bounce")} />
-                    {mounted && cartCount > 0 && (
-                      <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-0.5 text-[9px] font-bold text-amber-700">
-                        {cartCount > 9 ? "9+" : cartCount}
-                      </span>
-                    )}
-                  </button>
+      {/* Minimal transparent header */}
+      <header className="sticky top-0 z-50 bg-background/100 px-5">
+        <div className={cn(
+          "flex min-h-14 items-center justify-between",
+          showVenueChip ? "pt-3 pb-2" : "py-2",
+        )}>
+          {/* Left: Context-sensitive title / greeting */}
+          <div className="min-w-0">
+            <span className="text-[28px] font-semibold tracking-tight">
+              {pageTitle}
+            </span>
+            {showVenueChip && (
+              <button
+                type="button"
+                onClick={() => setVenuePickerOpen(true)}
+                className="flex items-center gap-1 mt-0 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {venueType === "canteen" ? (
+                  <Store className="h-3 w-3 shrink-0" />
+                ) : (
+                  <BookOpen className="h-3 w-3 shrink-0" />
                 )}
-              </div>
-            </div>
+                <span className="truncate max-w-[180px]">{currentVenueName}</span>
+                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+              </button>
+            )}
           </div>
 
+        {/* Right: Cart + Bell + Avatar */}
+        <div className="flex items-center gap-1">
+          {parentMode === "canteen" && (
+            <button
+              type="button"
+              onClick={() => { blurFocusedElement(); setCartDrawerOpen(true); }}
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted/50"
+              aria-label="Cart"
+            >
+              <IoCart className={cn("h-[22px] w-[22px]", cartBounce && "animate-bounce-subtle")} />
+              {mounted && cartCount > 0 && (
+                <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary" />
+              )}
+            </button>
+          )}
+          <ParentNotificationBell
+            parentId={session?.user?.id}
+            externalUnreadCount={notifUnreadCount}
+            onClick={() => void openNotificationDrawer()}
+            className="h-10 w-10 rounded-full"
+          />
+          <button
+            type="button"
+            onClick={() => { blurFocusedElement(); setWalletDrawerOpen(true); }}
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-primary/10 px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/15"
+            aria-label="Wallet balance"
+          >
+            <IoWallet className="h-4 w-4" />
+            <span>{mounted ? `₹${totalWalletBalance.toLocaleString("en-IN")}` : "…"}</span>
+          </button>
+        </div>
         </div>
       </header>
 
-      {/* Mode tabs — sticky below header */}
-      <div
-        ref={tabsRef}
-        className="sticky z-40 w-full bg-[#f59e0b] dark:bg-[#b45309]"
-        style={{ top: "var(--header-h, 60px)" } as React.CSSProperties}
+      {/* Venue picker BottomSheet */}
+      <BottomSheet
+        open={venuePickerOpen}
+        onClose={() => setVenuePickerOpen(false)}
+        snapPoints={[40]}
       >
-        <div className="mx-auto w-full max-w-6xl px-3 md:px-6">
-          <div className="relative flex w-full items-end">
-            {[
-              { mode: "canteen" as ParentMode, href: "/menu", icon: IoRestaurant, label: "Canteen", badge: 0 },
-              { mode: "library" as ParentMode, href: "/library-showcase", icon: IoBook, label: "Library", badge: overdueCount },
-              { mode: "content" as ParentMode, href: "/assignments", icon: IoDocumentText, label: "Notes", badge: 0 },
-            ].map((tab) => {
-              const isActive = parentMode === tab.mode;
-              const Icon = tab.icon;
+        <div className="space-y-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {venueType === "canteen" ? "Select Cafeteria" : "Select Library"}
+          </p>
+          <div className="space-y-1">
+            {(venueType === "canteen" ? canteens : libraries).map((venue) => {
+              const isSelected = venueType === "canteen"
+                ? venue.id === selectedCanteen
+                : venue.id === selectedLibrary;
               return (
-                <Link
-                  key={tab.mode}
-                  href={tab.href}
+                <button
+                  key={venue.id}
+                  type="button"
+                  onClick={() => {
+                    if (venueType === "canteen") setSelectedCanteen(venue.id);
+                    else setSelectedLibrary(venue.id);
+                    setVenuePickerOpen(false);
+                  }}
                   className={cn(
-                    "relative flex flex-1 flex-col items-center gap-0.5 rounded-t-2xl px-5 py-2.5 transition-all duration-200",
-                    isActive
-                      ? "bg-background dark:bg-background z-10"
-                      : "bg-transparent hover:bg-white/20 dark:hover:bg-white/10 text-white/70",
+                    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors",
+                    isSelected ? "bg-primary/10" : "hover:bg-muted/40",
                   )}
                 >
-                  {isActive && (
-                    <motion.div
-                      layoutId="mode-tab-bg"
-                      className="absolute inset-0 rounded-t-2xl bg-background"
-                      transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
-                    />
-                  )}
-                  <Icon className={cn(
-                    "relative z-10 h-6 w-6",
-                    isActive ? "text-[#d4891a]" : "text-white/80",
-                  )} />
-                  <span className={cn(
-                    "relative z-10 text-[11px] font-semibold leading-none",
-                    isActive ? "text-foreground" : "text-white/80",
+                  <div className={cn(
+                    "flex h-9 w-9 items-center justify-center rounded-full shrink-0",
+                    isSelected ? "bg-primary/15" : "bg-muted/50",
                   )}>
-                    {tab.label}
-                  </span>
-                  {tab.badge > 0 && (
-                    <span className="absolute right-2 top-1.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
-                      {tab.badge}
-                    </span>
-                  )}
-                </Link>
+                    {venueType === "canteen"
+                      ? <Store className={cn("h-4 w-4", isSelected ? "text-primary" : "text-muted-foreground")} />
+                      : <BookOpen className={cn("h-4 w-4", isSelected ? "text-primary" : "text-muted-foreground")} />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-[14px] truncate", isSelected && "font-semibold text-primary")}>{venue.name}</p>
+                    {venue.location && (
+                      <p className="text-[12px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{venue.location}</span>
+                      </p>
+                    )}
+                  </div>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                </button>
               );
             })}
+            {(venueType === "canteen" ? canteens : libraries).length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No {venueType === "canteen" ? "cafeterias" : "libraries"} available
+              </p>
+            )}
           </div>
         </div>
-      </div>
+      </BottomSheet>
 
-      {/* Context selector row - canteen mode only, below tabs */}
-      {showHeaderContextSelector && (
-        <div className="w-full bg-background px-3 py-2 md:px-6">
-          <div className="mx-auto flex max-w-6xl items-center gap-2">
-            <CanteenSelector
-              value={selectedCanteen}
-              onChange={setSelectedCanteen}
-              showAll={false}
-              includeInactive
-              compact
-              className="w-[180px] sm:w-[220px]"
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="app-mobile-safe-bottom pb-28">
+      {/* Content */}
+      <div className="pb-20">
         {children}
       </div>
 
-      {/* Gradient dim behind bottom nav */}
-      <div className="pointer-events-none fixed bottom-0 left-0 right-0 z-40 h-36 bg-gradient-to-t from-background/90 via-background/60 to-transparent" />
+      {/* Bottom tab bar — iOS floating glass pill + profile bubble */}
+      <nav
+        className="fixed bottom-3 left-0 right-0 z-50 flex items-end justify-center gap-2.5 px-4"
+        style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}
+      >
+        <div className="relative overflow-hidden rounded-full border border-white/45 bg-white/45 px-3 py-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10 w-full max-w-sm">
+          {/* Decorative light streaks */}
+          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/80" />
+          <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-black/5 dark:bg-white/10" />
+          <div className="pointer-events-none absolute -left-6 bottom-1 h-14 w-24 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
+          <div className="pointer-events-none absolute right-4 top-1 h-10 w-20 rounded-full bg-sky-200/35 blur-2xl dark:bg-sky-300/10" />
 
-      <nav className="fixed bottom-3 left-0 right-0 z-50 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex items-end justify-center gap-4 px-3">
-          {/* iOS-style compact tab bar */}
-          <div className={cn(
-            "w-70 h-16 flex items-stretch justify-between rounded-[72px] border border-white/20 px-1.5 py-1 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-            "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-            "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
-          )}>
-            {tabs.filter(item => !item.isProfile).map((tab) => {
-              const isActive = activeTab === tab.key;
+          <div className="relative flex items-center justify-around gap-1">
+            {bottomTabs.map((tab) => {
+              const isActive = bottomTab === tab.key;
               const Icon = tab.icon;
-
-              const handleClick = (e: React.MouseEvent) => {
-                if (tab.locked) {
-                  e.preventDefault();
-                  setShowControlsSheet(true);
-                }
-              };
-
               return (
                 <Link
                   key={tab.key}
                   href={tab.href}
-                  onClick={handleClick}
-                  className="relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-5 py-1.5"
+                  className={cn(
+                    "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-3 py-2 transition-all duration-200",
+                    isActive
+                      ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
+                      : "text-slate-600 dark:text-slate-300",
+                  )}
                 >
-                  {isActive && (
-                    <motion.div
-                      layoutId="tab-pill"
-                      className="absolute inset-0 rounded-4xl bg-primary/10 dark:bg-primary/20"
-                      transition={{ type: "tween", duration: 0.12, ease: "easeInOut" }}
-                    />)
-                  }
-                  <motion.div
-                    whileTap={{ scale: 0.85 }}
-                    className="relative z-10 flex flex-col items-center gap-0.5"
-                  >
-                    {Icon ? (
-                      <Icon
-                        className={cn(
-                          "h-[20px] w-[20px] transition-colors duration-200",
-                          isActive ? "text-primary" : "text-muted-foreground/70",
-                          tab.key === "cart" && cartBounce && "animate-bounce",
-                        )}
-                      />
-                    ) : null}
-                    <span className={cn(
-                      "text-[10px] font-medium leading-none transition-colors duration-200",
-                      isActive ? "text-primary" : "text-muted-foreground/70",
-                    )}>
-                      {tab.label}
-                    </span>
-                  </motion.div>
-
-                  {tab.key === "home" && parentMode === "library" && overdueCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-destructive px-0.5 text-[8px] font-bold text-white">
-                      {overdueCount}
-                    </span>
-                  )}
-
-                  {tab.key === "cart" && mounted && cartCount > 0 && (
-                    <span className="absolute right-1 top-0 z-20 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">
-                      {cartCount}
-                    </span>
-                  )}
-
-                  {tab.key === "controls" && tab.locked && (
-                    <span className="absolute right-1 top-0 z-20 rounded-full bg-primary px-1 py-0.5 text-[7px] font-bold leading-none text-primary-foreground">
-                      +
-                    </span>
-                  )}
+                  <span className="relative">
+                    <Icon className="h-5 w-5" />
+                    {tab.key === "pass" && certePlusActive && (
+                      <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-1 ring-white dark:ring-slate-900" />
+                    )}
+                  </span>
+                  <span className="text-[10px] font-medium">{tab.label}</span>
                 </Link>
               );
             })}
           </div>
-
-          {/* Separated profile circle button */}
-          {(() => {
-            const profileTab = tabs.find(item => item.isProfile);
-            if (!profileTab) return null;
-            const isActive = activeTab === profileTab.key;
-            return (
-              <Link
-                href={profileTab.href}
-                className={cn(
-                  "relative bottom-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]",
-                  "bg-background/70 backdrop-blur-2xl backdrop-saturate-[1.8]",
-                  "dark:border-white/[0.08] dark:bg-background/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.05)]",
-                  isActive && "ring-2 ring-primary/40",
-                )}
-              >
-                <motion.div whileTap={{ scale: 0.85 }}>
-                  <Avatar className={cn(
-                    "h-12 w-12 ring-1 transition-all duration-200",
-                    isActive ? "ring-primary/40" : "ring-primary/20",
-                  )}>
-                    <AvatarFallback className={cn(
-                      "text-[10px] font-bold transition-colors duration-200",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/90",
-                    )}>
-                      {mounted ? getInitials(session?.user?.name) : "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                </motion.div>
-              </Link>
-            );
-          })()}
         </div>
+
+        {/* Profile bubble */}
+        <button
+          type="button"
+          onClick={() => setProfileSheetOpen(true)}
+          className="relative bottom-2 shrink-0 h-[57px] w-[57px] overflow-hidden rounded-full border border-white/45 bg-white/45 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl transition-all duration-200 hover:bg-white/60 active:scale-95 dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10"
+          aria-label="Profile"
+        >
+          <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/40 to-transparent dark:from-white/10" />
+          <div className="relative flex h-full w-full items-center justify-center text-[15px] font-bold text-slate-800 dark:text-slate-100">
+            {mounted ? getInitials(session?.user?.name) : "?"}
+          </div>
+        </button>
       </nav>
+
+      {/* Profile Sheet */}
+      <BottomSheet
+        open={profileSheetOpen}
+        onClose={() => setProfileSheetOpen(false)}
+        snapPoints={[60, 90]}
+        bare
+      >
+        <div className="flex h-full flex-col">
+          {/* Profile info */}
+          <div className="px-5 pt-2 pb-4">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-12 w-12">
+                <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                  {mounted ? getInitials(session?.user?.name) : "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="truncate text-[22px] font-bold tracking-tight">{session?.user?.name || "User"}</p>
+                <p className="truncate text-[13px] text-muted-foreground">{session?.user?.email}</p>
+              </div>
+            </div>
+
+            {/* Wallet + Children cards */}
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => { setProfileSheetOpen(false); void router.push("/wallet"); }}
+                className="rounded-2xl bg-card p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+              >
+                <p className="text-xs text-muted-foreground">Wallet</p>
+                <p className="mt-1 flex items-center gap-1 text-lg font-bold">
+                  <IndianRupee className="h-4 w-4" />
+                  {totalWalletBalance.toFixed(0)}
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setProfileSheetOpen(false); void router.push("/children"); }}
+                className="rounded-2xl bg-card p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+              >
+                <p className="text-xs text-muted-foreground">Members</p>
+                <p className="mt-1 text-lg font-bold">
+                  {wallets.length} {wallets.length === 1 ? "member" : "members"}
+                </p>
+              </button>
+            </div>
+
+            {/* Certe+ subscription card */}
+            <button
+              type="button"
+              onClick={() => { setProfileSheetOpen(false); void router.push("/pre-orders"); }}
+              className={cn(
+                "mt-3 flex w-full items-center gap-3 rounded-2xl p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+                certePlusActive
+                  ? "bg-gradient-to-r from-amber-50 to-amber-100/60 dark:from-amber-950/30 dark:to-amber-900/20"
+                  : "bg-card",
+              )}
+            >
+              <span className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                certePlusActive ? "bg-amber-400/20" : "bg-muted/50",
+              )}>
+                <IoShieldCheckmark className={cn("h-4.5 w-4.5", certePlusActive ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold">Certe+</p>
+                {certePlusActive ? (
+                  <p className="text-[12px] text-amber-700 dark:text-amber-400">
+                    Active · {certePlusStatus?.subscription?.plan || "Subscribed"}
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">Subscribe for benefits</p>
+                )}
+              </div>
+              {!certePlusActive && (
+                <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
+                  Get
+                </span>
+              )}
+              {certePlusActive && (
+                <Check className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              )}
+            </button>
+          </div>
+
+          {/* Menu items */}
+          <div className="flex-1 overflow-y-auto px-5">
+            {[
+              { label: "Order History", href: "/orders" },
+              { label: "Library History", href: "/library-history" },
+              { label: "Calendar", href: "/calendar" },
+              { label: "Controls", href: "/controls" },
+              { label: "Notifications", href: "/notifications" },
+              { label: "Payments", action: () => { setProfileSheetOpen(false); void openPaymentsDrawer(); } },
+              { label: "Messaging", href: "/messaging-settings" },
+            ].map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  if ("action" in item && item.action) { item.action(); return; }
+                  setProfileSheetOpen(false);
+                  void router.push(item.href!);
+                }}
+                className="flex w-full items-center justify-between border-b border-border/30 py-3.5 text-[15px] last:border-0"
+              >
+                {item.label}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </button>
+            ))}
+
+            {/* Theme toggle */}
+            <div className="flex items-center justify-between border-b border-border/30 py-3.5">
+              <span className="text-[15px]">Theme</span>
+              <button
+                type="button"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted/50"
+              >
+                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {/* Sign out */}
+            <div className="mt-6 pb-8">
+              <button
+                type="button"
+                onClick={() =>
+                  signOut({
+                    fetchOptions: {
+                      onSuccess: () => { window.location.href = "/login"; },
+                    },
+                  })
+                }
+                className="w-full py-3 text-[15px] text-primary"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
 
       {isMobile ? (
         <>
           <BottomSheet
             open={cartDrawerOpen}
             onClose={() => setCartDrawerOpen(false)}
-            snapPoints={[88]}
+            snapPoints={[50]}
             bare
           >
             <div className="flex h-full flex-col">
@@ -1129,7 +1148,7 @@ function ParentLayoutContent({
           <BottomSheet
             open={walletDrawerOpen}
             onClose={() => setWalletDrawerOpen(false)}
-            snapPoints={[84]}
+            snapPoints={[50]}
             bare
           >
             <div className="flex h-full flex-col">
@@ -1201,7 +1220,7 @@ function ParentLayoutContent({
                   variant="premium"
                   onClick={() => {
                     setWalletDrawerOpen(false);
-                    void router.push(withParentMode("/wallet"));
+                    void router.push("/wallet");
                   }}
                 >
                   <IoSparkles className="h-4 w-4" />
@@ -1215,7 +1234,7 @@ function ParentLayoutContent({
           <BottomSheet
             open={notificationDrawerOpen}
             onClose={() => setNotificationDrawerOpen(false)}
-            snapPoints={[84]}
+            snapPoints={[60, 90]}
             bare
           >
             <div className="flex h-full flex-col">
@@ -1249,7 +1268,7 @@ function ParentLayoutContent({
                   variant="outline"
                   onClick={() => {
                     setNotificationDrawerOpen(false);
-                    void router.push(withParentMode("/notifications"));
+                    void router.push("/notifications");
                   }}
                 >
                   View All Notifications
@@ -1262,7 +1281,7 @@ function ParentLayoutContent({
           <BottomSheet
             open={paymentsDrawerOpen}
             onClose={() => { setPaymentsDrawerOpen(false); setSelectedPaymentEvent(null); }}
-            snapPoints={[88]}
+            snapPoints={[60, 90]}
             bare
           >
             <div className="flex h-full flex-col">
@@ -1303,20 +1322,6 @@ function ParentLayoutContent({
                 ) : (
                   renderPaymentEventList()
                 )}
-              </div>
-
-              <div className="border-t border-border/60 bg-muted/30 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                <Button
-                  className="w-full gap-2"
-                  variant="outline"
-                  onClick={() => {
-                    setPaymentsDrawerOpen(false);
-                    setSelectedPaymentEvent(null);
-                    void router.push("/events");
-                  }}
-                >
-                  View Full History
-                </Button>
               </div>
             </div>
           </BottomSheet>
@@ -1488,7 +1493,7 @@ function ParentLayoutContent({
                     variant="premium"
                     onClick={() => {
                       setWalletDrawerOpen(false);
-                      void router.push(withParentMode("/wallet"));
+                      void router.push("/wallet");
                     }}
                   >
                     <IoSparkles className="h-4 w-4" />
@@ -1542,7 +1547,7 @@ function ParentLayoutContent({
                       variant="outline"
                       onClick={() => {
                         setNotificationDrawerOpen(false);
-                        void router.push(withParentMode("/notifications"));
+                        void router.push("/notifications");
                       }}
                     >
                       View All Notifications
@@ -1610,20 +1615,6 @@ function ParentLayoutContent({
                     renderPaymentEventList()
                   )}
                 </div>
-
-                <SheetFooter className="border-t border-border/60 bg-muted/30">
-                  <Button
-                    className="w-full gap-2"
-                    variant="outline"
-                    onClick={() => {
-                      setPaymentsDrawerOpen(false);
-                      setSelectedPaymentEvent(null);
-                      void router.push("/events");
-                    }}
-                  >
-                    View Full History
-                  </Button>
-                </SheetFooter>
               </div>
             </SheetContent>
           </Sheet>
@@ -1650,7 +1641,7 @@ function ParentLayoutContent({
             className="w-full max-w-[280px]"
             onClick={() => {
               setShowControlsSheet(false);
-              void router.push(withParentMode("/settings"));
+              void router.push("/settings");
             }}
           >
             Upgrade to Certe+

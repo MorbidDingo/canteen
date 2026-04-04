@@ -12,6 +12,7 @@ export interface CartItem {
   name: string;
   price: number;
   discountedPrice?: number;
+  category?: string;
   canteenId: string;
   canteenName: string;
   quantity: number;

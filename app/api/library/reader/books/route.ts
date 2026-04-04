@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { readableBook, readingSession, certeSubscription } from "@/lib/db/schema";
+import { readableBook, readingSession } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, gte, count } from "drizzle-orm";
+import { and, eq, count } from "drizzle-orm";
 import { READER_MAX_ACTIVE_BOOKS } from "@/lib/constants";
 
 export async function GET() {
@@ -18,27 +18,6 @@ export async function GET() {
 
   const session = access.session;
   const organizationId = access.activeOrganizationId!;
-
-  // Certe+ subscription check
-  const now = new Date();
-  const [activeSub] = await db
-    .select({ id: certeSubscription.id })
-    .from(certeSubscription)
-    .where(
-      and(
-        eq(certeSubscription.parentId, session.user.id),
-        eq(certeSubscription.status, "ACTIVE"),
-        gte(certeSubscription.endDate, now),
-      ),
-    )
-    .limit(1);
-
-  if (!activeSub) {
-    return NextResponse.json(
-      { error: "Certe+ subscription required to access the book reader", code: "CERTE_PLUS_REQUIRED" },
-      { status: 403 },
-    );
-  }
 
   // Get available readable books for this org
   const books = await db

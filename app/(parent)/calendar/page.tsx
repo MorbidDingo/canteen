@@ -1,16 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   IoChevronBack,
   IoChevronForward,
-  IoDocumentText,
-  IoMegaphone,
-  IoSunny,
   IoCalendar,
-  IoSchool,
 } from "react-icons/io5";
+import { BottomSheet } from "@/components/ui/motion";
 
 
 type CalendarEvent = {
@@ -22,18 +20,11 @@ type CalendarEvent = {
   postType?: string;
 };
 
-const EVENT_COLORS = {
-  assignment: { dot: "bg-blue-500", bg: "bg-blue-50 dark:bg-blue-950/40", text: "text-blue-700 dark:text-blue-300", border: "border-blue-200 dark:border-blue-800" },
-  notice: { dot: "bg-amber-500", bg: "bg-amber-50 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300", border: "border-amber-200 dark:border-amber-800" },
-  holiday: { dot: "bg-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-200 dark:border-emerald-800" },
-  exam: { dot: "bg-red-500", bg: "bg-red-50 dark:bg-red-950/40", text: "text-red-700 dark:text-red-300", border: "border-red-200 dark:border-red-800" },
-} as const;
-
-const EVENT_ICONS = {
-  assignment: IoDocumentText,
-  notice: IoMegaphone,
-  holiday: IoSunny,
-  exam: IoSchool,
+const DOT_COLORS = {
+  assignment: "bg-blue-500",
+  notice: "bg-amber-500",
+  holiday: "bg-emerald-500",
+  exam: "bg-red-500",
 } as const;
 
 const MONTH_NAMES = [
@@ -54,7 +45,7 @@ export default function CalendarPage() {
   });
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string | null>(() => toDateKey(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const monthStr = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, "0")}`;
 
@@ -138,28 +129,42 @@ export default function CalendarPage() {
       if (m > 11) { m = 0; y++; }
       return { year: y, month: m };
     });
-    setSelectedDate(null);
   };
 
-  const selectedEvents = selectedDate ? (eventsByDate.get(selectedDate) ?? []) : [];
-
-  // Deduplicate events by ID (multi-day holidays)
+  // Deduplicate events by ID for selected date
   const uniqueSelectedEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    const dayEvents = eventsByDate.get(selectedDate) ?? [];
     const seen = new Set<string>();
-    return selectedEvents.filter((ev) => {
+    return dayEvents.filter((ev) => {
       if (seen.has(ev.id)) return false;
       seen.add(ev.id);
       return true;
     });
-  }, [selectedEvents]);
+  }, [selectedDate, eventsByDate]);
+
+  // All unique events this month for the list below
+  const monthEvents = useMemo(() => {
+    const seen = new Set<string>();
+    const result: CalendarEvent[] = [];
+    for (const ev of events) {
+      if (seen.has(ev.id)) continue;
+      seen.add(ev.id);
+      result.push(ev);
+    }
+    // Sort by date ascending
+    result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return result;
+  }, [events]);
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 px-3 pb-28 pt-4">
+    <div className="mx-auto w-full max-w-lg space-y-4 px-5 pb-24 sm:px-8">
       {/* Month header */}
       <div className="flex items-center justify-between">
         <button
+          type="button"
           onClick={() => goMonth(-1)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-muted"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-muted/40"
         >
           <IoChevronBack className="h-5 w-5" />
         </button>
@@ -167,66 +172,71 @@ export default function CalendarPage() {
           <h1 className="text-lg font-bold tracking-tight">
             {MONTH_NAMES[currentMonth.month]}
           </h1>
-          <p className="text-xs text-muted-foreground tabular-nums">{currentMonth.year}</p>
+          <p className="text-[12px] text-muted-foreground tabular-nums">{currentMonth.year}</p>
         </div>
         <button
+          type="button"
           onClick={() => goMonth(1)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-muted"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-muted/40"
         >
           <IoChevronForward className="h-5 w-5" />
         </button>
       </div>
 
       {/* Calendar grid */}
-      <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-border/40 bg-muted/30">
+        <div className="grid grid-cols-7">
           {DAY_NAMES.map((d) => (
-            <div key={d} className="py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div key={d} className="py-2.5 text-center text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {d}
             </div>
           ))}
         </div>
 
-        {/* Day cells */}
+        {/* Day cells — 48x48 min tap targets */}
         <div className="grid grid-cols-7">
           {calendarDays.map(({ date, inMonth }, i) => {
             const key = toDateKey(date);
             const isToday = key === today;
             const isSelected = key === selectedDate;
             const dayEvents = eventsByDate.get(key) ?? [];
-            const hasAssignment = dayEvents.some((e) => e.type === "assignment");
-            const hasNotice = dayEvents.some((e) => e.type === "notice");
-            const hasHoliday = dayEvents.some((e) => e.type === "holiday");
-            const hasExam = dayEvents.some((e) => e.type === "exam");
+
+            // Collect unique dot types (max 3)
+            const dotTypes = [...new Set(dayEvents.map((e) => e.type))].slice(0, 3);
 
             return (
               <button
                 key={i}
-                onClick={() => inMonth && setSelectedDate(isSelected ? null : key)}
+                type="button"
+                onClick={() => {
+                  if (!inMonth) return;
+                  if (dayEvents.length > 0) {
+                    setSelectedDate(isSelected ? null : key);
+                  }
+                }}
                 disabled={!inMonth}
                 className={cn(
-                  "relative flex flex-col items-center gap-0.5 py-2 transition-colors",
-                  !inMonth && "opacity-25",
-                  inMonth && "active:bg-muted/50",
-                  isSelected && "bg-primary/8 dark:bg-primary/12",
+                  "relative flex min-h-[48px] flex-col items-center justify-center gap-0.5 transition-colors",
+                  !inMonth && "opacity-20",
+                  inMonth && "active:bg-muted/30",
+                  isSelected && "bg-primary/5",
                 )}
               >
                 <span
                   className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-medium tabular-nums",
-                    isToday && !isSelected && "bg-primary text-primary-foreground font-bold",
-                    isSelected && "bg-primary text-primary-foreground font-bold ring-2 ring-primary/30",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-[13px] font-medium tabular-nums",
+                    isToday && !isSelected && "ring-2 ring-primary text-primary font-bold",
+                    isSelected && "bg-primary text-primary-foreground font-bold",
                   )}
                 >
                   {date.getDate()}
                 </span>
                 {/* Event dots */}
                 <div className="flex h-1.5 items-center gap-0.5">
-                  {hasAssignment && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
-                  {hasExam && <span className="h-1.5 w-1.5 rounded-full bg-red-500" />}
-                  {hasNotice && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
-                  {hasHoliday && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
+                  {dotTypes.map((type) => (
+                    <span key={type} className={cn("h-1.5 w-1.5 rounded-full", DOT_COLORS[type])} />
+                  ))}
                 </div>
               </button>
             );
@@ -234,90 +244,113 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-blue-500" />
-          Assignments
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-red-500" />
-          Exams
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-amber-500" />
-          Notices
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Holidays
-        </div>
-      </div>
+      {/* Selected date events — Bottom Sheet */}
+      <BottomSheet
+        open={!!selectedDate && uniqueSelectedEvents.length > 0}
+        onClose={() => setSelectedDate(null)}
+        snapPoints={[40]}
+      >
+        <div className="space-y-3 p-5">
+          {selectedDate && (
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
+                weekday: "long",
+                day: "numeric",
+                month: "short",
+              })}
+            </p>
+          )}
 
-      {/* Selected date events */}
-      {selectedDate && (
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
-              weekday: "long",
-              day: "numeric",
-              month: "short",
-            })}
-          </h2>
-
-          {loading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="h-16 w-full animate-pulse rounded-xl bg-muted" />
-              ))}
-            </div>
-          ) : uniqueSelectedEvents.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-border/60 py-8 text-muted-foreground">
-              <IoCalendar className="h-8 w-8 opacity-40" />
-              <p className="text-sm">Nothing scheduled</p>
+          {uniqueSelectedEvents.length === 0 ? (
+            <div className="py-6 text-center">
+              <IoCalendar className="mx-auto h-8 w-8 text-muted-foreground/20" />
+              <p className="mt-2 text-[13px] text-muted-foreground">Nothing scheduled</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {uniqueSelectedEvents.map((ev) => {
-                const colors = EVENT_COLORS[ev.type];
-                const Icon = EVENT_ICONS[ev.type];
+                const isAssignment = ev.type === "assignment";
                 return (
-                  <div
-                    key={ev.id}
-                    className={cn(
-                      "flex items-start gap-3 rounded-xl border px-3.5 py-3",
-                      colors.bg,
-                      colors.border,
+                  <div key={ev.id}>
+                    {isAssignment ? (
+                      <Link
+                        href={`/assignments/${ev.id}`}
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors active:bg-muted/30"
+                      >
+                        <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLORS[ev.type])} />
+                        <p className="min-w-0 flex-1 text-[14px] font-medium leading-tight">
+                          {ev.title}
+                          <span className="font-normal text-muted-foreground"> · Due</span>
+                        </p>
+                      </Link>
+                    ) : (
+                      <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                        <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLORS[ev.type])} />
+                        <p className="min-w-0 flex-1 text-[14px] font-medium leading-tight">
+                          {ev.type === "holiday" ? "Holiday" : ev.type === "exam" ? "Exam" : "Notice"}
+                          <span className="font-normal text-muted-foreground"> · {ev.title}</span>
+                        </p>
+                      </div>
                     )}
-                  >
-                    <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", colors.bg)}>
-                      <Icon className={cn("h-4 w-4", colors.text)} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={cn("text-sm font-semibold leading-snug", colors.text)}>
-                        {ev.title}
-                      </p>
-                      <p className="mt-0.5 text-xs capitalize text-muted-foreground">
-                        {ev.type === "assignment" && ev.postType
-                          ? ev.postType.toLowerCase()
-                          : ev.type}
-                        {ev.type === "assignment" && (
-                          <span className="ml-1.5 text-muted-foreground/70">
-                            Due {new Date(ev.date).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        )}
-                        {ev.type === "holiday" && ev.endDate && (
-                          <span className="ml-1.5 text-muted-foreground/70">
-                            until {new Date(ev.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                          </span>
-                        )}
-                      </p>
-                    </div>
                   </div>
                 );
               })}
             </div>
           )}
+        </div>
+      </BottomSheet>
+
+      {/* This Month events list */}
+      {!loading && monthEvents.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            This Month
+          </p>
+          <div className="space-y-2">
+            {monthEvents.map((ev) => {
+              const evDate = new Date(ev.date);
+              const dayStr = evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+              const isAssignment = ev.type === "assignment";
+              const Wrapper = isAssignment ? Link : "div";
+              const wrapperProps = isAssignment
+                ? { href: `/assignments/${ev.id}` as string }
+                : {};
+
+              return (
+                <Wrapper
+                  key={ev.id}
+                  {...(wrapperProps as Record<string, string>)}
+                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                  onClick={() => {
+                    if (!isAssignment) {
+                      const key = toDateKey(evDate);
+                      setSelectedDate(key);
+                    }
+                  }}
+                >
+                  {/* Colour accent bar */}
+                  <div className={cn("h-10 w-1 rounded-full shrink-0", DOT_COLORS[ev.type])} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-medium leading-tight truncate">{ev.title}</p>
+                    <p className="text-[12px] text-muted-foreground mt-0.5">
+                      {ev.type === "holiday" ? "Holiday" : ev.type === "exam" ? "Exam" : ev.type === "assignment" ? "Due" : "Notice"}
+                      {" · "}
+                      {dayStr}
+                      {ev.endDate && ev.endDate !== ev.date && (
+                        <> – {new Date(ev.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</>
+                      )}
+                    </p>
+                  </div>
+                </Wrapper>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {!loading && monthEvents.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center">
+          <IoCalendar className="mx-auto h-7 w-7 text-muted-foreground/30" />
+          <p className="mt-2 text-xs text-muted-foreground">No events this month</p>
         </div>
       )}
     </div>

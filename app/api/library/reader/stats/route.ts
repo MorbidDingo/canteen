@@ -5,10 +5,9 @@ import {
   readingSession,
   readingHighlight,
   readingBookmark,
-  certeSubscription,
 } from "@/lib/db/schema";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
-import { and, eq, gte, count, desc, sql } from "drizzle-orm";
+import { and, eq, count, desc, sql } from "drizzle-orm";
 
 /**
  * GET /api/library/reader/stats
@@ -32,27 +31,6 @@ export async function GET() {
 
   const session = access.session;
   const organizationId = access.activeOrganizationId!;
-
-  // Certe+ subscription check
-  const now = new Date();
-  const [activeSub] = await db
-    .select({ id: certeSubscription.id })
-    .from(certeSubscription)
-    .where(
-      and(
-        eq(certeSubscription.parentId, session.user.id),
-        eq(certeSubscription.status, "ACTIVE"),
-        gte(certeSubscription.endDate, now),
-      ),
-    )
-    .limit(1);
-
-  if (!activeSub) {
-    return NextResponse.json(
-      { error: "Certe+ subscription required", code: "CERTE_PLUS_REQUIRED" },
-      { status: 403 },
-    );
-  }
 
   // Most read books — by total number of reading sessions across all users
   const mostReadBooks = await db

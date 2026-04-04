@@ -1,32 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  BookOpen,
-  Loader2,
-  Search,
-  MapPin,
-  Clock,
-  CalendarDays,
-  CheckCircle2,
-  AlertTriangle,
-} from "lucide-react";
-import {
-  BOOK_CATEGORY_LABELS,
-  type BookCategory,
-} from "@/lib/constants";
+import { BookOpen, Loader2 } from "lucide-react";
 import { useSSE } from "@/lib/events";
-import { LibrarySelector } from "@/components/library-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import { cn } from "@/lib/utils";
 
@@ -69,31 +46,10 @@ interface DiscoverData {
   history: IssuedRecord[];
 }
 
-function getCategoryLabel(category: string) {
-  return BOOK_CATEGORY_LABELS[category as BookCategory] ?? category;
-}
-
 function getDaysRemaining(dueDate: string) {
   const due = new Date(dueDate);
   const now = new Date();
   return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function BookCover({ url, title, size = "md" }: { url: string | null; title: string; size?: "sm" | "md" }) {
-  const sizeClasses = size === "sm" ? "h-10 w-7 rounded-md" : "h-16 w-11 rounded-lg";
-  const iconSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
-  return (
-    <div className={cn("shrink-0 overflow-hidden bg-muted shadow-sm", sizeClasses)}>
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt={title} className="h-full w-full object-cover" />
-      ) : (
-        <div className={cn("flex h-full w-full items-center justify-center bg-gradient-to-br from-muted to-muted/60 text-muted-foreground/40")}>
-          <BookOpen className={iconSize} />
-        </div>
-      )}
-    </div>
-  );
 }
 
 function formatDate(dateStr: string) {
@@ -107,23 +63,11 @@ export default function LibraryHistoryPage() {
   const [data, setData] = useState<DiscoverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedChildId, setSelectedChildId] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("ALL");
   const {
     value: selectedLibrary,
     setValue: setSelectedLibrary,
     hydrated: libraryScopeHydrated,
   } = usePersistedSelection("certe:selected-library-id");
-
-  const initializedFilters = useRef(false);
-
-  useEffect(() => {
-    const handle = setTimeout(() => {
-      setQuery(searchInput.trim());
-    }, 250);
-    return () => clearTimeout(handle);
-  }, [searchInput]);
 
   const fetchDiscover = useCallback(async () => {
     setLoading(true);
@@ -132,8 +76,6 @@ export default function LibraryHistoryPage() {
       const params = new URLSearchParams();
       if (selectedChildId) params.set("childId", selectedChildId);
       if (selectedLibrary) params.set("libraryId", selectedLibrary);
-      if (query) params.set("q", query);
-      if (category !== "ALL") params.set("category", category);
 
       const res = await fetch(`/api/library/discover?${params.toString()}`);
       if (!res.ok) throw new Error();
@@ -148,19 +90,12 @@ export default function LibraryHistoryPage() {
       if (!selectedChildId && json.selectedChildId) {
         setSelectedChildId(json.selectedChildId);
       }
-
-      if (!initializedFilters.current) {
-        setSearchInput(json.filters.query || "");
-        setQuery(json.filters.query || "");
-        setCategory(json.filters.category || "ALL");
-        initializedFilters.current = true;
-      }
     } catch {
       toast.error("Failed to load library history");
     } finally {
       setLoading(false);
     }
-  }, [selectedChildId, selectedLibrary, query, category, setSelectedLibrary]);
+  }, [selectedChildId, selectedLibrary, setSelectedLibrary]);
 
   useSSE("library-updated", () => {
     void fetchDiscover();
@@ -170,8 +105,6 @@ export default function LibraryHistoryPage() {
     if (!libraryScopeHydrated) return;
     void fetchDiscover();
   }, [fetchDiscover, libraryScopeHydrated]);
-
-  const visibleHistory = useMemo(() => data?.history ?? [], [data]);
 
   if (loading && !data) {
     return (
@@ -183,76 +116,47 @@ export default function LibraryHistoryPage() {
 
   if (!data || data.children.length === 0) {
     return (
-      <div className="app-shell pb-24">
-        <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-8 text-center">
-          <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/40" />
-          <p className="mt-2 text-sm text-muted-foreground">No children found.</p>
+      <div className="px-5 pb-24 sm:px-8">
+        <div className="py-16 text-center">
+          <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/20" />
+          <p className="mt-2 text-[15px] text-muted-foreground">No members found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="app-shell space-y-4 pb-24">
-      {/* Library selector */}
-      <section className="flex justify-start">
-        <LibrarySelector value={selectedLibrary} onChange={setSelectedLibrary} showAll compact />
-      </section>
+    <div className="space-y-8 px-5 pb-24 sm:px-8">
 
-      {/* Search and filters - compact inline */}
-      <section className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[140px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            className="h-9 rounded-xl border-border/50 bg-card/80 pl-8 text-sm shadow-sm backdrop-blur-sm"
-            placeholder="Search books..."
-          />
+      {/* Child filter — only if 2+ children */}
+      {data.children.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          {data.children.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setSelectedChildId(c.id)}
+              className={cn(
+                "h-8 shrink-0 rounded-full px-3 text-[12px] font-medium transition-colors",
+                (selectedChildId || data.selectedChildId || data.children[0]?.id) === c.id
+                  ? "bg-foreground text-background"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+              )}
+            >
+              {c.name}
+            </button>
+          ))}
         </div>
+      )}
 
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="h-9 w-auto min-w-[120px] rounded-xl border-border/50 bg-card/80 text-xs shadow-sm">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All categories</SelectItem>
-            {Object.keys(BOOK_CATEGORY_LABELS).map((item) => (
-              <SelectItem key={item} value={item}>
-                {BOOK_CATEGORY_LABELS[item as BookCategory]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={selectedChildId || data.selectedChildId || data.children[0]?.id} onValueChange={setSelectedChildId}>
-          <SelectTrigger className="h-9 w-auto min-w-[100px] rounded-xl border-border/50 bg-card/80 text-xs shadow-sm">
-            <SelectValue placeholder="Child" />
-          </SelectTrigger>
-          <SelectContent>
-            {data.children.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </section>
-
-      {/* Currently Issued - Premium cards */}
+      {/* Currently Issued */}
       <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Currently Issued</h2>
-          {data.issued.length > 0 && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{data.issued.length}</Badge>
-          )}
-        </div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Currently Issued</p>
 
         {data.issued.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-6 text-center">
-            <BookOpen className="mx-auto h-6 w-6 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">No active issuances</p>
+          <div className="py-10 text-center">
+            <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/20" />
+            <p className="mt-2 text-[13px] text-muted-foreground">No active issuances</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -263,52 +167,38 @@ export default function LibraryHistoryPage() {
               return (
                 <div
                   key={item.issuanceId}
-                  className={cn(
-                    "group rounded-2xl border bg-card/80 p-3 shadow-sm backdrop-blur-sm transition-all",
-                    overdue
-                      ? "border-red-200/60 dark:border-red-900/30"
-                      : "border-border/50 hover:border-border/80",
-                  )}
+                  className="flex gap-3 rounded-2xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
                 >
-                  <div className="flex gap-3">
-                    {/* Book cover */}
-                    <BookCover url={item.bookCoverUrl} title={item.bookTitle} />
-
-                    {/* Details */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-1 text-sm font-semibold leading-tight">{item.bookTitle}</p>
-                          <p className="line-clamp-1 mt-0.5 text-xs text-muted-foreground">{item.bookAuthor}</p>
-                        </div>
-                        <Badge className={cn(
-                          "shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-bold",
-                          overdue
-                            ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-                            : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-                        )}>
-                          {overdue ? (
-                            <><AlertTriangle className="mr-0.5 inline h-2.5 w-2.5" />{Math.abs(daysRemaining)}d overdue</>
-                          ) : (
-                            <>{daysRemaining}d left</>
-                          )}
-                        </Badge>
+                  {/* Book cover */}
+                  <div className="h-16 w-11 shrink-0 overflow-hidden rounded-lg bg-muted">
+                    {item.bookCoverUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.bookCoverUrl} alt={item.bookTitle} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
+                        <BookOpen className="h-4 w-4" />
                       </div>
-
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                        {item.libraryName && (
-                          <span className="inline-flex items-center gap-0.5">
-                            <MapPin className="h-2.5 w-2.5" />
-                            {item.libraryName}
-                          </span>
-                        )}
-                        <span className="inline-flex items-center gap-0.5">
-                          <CalendarDays className="h-2.5 w-2.5" />
-                          {formatDate(item.issuedAt)} → {formatDate(item.dueDate)}
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
+
+                  {/* Details */}
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-1 text-[15px] font-semibold leading-tight">{item.bookTitle}</p>
+                    <p className="line-clamp-1 mt-0.5 text-[13px] text-muted-foreground">{item.bookAuthor}</p>
+                    <p className={cn(
+                      "mt-1 text-[12px] font-medium",
+                      overdue ? "text-destructive" : "text-emerald-600",
+                    )}>
+                      {overdue
+                        ? `Overdue ${Math.abs(daysRemaining)} days`
+                        : `Due ${formatDate(item.dueDate)} · ${daysRemaining} days`}
+                    </p>
+                  </div>
+
+                  {/* Overdue dot indicator */}
+                  {overdue && (
+                    <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-destructive" />
+                  )}
                 </div>
               );
             })}
@@ -316,41 +206,28 @@ export default function LibraryHistoryPage() {
         )}
       </section>
 
-      {/* Reading History - Clean list */}
+      {/* Returned — text-only rows */}
       <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">Reading History</h2>
-          {visibleHistory.length > 0 && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">{visibleHistory.length}</Badge>
-          )}
-        </div>
+        <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Returned</p>
 
-        {visibleHistory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border/60 bg-card/50 p-6 text-center">
-            <BookOpen className="mx-auto h-6 w-6 text-muted-foreground/30" />
-            <p className="mt-1.5 text-xs text-muted-foreground">No history yet</p>
+        {(data.history ?? []).length === 0 ? (
+          <div className="py-10 text-center">
+            <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/20" />
+            <p className="mt-2 text-[13px] text-muted-foreground">No history yet</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
-            {visibleHistory.slice(0, 20).map((item) => (
+          <div className="space-y-1">
+            {(data.history ?? []).slice(0, 20).map((item) => (
               <div
                 key={item.issuanceId}
-                className="flex items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-3 py-2.5 shadow-sm backdrop-blur-sm transition-colors hover:bg-card/90"
+                className="rounded-xl px-3 py-2.5"
               >
-                {/* Mini cover */}
-                <BookCover url={item.bookCoverUrl} title={item.bookTitle} size="sm" />
-
-                <div className="min-w-0 flex-1">
-                  <p className="line-clamp-1 text-sm font-medium leading-tight">{item.bookTitle}</p>
-                  <p className="line-clamp-1 text-[11px] text-muted-foreground">
-                    {item.bookAuthor} · {getCategoryLabel(item.bookCategory)}
-                  </p>
-                </div>
-
-                <Badge variant="outline" className="shrink-0 rounded-md text-[10px]">
-                  {item.status}
-                </Badge>
+                <p className="text-[14px] font-medium leading-tight">
+                  {item.bookTitle} · <span className="font-normal text-muted-foreground">{item.bookAuthor}</span>
+                </p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  Returned {item.returnedAt ? formatDate(item.returnedAt) : "N/A"}
+                </p>
               </div>
             ))}
           </div>

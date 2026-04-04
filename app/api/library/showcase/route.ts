@@ -200,12 +200,7 @@ export async function GET(request: NextRequest) {
       createdAt: child.createdAt,
     })
     .from(child)
-    .where(
-      and(
-        eq(child.parentId, session.user.id),
-        or(eq(child.organizationId, organizationId), isNull(child.organizationId)),
-      ),
-    )
+    .where(eq(child.parentId, session.user.id))
     .orderBy(asc(child.createdAt));
 
   if (childRows.length === 0 && session.user.role === "GENERAL") {
@@ -234,7 +229,7 @@ export async function GET(request: NextRequest) {
           createdAt: child.createdAt,
         })
         .from(child)
-        .where(and(eq(child.parentId, session.user.id), eq(child.organizationId, organizationId)))
+        .where(eq(child.parentId, session.user.id))
         .orderBy(asc(child.createdAt));
 
   if (finalChildrenRows.length === 0) {

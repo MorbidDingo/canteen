@@ -3,17 +3,14 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "@/components/ui/motion";
-import { MotionPage, spring } from "@/components/ui/motion";
+import { motion, AnimatePresence, MotionPage, spring } from "@/components/ui/motion";
 import { Button } from "@/components/ui/button";
 import {
-  BookOpen, Loader2, Sparkles, X, Play, Lock,
-  TrendingUp, Search, ChevronLeft, ChevronRight,
-  BookMarked,
+  BookOpen, Loader2, Sparkles, X,
+  Search, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { READER_MAX_ACTIVE_BOOKS } from "@/lib/constants";
-import { Input } from "@/components/ui/input";
 
 const BOOKS_PER_PAGE = 10;
 
@@ -76,7 +73,6 @@ export default function LibraryReaderPage() {
   const [sessions, setSessions] = useState<ReadingSessionInfo[]>([]);
   const [stats, setStats] = useState<ReaderStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [certePlusRequired, setCertePlusRequired] = useState(false);
   const [startingBookId, setStartingBookId] = useState<string | null>(null);
   const [closingSessionId, setClosingSessionId] = useState<string | null>(null);
   const [seedingPublicBooks, setSeedingPublicBooks] = useState(false);
@@ -219,7 +215,6 @@ export default function LibraryReaderPage() {
       ]);
 
       if (booksRes.status === 403) {
-        setCertePlusRequired(true);
         setLoading(false);
         return;
       }
@@ -348,52 +343,30 @@ export default function LibraryReaderPage() {
     );
   }
 
-  if (certePlusRequired) {
-    return (
-      <MotionPage>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
-          <div className="rounded-full bg-amber-500/10 p-4">
-            <Lock className="h-10 w-10 text-amber-500" />
-          </div>
-          <h2 className="text-xl font-bold text-center">Certe+ Required</h2>
-          <p className="text-muted-foreground text-center max-w-sm">
-            The Book Reader is available exclusively for Certe+ subscribers.
-            Upgrade to start reading digital books with bookmarks, highlights, and more.
-          </p>
-          <Button onClick={() => router.push("/certe-plus")} className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            Upgrade to Certe+
-          </Button>
-        </div>
-      </MotionPage>
-    );
-  }
-
   const orgBooks = books.filter((b) => !b.isPublicDomain);
 
   return (
     <MotionPage>
-      <div className="px-4 pt-4 pb-28 max-w-2xl mx-auto space-y-7">
+      <div className="space-y-8 px-5 pb-28 sm:px-8">
 
-        {/* ── Search ── */}
-        <section className="relative">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search books by title, author, genre…"
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-10 pr-10 rounded-xl h-11 bg-card"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(""); setSearchResults([]); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
-              >
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            )}
-          </div>
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+          <input
+            placeholder="Search public domain books..."
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            className="h-11 w-full rounded-full bg-muted/40 pl-11 pr-10 text-[15px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:bg-muted/60"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(""); setSearchResults([]); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
 
           {/* Search Results Dropdown */}
           <AnimatePresence>
@@ -403,7 +376,7 @@ export default function LibraryReaderPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={spring.snappy}
-                className="absolute left-0 right-0 top-full z-50 mt-1 rounded-xl bg-card border border-border shadow-lg overflow-hidden max-h-[60vh] overflow-y-auto"
+                className="absolute left-0 right-0 top-full z-50 mt-1 rounded-2xl bg-card border border-border/50 shadow-lg overflow-hidden max-h-[60vh] overflow-y-auto"
               >
                 {searching && searchResults.length === 0 ? (
                   <div className="flex items-center justify-center py-6">
@@ -411,52 +384,42 @@ export default function LibraryReaderPage() {
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="py-6 text-center text-sm text-muted-foreground">
-                    No books found for &ldquo;{searchQuery}&rdquo;
+                    No books found
                   </div>
                 ) : (
-                  searchResults.map((hit) => {
-                    const existsInLib = books.some((b) => b.gutenbergId === String(hit.gutenbergId));
-                    return (
-                      <button
-                        key={hit.id}
-                        onClick={() => openSearchResult(hit.gutenbergId)}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left border-b border-border last:border-b-0"
-                      >
-                        <div className="w-10 h-14 rounded-md bg-gradient-to-br from-indigo-500/20 to-purple-600/20 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                          {hit.coverImageUrl ? (
-                            <img src={hit.coverImageUrl} alt="" className="w-full h-full object-cover rounded-md" />
-                          ) : (
-                            <BookOpen className="h-4 w-4 text-muted-foreground/40" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{hit.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">{hit.authors}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-full">{hit.category}</span>
-                            {existsInLib && (
-                              <span className="text-[9px] text-emerald-600 font-medium">In Library</span>
-                            )}
+                  searchResults.map((hit) => (
+                    <button
+                      key={hit.id}
+                      type="button"
+                      onClick={() => openSearchResult(hit.gutenbergId)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left border-b border-border/30 last:border-b-0"
+                    >
+                      <div className="w-10 h-14 rounded-lg bg-muted shrink-0 overflow-hidden">
+                        {hit.coverImageUrl ? (
+                          <img src={hit.coverImageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                            <BookOpen className="h-4 w-4" />
                           </div>
-                        </div>
-                      </button>
-                    );
-                  })
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-semibold truncate">{hit.title}</p>
+                        <p className="text-[12px] text-muted-foreground truncate">{hit.authors}</p>
+                      </div>
+                    </button>
+                  ))
                 )}
               </motion.div>
             )}
           </AnimatePresence>
-        </section>
+        </div>
 
-        {/* ── Currently Reading ── */}
+        {/* Continue Reading */}
         {sessions.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <BookMarked className="h-4 w-4 text-indigo-500" />
-              <h2 className="text-sm font-semibold text-foreground">Continue Reading</h2>
-              <span className="ml-auto text-[10px] text-muted-foreground">{sessions.length}/{READER_MAX_ACTIVE_BOOKS} active</span>
-            </div>
-            <div className="space-y-2.5">
+          <section className="space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Continue Reading</p>
+            <div className="space-y-3">
               <AnimatePresence mode="popLayout">
                 {sessions.map((s) => {
                   const pct = s.totalPages > 0 ? Math.round((s.currentPage / s.totalPages) * 100) : 0;
@@ -468,68 +431,67 @@ export default function LibraryReaderPage() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -20 }}
                       transition={spring.snappy}
-                      className="flex gap-3 p-3 rounded-2xl bg-card border border-border shadow-sm"
+                      className="flex gap-3 rounded-2xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
                     >
                       {/* Cover */}
                       <button
-                        className="w-14 h-20 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex-shrink-0 overflow-hidden shadow-md active:scale-95 transition-transform"
+                        type="button"
+                        className="w-14 h-20 rounded-xl bg-muted shrink-0 overflow-hidden active:scale-95 transition-transform"
                         onClick={() => router.push(`/library-reader/${s.readableBookId}`)}
                       >
                         {s.bookCover ? (
                           <img src={s.bookCover} alt={s.bookTitle} className="w-full h-full object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <BookOpen className="h-5 w-5 text-white/70" />
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                            <BookOpen className="h-5 w-5" />
                           </div>
                         )}
                       </button>
 
-                      <div className="flex-1 min-w-0 flex flex-col justify-between">
+                      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                         <div>
                           <button
-                            className="text-sm font-semibold text-left leading-tight truncate w-full hover:text-indigo-500 transition-colors"
+                            type="button"
+                            className="text-[16px] font-semibold text-left leading-tight truncate w-full"
+                            style={{ fontFamily: "'Cormorant Garamond', serif" }}
                             onClick={() => router.push(`/library-reader/${s.readableBookId}`)}
                           >
                             {s.bookTitle}
                           </button>
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{s.bookAuthor}</p>
+                          <p className="text-[13px] text-muted-foreground mt-0.5 truncate">{s.bookAuthor}</p>
                         </div>
 
-                        {/* Progress */}
+                        {/* Progress bar */}
                         <div className="mt-2">
-                          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                            <span>{pct}% read</span>
-                            <span>Pg {s.currentPage}{s.totalPages > 0 ? ` / ${s.totalPages}` : ""}</span>
-                          </div>
-                          <div className="h-1 bg-muted rounded-full overflow-hidden">
+                          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                             <motion.div
-                              className="h-full bg-indigo-500 rounded-full"
+                              className="h-full bg-primary rounded-full"
                               initial={{ width: 0 }}
                               animate={{ width: `${pct}%` }}
                               transition={spring.gentle}
                             />
                           </div>
+                          <p className="text-[11px] text-muted-foreground mt-1">{pct}%</p>
                         </div>
 
-                        <div className="flex gap-2 mt-2.5">
-                          <Button
-                            size="sm"
-                            className="h-7 text-xs gap-1 flex-1 rounded-lg"
-                            onClick={() => router.push(`/library-reader/${s.readableBookId}`)}
-                          >
-                            <Play className="h-3 w-3" /> Continue
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 text-xs text-muted-foreground rounded-lg"
-                            onClick={() => closeBook(s.id)}
-                            disabled={closingSessionId === s.id}
-                          >
-                            {closingSessionId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-                          </Button>
-                        </div>
+                        <button
+                          type="button"
+                          className="mt-1.5 self-start text-[13px] font-medium text-primary"
+                          onClick={() => router.push(`/library-reader/${s.readableBookId}`)}
+                        >
+                          Continue →
+                        </button>
                       </div>
+
+                      {/* Close button */}
+                      <button
+                        type="button"
+                        className="self-start rounded-full p-1.5 text-muted-foreground/50 hover:text-foreground transition-colors"
+                        onClick={() => closeBook(s.id)}
+                        disabled={closingSessionId === s.id}
+                      >
+                        {closingSessionId === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                      </button>
                     </motion.div>
                   );
                 })}
@@ -538,226 +500,119 @@ export default function LibraryReaderPage() {
           </section>
         )}
 
-        {/* ── Trending ── */}
-        {stats && stats.trending.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="h-4 w-4 text-rose-500" />
-              <h2 className="text-sm font-semibold">Trending</h2>
-            </div>
-            <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
-              {stats.trending.map((t) => (
-                <motion.button
-                  key={t.bookId}
-                  className="flex-shrink-0 w-24 rounded-2xl bg-card border border-border shadow-sm overflow-hidden text-left"
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => {
-                    const match = books.find((b) => b.id === t.bookId);
-                    if (match?.isActive) router.push(`/library-reader/${t.bookId}`);
-                    else if (match) startReading(t.bookId);
-                  }}
-                >
-                  <div className="aspect-[2/3] bg-gradient-to-br from-rose-500/20 to-orange-600/20 overflow-hidden">
-                    {t.coverImageUrl ? (
-                      <img src={t.coverImageUrl} alt={t.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <BookOpen className="h-6 w-6 text-muted-foreground/30" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-2">
-                    <p className="font-semibold text-[10px] truncate leading-tight">{t.title}</p>
-                    <p className="text-[9px] text-rose-500 font-medium mt-0.5">{t.recentReaders} reading</p>
-                  </div>
-                </motion.button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* ── Discover Library ── */}
+        {/* Discover — cover-only horizontal rail */}
         {shuffledPublicBooks.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4 text-indigo-500" />
-              <h2 className="text-sm font-semibold">Discover</h2>
-              {totalBookPages > 1 && (
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {booksPage + 1} / {totalBookPages}
-                </span>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              <AnimatePresence mode="popLayout">
-                {visibleBooks.map((b) => (
-                  <motion.button
-                    key={b.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={spring.snappy}
-                    className={cn(
-                      "relative rounded-2xl overflow-hidden bg-card border border-border shadow-sm text-left",
-                      b.isActive && "ring-2 ring-indigo-500",
-                    )}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => {
-                      if (b.isActive) router.push(`/library-reader/${b.id}`);
-                      else startReading(b.id);
-                    }}
-                  >
-                    <div className="aspect-[2/3] bg-gradient-to-br from-indigo-500/15 to-purple-600/15 overflow-hidden">
-                      {b.coverImageUrl ? (
-                        <img src={b.coverImageUrl} alt={b.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <BookOpen className="h-8 w-8 text-muted-foreground/25" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2.5">
-                      <p className="font-semibold text-xs leading-tight line-clamp-2">{b.title}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{b.author}</p>
-                    </div>
-
-                    {b.isActive && (
-                      <div className="absolute top-2 right-2 bg-indigo-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                        Reading
-                      </div>
-                    )}
-                    {startingBookId === b.id && (
-                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                        <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-                      </div>
-                    )}
-                  </motion.button>
-                ))}
-              </AnimatePresence>
-            </div>
-
-            {/* Pagination */}
-            {totalBookPages > 1 && (
-              <div className="flex items-center justify-center gap-3 mt-4">
+          <section className="space-y-2">
+            <div
+              className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:px-8 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {visibleBooks.map((b) => (
                 <button
-                  onClick={() => setBooksPage((p) => Math.max(0, p - 1))}
-                  disabled={booksPage === 0}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-full border border-border bg-card transition-colors",
-                    booksPage === 0 ? "opacity-30 pointer-events-none" : "hover:bg-muted",
-                  )}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                <div className="flex gap-1">
-                  {Array.from({ length: Math.min(totalBookPages, 5) }).map((_, i) => {
-                    const pageNum = totalBookPages <= 5
-                      ? i
-                      : booksPage < 3
-                        ? i
-                        : booksPage > totalBookPages - 4
-                          ? totalBookPages - 5 + i
-                          : booksPage - 2 + i;
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setBooksPage(pageNum)}
-                        className={cn(
-                          "h-1.5 rounded-full transition-all",
-                          pageNum === booksPage
-                            ? "w-4 bg-indigo-500"
-                            : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50",
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={() => setBooksPage((p) => Math.min(totalBookPages - 1, p + 1))}
-                  disabled={booksPage >= totalBookPages - 1}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-full border border-border bg-card transition-colors",
-                    booksPage >= totalBookPages - 1 ? "opacity-30 pointer-events-none" : "hover:bg-muted",
-                  )}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* ── Organisation Books ── */}
-        {orgBooks.length > 0 && (
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <BookOpen className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-semibold">Library Collection</h2>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-              {orgBooks.map((b) => (
-                <motion.button
                   key={b.id}
+                  type="button"
                   className={cn(
-                    "relative rounded-2xl overflow-hidden bg-card border border-border shadow-sm text-left",
-                    b.isActive && "ring-2 ring-indigo-500",
+                    "group w-[120px] shrink-0 cursor-pointer text-left",
                   )}
-                  whileTap={{ scale: 0.97 }}
                   onClick={() => {
                     if (b.isActive) router.push(`/library-reader/${b.id}`);
                     else startReading(b.id);
                   }}
                 >
-                  <div className="aspect-[2/3] bg-gradient-to-br from-amber-500/15 to-orange-600/15 overflow-hidden">
+                  <div className={cn(
+                    "relative aspect-[2/3] w-full overflow-hidden rounded-xl transition-all duration-300",
+                    "shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]",
+                    "group-hover:scale-[1.03] group-active:scale-[0.97]",
+                    b.isActive && "ring-2 ring-primary",
+                  )}>
                     {b.coverImageUrl ? (
                       <img src={b.coverImageUrl} alt={b.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <BookOpen className="h-8 w-8 text-muted-foreground/25" />
+                      <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground/25">
+                        <BookOpen className="h-8 w-8" />
+                      </div>
+                    )}
+                    {startingBookId === b.id && (
+                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
                       </div>
                     )}
                   </div>
-                  <div className="p-2.5">
-                    <p className="font-semibold text-xs leading-tight line-clamp-2">{b.title}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{b.author}</p>
-                    {b.totalPages > 0 && (
-                      <p className="text-[9px] text-muted-foreground/70 mt-0.5">{b.totalPages} pages</p>
-                    )}
-                  </div>
-                  {b.isActive && (
-                    <div className="absolute top-2 right-2 bg-indigo-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">
-                      Reading
-                    </div>
-                  )}
-                  {startingBookId === b.id && (
-                    <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
-                      <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />
-                    </div>
-                  )}
-                </motion.button>
+                </button>
               ))}
             </div>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Discover</p>
+              {totalBookPages > 1 && booksPage < totalBookPages - 1 && (
+                <button
+                  type="button"
+                  onClick={() => setBooksPage((p) => Math.min(totalBookPages - 1, p + 1))}
+                  className="flex items-center gap-0.5 text-[13px] font-medium text-primary"
+                >
+                  More <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Organisation Books — same cover rail */}
+        {orgBooks.length > 0 && (
+          <section className="space-y-2">
+            <div
+              className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:px-8 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {orgBooks.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  className="group w-[120px] shrink-0 cursor-pointer text-left"
+                  onClick={() => {
+                    if (b.isActive) router.push(`/library-reader/${b.id}`);
+                    else startReading(b.id);
+                  }}
+                >
+                  <div className={cn(
+                    "relative aspect-[2/3] w-full overflow-hidden rounded-xl transition-all duration-300",
+                    "shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]",
+                    "group-hover:scale-[1.03] group-active:scale-[0.97]",
+                    b.isActive && "ring-2 ring-primary",
+                  )}>
+                    {b.coverImageUrl ? (
+                      <img src={b.coverImageUrl} alt={b.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground/25">
+                        <BookOpen className="h-8 w-8" />
+                      </div>
+                    )}
+                    {startingBookId === b.id && (
+                      <div className="absolute inset-0 bg-background/60 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Library Collection</p>
           </section>
         )}
 
         {/* Empty state */}
         {shuffledPublicBooks.length === 0 && orgBooks.length === 0 && !seedingPublicBooks && (
-          <div className="text-center py-16 text-muted-foreground">
-            <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-medium">No books yet</p>
-            <p className="text-xs mt-1 opacity-70">Search above to discover public domain classics.</p>
+          <div className="text-center py-16">
+            <BookOpen className="h-12 w-12 mx-auto mb-3 text-muted-foreground/20" />
+            <p className="text-[20px] font-medium text-muted-foreground">Nothing here yet</p>
+            <p className="text-[13px] mt-1 text-muted-foreground/70">Search above to discover public domain classics</p>
           </div>
         )}
 
         {/* Seeding indicator */}
         {seedingPublicBooks && (
           <div className="flex items-center justify-center gap-2 py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-            <p className="text-xs text-muted-foreground">Loading public domain books…</p>
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <p className="text-[13px] text-muted-foreground">Loading public domain books…</p>
           </div>
         )}
       </div>

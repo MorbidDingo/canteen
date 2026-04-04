@@ -56,27 +56,27 @@ export function CancelReasonSheet({
     <BottomSheet
       open={open}
       onClose={() => onOpenChange(false)}
-      snapPoints={[75]}
+      snapPoints={[45]}
     >
-      <div className="px-4 pb-6 space-y-4">
+      <div className="px-5 pb-8 pt-2 space-y-5">
         <div>
-          <h3 className="text-lg font-semibold">Why are you cancelling?</h3>
-          <p className="text-sm text-muted-foreground">
-            This helps us improve our service
+          <h3 className="text-lg font-semibold tracking-tight">Why are you cancelling?</h3>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            This helps us improve
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-2">
+        <div className="flex flex-wrap gap-2">
           {CANCEL_REASONS.map((reason) => (
             <button
               key={reason.value}
               type="button"
               onClick={() => setSelected(reason.value)}
               className={cn(
-                "w-full rounded-xl border-2 px-4 py-3 text-left text-sm font-medium transition-all",
+                "rounded-full px-4 py-2 text-[13px] font-medium transition-all",
                 selected === reason.value
-                  ? "border-destructive bg-destructive/5 text-destructive"
-                  : "border-border hover:border-muted-foreground/30 hover:bg-muted/50",
+                  ? "border border-primary bg-primary/10 text-primary"
+                  : "border border-border text-foreground",
               )}
             >
               {reason.label}
@@ -91,13 +91,13 @@ export function CancelReasonSheet({
             placeholder="Tell us why..."
             maxLength={500}
             rows={2}
-            className="animate-in fade-in slide-in-from-top-2 duration-200"
+            className="rounded-xl text-sm"
           />
         )}
 
         <Button
           variant="destructive"
-          className="w-full"
+          className="w-full h-12 rounded-2xl"
           disabled={!selected || submitting}
           onClick={handleConfirm}
         >

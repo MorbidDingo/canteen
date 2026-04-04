@@ -153,6 +153,55 @@ export const PREDEFINED_INSTRUCTIONS = [
   "No onion",
 ] as const;
 
+/** Category-aware instruction suggestions. Returns relevant presets based on item category & name. */
+export function getSuggestedInstructions(category: string, name: string): string[] {
+  const n = name.toLowerCase();
+
+  // Common base for most food items
+  const base: string[] = [];
+
+  switch (category) {
+    case "MEALS":
+      base.push("Less spicy", "Less oily", "No onion", "Extra roti");
+      if (n.includes("rice") || n.includes("biryani") || n.includes("pulao"))
+        base.push("Less rice", "Extra raita");
+      if (n.includes("dal") || n.includes("curry") || n.includes("sabzi"))
+        base.push("Less gravy");
+      if (n.includes("thali"))
+        base.push("No pickle", "Extra dal");
+      break;
+    case "SNACKS":
+      base.push("Less spicy", "Less oily");
+      if (n.includes("sandwich") || n.includes("burger") || n.includes("wrap"))
+        base.push("No mayo", "No cheese", "Extra cheese");
+      if (n.includes("pav") || n.includes("vada"))
+        base.push("No pav", "Extra pav");
+      if (n.includes("samosa") || n.includes("pakoda") || n.includes("fry"))
+        base.push("Extra chutney");
+      if (n.includes("pizza") || n.includes("pasta"))
+        base.push("No cheese", "Extra cheese");
+      if (n.includes("dosa") || n.includes("idli") || n.includes("uttapam"))
+        base.push("Extra chutney", "Extra sambar");
+      if (base.length <= 2) base.push("No onion", "Extra chutney");
+      break;
+    case "DRINKS":
+      base.push("Less sugar", "No ice");
+      if (n.includes("tea") || n.includes("chai") || n.includes("coffee"))
+        base.push("Less milk", "Strong");
+      if (n.includes("juice") || n.includes("shake") || n.includes("smoothie") || n.includes("lassi"))
+        base.push("No sugar", "Extra cold");
+      break;
+    case "PACKED_FOOD":
+      base.push("Heat before serving");
+      break;
+    default:
+      base.push("Less spicy", "Less oily", "No onion");
+  }
+
+  // Deduplicate and limit to 5
+  return [...new Set(base)].slice(0, 5);
+}
+
 // ─── Discount Types ──────────────────────────────────────
 
 export const DISCOUNT_TYPE = {

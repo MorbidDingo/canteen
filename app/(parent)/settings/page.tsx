@@ -18,7 +18,6 @@ import {
   Shield,
   Check,
   Clock3,
-  LogOut,
   ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +27,7 @@ import {
   CERTE_PLUS,
 } from "@/lib/constants";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
-import { useSession, signOut } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { ThemeSelector } from "@/components/theme-toggle";
 
@@ -560,33 +559,6 @@ export default function SettingsPage() {
           )}
         </div>
       </CardContent>
-
-      <Card className="overflow-hidden rounded-2xl border border-destructive/30 bg-card/70 p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold">Sign out</h3>
-            <p className="text-xs text-muted-foreground">
-              Securely sign out from this device.
-            </p>
-          </div>
-          <Button
-            variant="destructive"
-            className="gap-2"
-            onClick={() =>
-              signOut({
-                fetchOptions: {
-                  onSuccess: () => {
-                    window.location.href = "/login";
-                  },
-                },
-              })
-            }
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </Button>
-        </div>
-      </Card>
     </div>
   );
 }

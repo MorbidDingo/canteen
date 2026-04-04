@@ -4,28 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import Link from "next/link";
 import { useSSE } from "@/lib/events";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { AnimatePresence, motion } from "@/components/ui/motion";
-import { Search, Loader2, BookOpen, X, Sparkles, Clock3, TrendingUp, Star, Zap, Heart, Library, Bot, MapPin, User } from "lucide-react";
+import { AnimatePresence, motion, BottomSheet } from "@/components/ui/motion";
+import { Search, Loader2, BookOpen, X, Heart, Bot, MapPin, Sparkles, Clock3, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   BOOK_CATEGORY_LABELS,
   type BookCategory,
 } from "@/lib/constants";
-import { LibrarySelector } from "@/components/library-selector";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
-import { LibraryRecommendations } from "@/components/recommendations/library-recs";
-import { LibraryInsightsWidget } from "@/components/recommendations/library-insights";
 
 // ─── Markdown Renderer ──────────────────────────────────────────────────────
 
@@ -40,7 +29,7 @@ function renderSummaryMarkdown(text: string): React.ReactNode[] {
     const h1 = trimmed.match(/^#\s+(.+)/);
     if (h1) {
       nodes.push(
-        <p key={index} className="mt-2 text-[13px] font-bold text-white leading-snug">{h1[1]}</p>,
+        <p key={index} className="mt-2 text-[13px] font-bold text-foreground leading-snug">{h1[1]}</p>,
       );
       return;
     }
@@ -48,7 +37,7 @@ function renderSummaryMarkdown(text: string): React.ReactNode[] {
     const h2 = trimmed.match(/^##\s+(.+)/);
     if (h2) {
       nodes.push(
-        <p key={index} className="mt-2 text-[12px] font-semibold text-indigo-300 uppercase tracking-wide">{h2[1]}</p>,
+        <p key={index} className="mt-2 text-[12px] font-semibold text-primary uppercase tracking-wide">{h2[1]}</p>,
       );
       return;
     }
@@ -56,7 +45,7 @@ function renderSummaryMarkdown(text: string): React.ReactNode[] {
     const h3 = trimmed.match(/^###\s+(.+)/);
     if (h3) {
       nodes.push(
-        <p key={index} className="mt-1.5 text-[12px] font-semibold text-white/80">{h3[1]}</p>,
+        <p key={index} className="mt-1.5 text-[12px] font-semibold text-foreground/80">{h3[1]}</p>,
       );
       return;
     }
@@ -64,13 +53,13 @@ function renderSummaryMarkdown(text: string): React.ReactNode[] {
     const bold = trimmed.match(/\*\*(.+)\*\*/);
     if (bold) {
       nodes.push(
-        <p key={index} className="mt-1.5 text-[12px] font-semibold text-white/90">{bold[1]}</p>,
+        <p key={index} className="mt-1.5 text-[12px] font-semibold text-foreground/90">{bold[1]}</p>,
       );
       return;
     }
 
     nodes.push(
-      <p key={index} className="mt-1 text-[13px] leading-relaxed text-white/80">{trimmed}</p>,
+      <p key={index} className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{trimmed}</p>,
     );
   });
 
@@ -103,6 +92,7 @@ interface ShelfBook {
   canRequest: boolean;
   isFavourited?: boolean;
   favouriteCount?: number;
+  isIssued?: boolean;
 }
 
 interface CategoryRail {
@@ -200,17 +190,14 @@ function TitleCard({
       tabIndex={0}
       onClick={() => onClick(book)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(book); } }}
-      className="group w-[42vw] min-w-[130px] max-w-[160px] shrink-0 cursor-pointer text-left sm:w-[148px]"
+      className="group w-[120px] shrink-0 cursor-pointer text-left"
       title={`${book.title} by ${book.author}`}
     >
       <div className={cn(
-        "relative h-[220px] overflow-hidden rounded-2xl border bg-muted transition-all duration-300",
-        "shadow-[0_8px_20px_-10px_rgba(15,23,42,0.5)] group-hover:shadow-[0_14px_30px_-10px_rgba(15,23,42,0.65)]",
-        "group-hover:scale-[1.025] group-active:scale-[0.98]",
-        isPending
-          ? "border-amber-500/40 ring-1 ring-amber-500/25"
-          : "border-white/10 group-hover:border-white/20",
-        isUnavailable && "opacity-60",
+        "relative aspect-[2/3] w-full overflow-hidden rounded-xl transition-all duration-300",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]",
+        "group-hover:scale-[1.03] group-active:scale-[0.97]",
+        isUnavailable && "opacity-50",
       )}>
         {book.coverImageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -220,34 +207,32 @@ function TitleCard({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-white/50">
+          <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground/40">
             <BookOpen className="h-8 w-8" />
           </div>
         )}
 
-        {/* gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
+        {/* Unavailable overlay */}
+        {isUnavailable && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-white">Unavailable</span>
+          </div>
+        )}
 
-        {/* status badges */}
-        <div className="absolute left-2 top-2 flex flex-col gap-1">
-          {isPending && (
-            <span className="rounded-full bg-amber-500/90 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-              Pending
+        {/* Status dots — top-left */}
+        <div className="absolute left-1.5 top-1.5 flex flex-col gap-1">
+          {book.isIssued && (
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-sm">
+              <CheckCircle2 className="h-3.5 w-3.5 text-white" />
             </span>
           )}
-          {isUnavailable && (
-            <span className="rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white/80 backdrop-blur-sm">
-              Unavailable
-            </span>
-          )}
-          {typeof book.availableCopies === "number" && book.availableCopies > 0 && !isPending && (
-            <span className="rounded-full bg-emerald-500/80 px-1.5 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
-              {book.availableCopies}
-            </span>
+          {isPending && !book.isIssued && <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-sm" />}
+          {!isPending && !isUnavailable && !book.isIssued && typeof book.availableCopies === "number" && book.availableCopies > 0 && (
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm" />
           )}
         </div>
 
-        {/* Favourite button */}
+        {/* Favourite heart — top-right, visible on hover/long-press */}
         {onFavouriteToggle && (
           <button
             type="button"
@@ -255,32 +240,16 @@ function TitleCard({
             disabled={favouriteLoading}
             onClick={(e) => { e.stopPropagation(); onFavouriteToggle(book, e); }}
             className={cn(
-              "absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all",
+              "absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full transition-all",
+              "opacity-0 group-hover:opacity-100",
               book.isFavourited
-                ? "bg-rose-500/90 text-white shadow-md shadow-rose-500/30"
-                : "bg-black/40 text-white/70 hover:bg-black/60 hover:text-white",
+                ? "bg-rose-500/90 text-white opacity-100"
+                : "bg-black/30 text-white/80 hover:bg-black/50",
             )}
           >
-            <Heart
-              className={cn(
-                "h-3.5 w-3.5 transition-all",
-                book.isFavourited && "fill-current",
-              )}
-            />
+            <Heart className={cn("h-3.5 w-3.5", book.isFavourited && "fill-current")} />
           </button>
         )}
-
-        {/* title */}
-        <div className="absolute inset-x-0 bottom-0 p-2.5">
-          <p className="line-clamp-2 text-xs font-semibold leading-tight text-white drop-shadow">{book.title}</p>
-          <p className="mt-0.5 truncate text-[10px] text-white/65">{book.author}</p>
-          {book.libraryName ? (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-white/75">
-              <MapPin className="h-2.5 w-2.5 shrink-0" />
-              {book.libraryName}
-            </p>
-          ) : null}
-        </div>
       </div>
     </div>
   );
@@ -288,7 +257,6 @@ function TitleCard({
 
 function Rail({
   title,
-  icon,
   books,
   onBookClick,
   onFavouriteToggle,
@@ -304,34 +272,22 @@ function Rail({
   if (books.length === 0) return null;
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        {icon && (
-          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            {icon}
-          </span>
-        )}
-        <h2 className="text-sm font-bold tracking-tight text-foreground">{title}</h2>
-        <span className="text-xs text-muted-foreground">({books.length})</span>
+    <section className="space-y-2">
+      <div
+        className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 sm:-mx-8 sm:px-8 [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {books.map((book) => (
+          <TitleCard
+            key={`${title}-${book.id}`}
+            book={book}
+            onClick={onBookClick}
+            onFavouriteToggle={onFavouriteToggle}
+            favouriteLoading={favouriteLoadingId === book.id}
+          />
+        ))}
       </div>
-      <div className="relative">
-        <div
-          className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {books.map((book) => (
-            <TitleCard
-              key={`${title}-${book.id}`}
-              book={book}
-              onClick={onBookClick}
-              onFavouriteToggle={onFavouriteToggle}
-              favouriteLoading={favouriteLoadingId === book.id}
-            />
-          ))}
-        </div>
-        {/* Right-edge fade to indicate more content */}
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-background to-transparent" />
-      </div>
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{title}</p>
     </section>
   );
 }
@@ -612,26 +568,24 @@ export default function LibraryShowcasePage() {
     setSummaryUsage(null);
   }, [activeBook?.id]);
 
-  const rails = useMemo<Array<{ title: string; icon: React.ReactNode; books: ShelfBook[] }>>(() => {
+  const rails = useMemo<Array<{ title: string; books: ShelfBook[] }>>(() => {
     if (!data) return [];
 
     const base = [
-      { title: "Trending Now", icon: <TrendingUp className="h-3.5 w-3.5" />, books: data.rails.hotThisWeek },
-      { title: "Must Read", icon: <Heart className="h-3.5 w-3.5" />, books: data.rails.mustReads },
-      { title: "Newcomers", icon: <Zap className="h-3.5 w-3.5" />, books: data.rails.newcomers },
-      { title: "GOATs", icon: <Star className="h-3.5 w-3.5" />, books: data.rails.goats },
-      { title: "For You", icon: <Sparkles className="h-3.5 w-3.5" />, books: data.rails.personalized ?? [] },
+      { title: "For You", books: data.rails.personalized ?? [] },
+      { title: "Trending", books: data.rails.hotThisWeek },
+      { title: "Must Read", books: data.rails.mustReads },
+      { title: "New Arrivals", books: data.rails.newcomers },
+      { title: "All-Time Greats", books: data.rails.goats },
     ];
 
     const categoryRails = data.rails.categories.map((rail) => ({
       title: getCategoryLabel(rail.category),
-      icon: <Library className="h-3.5 w-3.5" />,
       books: rail.books,
     }));
 
     const authorRails = (data.rails.authors ?? []).map((rail) => ({
       title: `By ${rail.author}`,
-      icon: <User className="h-3.5 w-3.5" />,
       books: rail.books,
     }));
 
@@ -654,7 +608,7 @@ export default function LibraryShowcasePage() {
     return (
       <div className="app-shell pb-24">
         <div className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
-          No children found.
+          No members found.
         </div>
       </div>
     );
@@ -662,222 +616,137 @@ export default function LibraryShowcasePage() {
 
   return (
     <>
-      <div className="app-shell space-y-5 pb-28">
+      <div className="space-y-8 px-5 pb-28 sm:px-8">
 
-        <section className="flex justify-start">
-          <LibrarySelector
-            value={selectedLibrary}
-            onChange={setSelectedLibrary}
-            showAll
-            compact
+        {/* Search bar — rounded-full, muted bg */}
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            className="h-11 w-full rounded-full bg-muted/40 pl-11 pr-10 text-[15px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:bg-muted/60"
+            placeholder="Search books..."
           />
-        </section>
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => { setSearchInput(""); setQuery(""); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
 
-        {/* Search & filter bar */}
-        <section className="rounded-2xl border border-border/60 bg-card/70 p-3 shadow-sm backdrop-blur-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                className="h-10 rounded-xl pl-9 text-sm"
-                placeholder="Search title or author…"
-              />
-            </div>
+        {/* Category pills — horizontal scroll */}
+        <div className="-mx-5 flex gap-2 overflow-x-auto px-5 sm:-mx-8 sm:px-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <Link
+            href="/library-history"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-4 text-[13px] font-medium text-primary transition-colors hover:bg-primary/20"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            My Books
+          </Link>
+          <Link
+            href="/library-reader"
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-muted/50 px-4 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/80 border border-border/40"
+          >
+            Public
+          </Link>
+          <button
+            type="button"
+            onClick={() => setCategory("ALL")}
+            className={cn(
+              "h-9 shrink-0 rounded-full px-4 text-[13px] font-medium transition-colors",
+              category === "ALL"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/50 text-foreground hover:bg-muted/80",
+            )}
+          >
+            All
+          </button>
+          {Object.entries(BOOK_CATEGORY_LABELS).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setCategory(key)}
+              className={cn(
+                "h-9 shrink-0 rounded-full px-4 text-[13px] font-medium transition-colors",
+                category === key
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/50 text-foreground hover:bg-muted/80",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-            <div className="flex gap-2">
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="h-10 flex-1 rounded-xl text-sm sm:w-[160px] sm:flex-none">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All categories</SelectItem>
-                  {Object.keys(BOOK_CATEGORY_LABELS).map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {BOOK_CATEGORY_LABELS[item as BookCategory]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedChildId || data.selectedChildId || data.children[0]!.id} onValueChange={setSelectedChildId}>
-                <SelectTrigger className="h-10 flex-1 rounded-xl text-sm sm:w-[160px] sm:flex-none">
-                  <SelectValue placeholder="Child" />
-                </SelectTrigger>
-                <SelectContent>
-                  {data.children.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {/* Child selector — only when multiple children */}
+        {data.children.length > 1 && (
+          <div className="-mx-5 flex gap-2 overflow-x-auto px-5 sm:-mx-8 sm:px-8 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+            {data.children.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedChildId(c.id)}
+                className={cn(
+                  "h-8 shrink-0 rounded-full px-3 text-[12px] font-medium transition-colors",
+                  (selectedChildId || data.selectedChildId || data.children[0]?.id) === c.id
+                    ? "bg-foreground text-background"
+                    : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                {c.name}
+              </button>
+            ))}
           </div>
-        </section>
-
-        {/* ML insights and AI book recommendations */}
-        {!hasActiveFilters && (
-          <>
-            <LibraryInsightsWidget />
-            <LibraryRecommendations childId={selectedChildId || data.selectedChildId || data.children[0]?.id} />
-          </>
         )}
 
-        {/* Suggested for You — personalized recommendation banner */}
-        {!hasActiveFilters && (data.rails.personalized ?? []).length > 0 && (
-          <section className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/6 via-background to-primary/4 shadow-sm">
-            <div className="flex items-center gap-2 border-b border-primary/15 px-4 py-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-bold text-foreground">Suggested for You</h2>
-                <p className="text-xs text-muted-foreground">Based on your reading history & preferences</p>
-              </div>
-              <Badge variant="outline" className="shrink-0 border-primary/25 bg-primary/8 text-primary text-[10px]">
-                Personalized
-              </Badge>
+        {/* Pending requests — compact banner */}
+        {pendingRequests.length > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl bg-primary/5 p-4">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <Clock3 className="h-4 w-4 text-primary" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-foreground">
+                {pendingRequests.length} pending {pendingRequests.length === 1 ? "request" : "requests"}
+              </p>
+              <p className="text-[12px] text-muted-foreground">Confirm at library kiosk</p>
             </div>
-
-            <div className="grid grid-cols-1 gap-px divide-y divide-primary/8 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-              {(data.rails.personalized ?? []).slice(0, 3).map((book) => (
-                <button
-                  key={`suggested-${book.id}`}
-                  type="button"
-                  onClick={() => setActiveBook(book)}
-                  className="flex items-center gap-3 p-3 text-left transition-colors hover:bg-primary/4 active:bg-primary/8"
-                >
-                  <div className="h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-border/50 bg-muted shadow-sm">
-                    {book.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={book.coverImageUrl}
-                        alt={book.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
-                        <BookOpen className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="line-clamp-2 text-[13px] font-semibold leading-tight text-foreground">
-                      {book.title}
-                    </p>
-                    <p className="truncate text-[11px] text-muted-foreground">{book.author}</p>
-                    {book.mlReasons?.[0] ? (
-                      <p className="mt-1 line-clamp-1 text-[10px] text-primary/80">
-                        {book.mlReasons[0]}
-                      </p>
-                    ) : (
-                      <Badge variant="outline" className="mt-1 border-primary/20 bg-primary/5 px-1.5 py-0 text-[9px] font-medium text-primary">
-                        {getCategoryLabel(book.category)}
-                      </Badge>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
+            {pendingRequests.length === 1 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-xs text-destructive hover:text-destructive"
+                disabled={cancellingRequestId === pendingRequests[0].requestId}
+                onClick={() => void cancelIssueRequest(pendingRequests[0].requestId)}
+              >
+                {cancellingRequestId === pendingRequests[0].requestId ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : "Cancel"}
+              </Button>
+            )}
+          </div>
         )}
-
-        {/* Pending requests */}
-        {pendingRequests.length > 0 ? (
-          <section className="overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/8 to-amber-600/5 shadow-sm">
-            <div className="flex items-center justify-between gap-2 border-b border-amber-500/20 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/15">
-                  <Clock3 className="h-3.5 w-3.5 text-amber-600" />
-                </span>
-                <div>
-                  <h2 className="text-sm font-bold text-foreground">Pending Issue Request</h2>
-                  <p className="text-xs text-muted-foreground">Delete before creating another</p>
-                </div>
-              </div>
-              <Badge className="border-amber-500/30 bg-amber-500/10 text-amber-700">
-                {pendingRequests.length} active
-              </Badge>
-            </div>
-
-            <div className="divide-y divide-amber-500/10">
-              {pendingRequests.map((requestItem) => (
-                <div
-                  key={requestItem.requestId}
-                  className="flex items-center gap-3 p-3"
-                >
-                  <div className="h-14 w-10 shrink-0 overflow-hidden rounded-lg border border-amber-500/20 bg-muted shadow-sm">
-                    {requestItem.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={requestItem.coverImageUrl}
-                        alt={requestItem.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                        <BookOpen className="h-3.5 w-3.5" />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="line-clamp-1 text-sm font-semibold text-foreground">{requestItem.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{requestItem.author}</p>
-                    {requestItem.libraryName ? (
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        {requestItem.libraryName}
-                        {requestItem.libraryLocation ? ` · ${requestItem.libraryLocation}` : ""}
-                      </p>
-                    ) : null}
-                    <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
-                      <Clock3 className="h-3 w-3 shrink-0" />
-                      Expires {formatDateTime(requestItem.expiresAt)}
-                    </p>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 rounded-xl border-amber-500/30 text-xs hover:border-destructive/40 hover:text-destructive"
-                    disabled={cancellingRequestId === requestItem.requestId}
-                    onClick={() => void cancelIssueRequest(requestItem.requestId)}
-                  >
-                    {cancellingRequestId === requestItem.requestId ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <X className="h-3 w-3" />
-                    )}
-                    <span className="hidden sm:inline">Delete</span>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         {/* Book rails / search results */}
-        <section className="space-y-6">
+        <section className="space-y-10">
           {hasActiveFilters ? (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold tracking-tight text-foreground">
-                  {query ? `Results for "${query}"` : `${getCategoryLabel(category)} Titles`}
-                </h2>
-                <span className="text-xs text-muted-foreground">{filteredCatalog.length} books</span>
-              </div>
+            <section className="space-y-4">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                {query ? `Results for "${query}"` : getCategoryLabel(category)}
+              </p>
 
               {filteredCatalog.length === 0 ? (
-                <div className="rounded-2xl border p-10 text-center">
-                  <BookOpen className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-                  <p className="text-sm text-muted-foreground">No books found for your filters.</p>
+                <div className="py-16 text-center">
+                  <BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
+                  <p className="text-[15px] text-muted-foreground">No books found</p>
                 </div>
               ) : (
-                <div className="-mx-4 flex flex-wrap gap-3 px-4 pb-1 sm:-mx-6 sm:px-6">
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
                   {filteredCatalog.map((book) => (
                     <TitleCard
                       key={`search-${book.id}`}
@@ -891,16 +760,15 @@ export default function LibraryShowcasePage() {
               )}
             </section>
           ) : rails.length === 0 ? (
-            <div className="rounded-2xl border p-10 text-center">
-              <BookOpen className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No books found.</p>
+            <div className="py-16 text-center">
+              <BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground/20" />
+              <p className="text-[15px] text-muted-foreground">No books found</p>
             </div>
           ) : (
             rails.map((rail) => (
               <Rail
                 key={rail.title}
                 title={rail.title}
-                icon={rail.icon}
                 books={rail.books}
                 onBookClick={(selectedBook) => setActiveBook(selectedBook)}
                 onFavouriteToggle={(selectedBook, e) => void toggleFavourite(selectedBook, e)}
@@ -911,208 +779,159 @@ export default function LibraryShowcasePage() {
         </section>
       </div>
 
-      {/* Book detail modal */}
-      <AnimatePresence>
-        {activeBook ? (
-          <>
-            {/* Backdrop */}
-            <motion.button
-              type="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
-              onClick={() => setActiveBook(null)}
-              aria-label="Close book detail"
-            />
-
-            {/* Sheet / modal */}
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 32 }}
-              transition={{ type: "spring", stiffness: 320, damping: 30 }}
-              className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[96dvh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-white/15 bg-background shadow-[0_-16px_60px_-10px_rgba(0,0,0,0.6)] sm:inset-x-4 sm:bottom-auto sm:top-[5vh] sm:mx-auto sm:max-w-3xl sm:rounded-3xl sm:border sm:shadow-[0_32px_80px_-20px_rgba(0,0,0,0.7)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {/* Drag handle (mobile) */}
-              <div className="flex justify-center pb-1 pt-2.5 sm:hidden">
-                <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
+      {/* Book detail — BottomSheet */}
+      <BottomSheet
+        open={Boolean(activeBook)}
+        onClose={() => setActiveBook(null)}
+        snapPoints={[65, 90]}
+      >
+        {activeBook && (
+          <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+            {/* Cover + info row */}
+            <div className="flex gap-4 pt-2">
+              <div className="h-[140px] w-[95px] shrink-0 overflow-hidden rounded-xl bg-muted shadow-sm">
+                {activeBook.coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={activeBook.coverImageUrl}
+                    alt={activeBook.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">
+                    <BookOpen className="h-8 w-8" />
+                  </div>
+                )}
               </div>
+              <div className="min-w-0 flex-1 space-y-1.5 py-1">
+                <h3 className="text-[20px] font-bold leading-tight tracking-tight text-foreground" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+                  {activeBook.title}
+                </h3>
+                <p className="text-[14px] text-muted-foreground">{activeBook.author}</p>
+                <p className="text-[12px] text-muted-foreground">
+                  {getCategoryLabel(activeBook.category)}
+                  {activeBook.libraryName && ` · ${activeBook.libraryName}`}
+                </p>
+                {typeof activeBook.availableCopies === "number" && (
+                  <p className={cn(
+                    "text-[12px] font-medium",
+                    activeBook.availableCopies > 0 ? "text-emerald-600" : "text-destructive",
+                  )}>
+                    {activeBook.availableCopies > 0
+                      ? `${activeBook.availableCopies} available`
+                      : "No copies available"}
+                  </p>
+                )}
+              </div>
+            </div>
 
-              {/* Close button */}
-              <button
-                type="button"
-                onClick={() => setActiveBook(null)}
-                className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-background/95 shadow-sm transition hover:bg-muted sm:right-4 sm:top-4"
-                aria-label="Close"
+            {/* Request button */}
+            <div className="mt-5">
+              <Button
+                className={cn(
+                  "h-12 w-full rounded-xl text-[15px] font-semibold",
+                  !activeBook.requestId && activeBook.canRequest && "shadow-md shadow-primary/20",
+                )}
+                variant={!activeBook.requestId && activeBook.canRequest ? "default" : "outline"}
+                disabled={!activeBook.canRequest || issuingBookId === activeBook.id || Boolean(activeBook.requestId)}
+                onClick={() => void requestIssue(activeBook.id)}
               >
-                <X className="h-4 w-4" />
-              </button>
+                {issuingBookId === activeBook.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {activeBook.requestId
+                  ? "Already Pending"
+                  : activeBook.canRequest
+                    ? `Request for ${data.children.find((c) => c.id === (selectedChildId || data.selectedChildId || data.children[0]?.id))?.name ?? "member"}`
+                    : "Unavailable"}
+              </Button>
+            </div>
 
-              {/* Scrollable content */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                <div className="grid sm:grid-cols-[220px_1fr] md:grid-cols-[260px_1fr]">
+            {/* Action row — favourite + AI summary */}
+            <div className="mt-3 flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  "h-10 flex-1 rounded-xl text-[13px]",
+                  activeBook.isFavourited && "text-rose-600",
+                )}
+                disabled={favouriteLoadingId === activeBook.id}
+                onClick={(e) => void toggleFavourite(activeBook, e)}
+              >
+                {favouriteLoadingId === activeBook.id ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Heart className={cn("mr-1.5 h-4 w-4", activeBook.isFavourited && "fill-current")} />
+                )}
+                {activeBook.isFavourited ? "Favourited" : "Favourite"}
+              </Button>
 
-                  {/* Cover */}
-                  <div className="relative h-[200px] shrink-0 bg-muted sm:h-full sm:min-h-[320px]">
-                    {activeBook.coverImageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={activeBook.coverImageUrl}
-                        alt={activeBook.title}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-white/60">
-                        <BookOpen className="h-10 w-10" />
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/70 to-transparent sm:hidden" />
-                  </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-10 flex-1 rounded-xl text-[13px]"
+                disabled={summaryLoading}
+                onClick={() => void requestBookSummary(activeBook)}
+              >
+                {summaryLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
+                {summaryLoading ? "Summarizing..." : "AI Summary"}
+              </Button>
+            </div>
 
-                  {/* Info */}
-                  <div className="space-y-4 p-4 pb-5 sm:p-6">
-                    <div className="pr-8 sm:pr-10">
-                      <h3 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{activeBook.title}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{activeBook.author}</p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{getCategoryLabel(activeBook.category)}</Badge>
-                      {activeBook.libraryName ? (
-                        <Badge variant="outline" className="gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {activeBook.libraryName}
-                        </Badge>
-                      ) : null}
-                      {activeBook.metaLabel ? <Badge variant="vibrant">{activeBook.metaLabel}</Badge> : null}
-                      {typeof activeBook.availableCopies === "number" ? (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            activeBook.availableCopies > 0
-                              ? "border-emerald-500/30 bg-emerald-500/8 text-emerald-700"
-                              : "border-destructive/30 text-destructive",
-                          )}
-                        >
-                          {activeBook.availableCopies > 0
-                            ? `${activeBook.availableCopies} available`
-                            : "No copies"}
-                        </Badge>
-                      ) : null}
-                    </div>
-
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {activeBook.description ?? "A curated library title from your school collection."}
-                    </p>
-
-                    {activeBook.mlReasons && activeBook.mlReasons.length > 0 ? (
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-                        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-primary">
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Why this appears in your shelf
-                        </p>
-                        <p className="text-xs leading-relaxed text-primary/80">{activeBook.mlReasons[0]}</p>
-                      </div>
-                    ) : null}
-
-                    {summaryText ? (
-                      <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 shadow-[0_0_0_1px_rgba(99,102,241,0.15),0_8px_32px_-8px_rgba(99,102,241,0.25)]">
-                        {/* Header strip */}
-                        <div className="flex items-center gap-2 border-b border-white/[0.07] bg-white/[0.04] px-4 py-2.5">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/20">
-                            <Bot className="h-3.5 w-3.5 text-indigo-400" />
-                          </span>
-                          <span className="text-xs font-semibold tracking-wide text-indigo-300">AI Summary</span>
-                          <span className="ml-auto rounded-full border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-medium text-indigo-400">
-                            Powered by Claude
-                          </span>
-                        </div>
-                        {/* Body */}
-                        <div className="px-4 py-3">{renderSummaryMarkdown(summaryText)}</div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
+            {/* About section */}
+            {activeBook.description && (
+              <div className="mt-6">
+                <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">About this book</p>
+                <p className="mt-2 text-[15px] leading-relaxed text-foreground/80">
+                  {activeBook.description}
+                </p>
               </div>
+            )}
 
-              {/* Action bar — always visible, above bottom nav */}
-              <div className="shrink-0 border-t border-border/60 bg-background/98 backdrop-blur-sm">
-                <div className="flex flex-col gap-2.5 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-muted-foreground">Confirm at library kiosk after requesting.</p>
-                    {summaryUsage ? (
-                      <p className="text-xs text-muted-foreground">
-                        AI summaries today: {summaryUsage.used}/{summaryUsage.limit} used
-                      </p>
-                    ) : null}
-                    {activeBook.requestId ? (
-                      <p className="flex items-center gap-1 text-xs font-medium text-amber-700">
-                        <Clock3 className="h-3 w-3" />
-                        Pending until {formatDateTime(activeBook.requestExpiresAt)}
-                      </p>
-                    ) : null}
-                    {typeof activeBook.favouriteCount === "number" && activeBook.favouriteCount > 0 ? (
-                      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Heart className="h-3 w-3 fill-current text-rose-400" />
-                        {activeBook.favouriteCount} {activeBook.favouriteCount === 1 ? "person" : "people"} favourited
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                    {/* Favourite toggle */}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        "h-11 w-full rounded-xl px-5 text-sm font-semibold sm:w-auto",
-                        activeBook.isFavourited && "border-rose-500/40 bg-rose-500/8 text-rose-600 hover:bg-rose-500/15",
-                      )}
-                      disabled={favouriteLoadingId === activeBook.id}
-                      onClick={(e) => void toggleFavourite(activeBook, e)}
-                    >
-                      {favouriteLoadingId === activeBook.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Heart className={cn("h-4 w-4", activeBook.isFavourited && "fill-current text-rose-500")} />
-                      )}
-                      {activeBook.isFavourited ? "Favourited" : "Favourite"}
-                    </Button>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 w-full rounded-xl px-6 text-sm font-semibold sm:w-auto"
-                      disabled={summaryLoading}
-                      onClick={() => void requestBookSummary(activeBook)}
-                    >
-                      {summaryLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      {summaryLoading ? "Summarizing..." : "AI Summary"}
-                    </Button>
-
-                    <Button
-                      className={cn(
-                        "h-11 w-full rounded-xl px-6 text-sm font-semibold sm:w-auto",
-                        !activeBook.requestId && activeBook.canRequest && "shadow-md shadow-primary/20",
-                      )}
-                      variant={!activeBook.requestId && activeBook.canRequest ? "premium" : "outline"}
-                      disabled={!activeBook.canRequest || issuingBookId === activeBook.id || Boolean(activeBook.requestId)}
-                      onClick={() => void requestIssue(activeBook.id)}
-                    >
-                      {issuingBookId === activeBook.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : null}
-                      {activeBook.requestId ? "Already Pending" : activeBook.canRequest ? "Request Issue" : "Unavailable"}
-                    </Button>
-                  </div>
-                </div>
+            {/* ML reasons */}
+            {activeBook.mlReasons && activeBook.mlReasons.length > 0 && (
+              <div className="mt-4 rounded-xl bg-primary/5 p-3">
+                <p className="flex items-center gap-1.5 text-[12px] font-medium text-primary">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Why this appears for you
+                </p>
+                <p className="mt-1 text-[12px] text-primary/70">{activeBook.mlReasons[0]}</p>
               </div>
-            </motion.div>
-          </>
-        ) : null}
-      </AnimatePresence>
+            )}
+
+            {/* AI Summary */}
+            {summaryText && (
+              <div className="mt-4 overflow-hidden rounded-2xl border bg-card">
+                <div className="flex items-center gap-2 border-b px-4 py-2.5">
+                  <Bot className="h-4 w-4 text-primary" />
+                  <span className="text-[12px] font-semibold text-foreground">AI Summary</span>
+                </div>
+                <div className="px-4 py-3">{renderSummaryMarkdown(summaryText)}</div>
+              </div>
+            )}
+
+            {/* Favourite count + usage info */}
+            <div className="mt-4 space-y-1">
+              {typeof activeBook.favouriteCount === "number" && activeBook.favouriteCount > 0 && (
+                <p className="flex items-center gap-1 text-[12px] text-muted-foreground">
+                  <Heart className="h-3 w-3 fill-current text-rose-400" />
+                  {activeBook.favouriteCount} {activeBook.favouriteCount === 1 ? "person" : "people"} favourited
+                </p>
+              )}
+              {summaryUsage && (
+                <p className="text-[12px] text-muted-foreground">
+                  AI summaries today: {summaryUsage.used}/{summaryUsage.limit}
+                </p>
+              )}
+              {activeBook.requestId && (
+                <p className="flex items-center gap-1 text-[12px] font-medium text-primary">
+                  <Clock3 className="h-3 w-3" />
+                  Pending until {formatDateTime(activeBook.requestExpiresAt)}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </BottomSheet>
     </>
   );
 }

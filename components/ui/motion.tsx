@@ -178,13 +178,13 @@ export function BottomSheet({
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop — iOS-style dim + blur */}
+          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-md"
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[60] bg-black/15 backdrop-blur-[2px]"
             onClick={onClose}
           />
           {/* Sheet */}
@@ -194,16 +194,15 @@ export function BottomSheet({
             exit={{ y: "100%" }}
             transition={{
               type: "spring",
-              damping: 32,
-              stiffness: 380,
-              mass: 0.8,
+              damping: 28,
+              stiffness: 300,
             }}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
             className={cn(
-              "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-[20px]",
+              "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",
@@ -212,9 +211,9 @@ export function BottomSheet({
             )}
             style={{ height: `${maxSnap}dvh` }}
           >
-            {/* Drag handle — iOS pill */}
-            <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing shrink-0">
-              <div className="h-[5px] w-9 rounded-full bg-muted-foreground/25 dark:bg-white/20" />
+            {/* Drag handle — 40×4px pill */}
+            <div className="flex justify-center mt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0">
+              <div className="h-1 w-10 rounded-full bg-muted/40" />
             </div>
             {bare ? (
               <div className="flex flex-1 flex-col min-h-0 overflow-hidden">{children}</div>

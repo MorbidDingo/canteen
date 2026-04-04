@@ -2033,6 +2033,7 @@ export const contentPostAttachment = pgTable("content_post_attachment", {
     .references(() => contentPost.id, { onDelete: "cascade" }),
   storageBackend: text("storage_backend", { enum: ["S3", "CLOUDINARY"] }).notNull(),
   storageKey: text("storage_key").notNull(),
+  originalFileName: text("original_file_name"),
   mimeType: text("mime_type").notNull(),
   size: integer("size").notNull(),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -21,7 +20,6 @@ import {
   Minus,
   Trash2,
   CalendarClock,
-  PencilLine,
   Search,
   ChevronRight,
   Wallet,
@@ -491,6 +489,16 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
     onMove(clientX);
   }, [paymentConfirmed, creating, submitPreOrder]);
 
+  // Wizard step state
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+
+  const openWizard = () => {
+    setAllocations([]);
+    setWizardStep(1);
+    setWizardOpen(true);
+  };
+
   const openPaymentDialog = () => {
     if (allocations.length === 0) return toast.error("Add at least one allocation");
     if (!subscriptionEndIso) return toast.error("Subscription end date missing. Please refresh.");
@@ -511,9 +519,6 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
     setPaymentSlideX(0);
     setPaymentOpen(true);
   };
-
-  // Keep old createPreOrders as alias for the dialog opener
-  const createPreOrders = openPaymentDialog;
 
   const openEdit = (po: PreOrderWithItems) => {
     const fallbackBreak = settings.breaks[0] ?? DEFAULT_BREAKS[0];
@@ -595,16 +600,15 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
   return (
     <div className={embedded ? "space-y-6 pb-28" : "mx-auto max-w-2xl px-4 py-5 space-y-6 pb-28"}>
-      {/* Header */}
+      {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Certe Pass</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Schedule daily meals for your children
         </p>
       </div>
 
-      {/* Plan summary strip */}
-      <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card p-3.5">
+      {/* ── Plan summary strip ── */}
+      <div className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 shrink-0">
           <CalendarClock className="h-5 w-5 text-primary" />
         </div>
@@ -621,235 +625,375 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         </div>
       </div>
 
-      {/* ── New Pass Form ─────────────────────────────────────── */}
-      <div className="space-y-4">
-        <h2 className="text-base font-semibold">New Pass</h2>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <LabelText>Child</LabelText>
-            <Select value={assignChildId} onValueChange={setAssignChildId}>
-              <SelectTrigger className="h-10 rounded-xl">
-                <SelectValue placeholder="Select child" />
-              </SelectTrigger>
-              <SelectContent>
-                {children.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <LabelText>Break</LabelText>
-            <Select value={assignBreak} onValueChange={setAssignBreak}>
-              <SelectTrigger className="h-10 rounded-xl">
-                <SelectValue placeholder="Select break" />
-              </SelectTrigger>
-              <SelectContent>
-                {settings.breaks.map((b) => (
-                  <SelectItem key={b} value={b}>{breakLabelByName.get(b) ?? b}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Menu search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 rounded-xl pl-9"
-            placeholder="Search menu items…"
-          />
-        </div>
-
-        {/* Menu list */}
-        <div className="max-h-52 overflow-auto rounded-xl border border-border/50">
-          {filteredMenu.slice(0, 50).map((item) => (
-            <div key={item.id} className="flex items-center justify-between border-b border-border/30 px-3 py-2.5 last:border-b-0">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{item.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {MENU_CATEGORY_LABELS[item.category]} · ₹{item.discountedPrice ?? item.price}
-                </p>
-              </div>
-              <Button size="sm" variant="ghost" className="h-8 shrink-0 text-primary" onClick={() => addItem(item.id)}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
-          {filteredMenu.length === 0 && (
-            <p className="py-6 text-center text-xs text-muted-foreground">No items found</p>
-          )}
-        </div>
-
-        {/* Allocations */}
-        {allocations.length > 0 && (
-          <div className="space-y-2">
-            {allocations.map((row) => {
-              const menu = menuById.get(row.menuItemId);
-              return (
-                <div key={row.id} className="rounded-xl border border-border/50 bg-card p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {childById.get(row.childId)} · {breakLabelByName.get(row.breakName) ?? row.breakName}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(row.id, -1)}>
-                        <Minus className="h-3.5 w-3.5" />
-                      </Button>
-                      <span className="w-6 text-center text-sm font-semibold tabular-nums">{row.quantity}</span>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => changeQty(row.id, 1)}>
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => setAllocations((prev) => prev.filter((x) => x.id !== row.id))}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Cost summary */}
-        {allocations.length > 0 && (
-          <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-1 text-sm">
-            {Array.from(summaryByChild.entries()).map(([childId, s]) => (
-              <div key={childId} className="flex justify-between">
-                <span className="text-muted-foreground">{childById.get(childId)}</span>
-                <span className={cn("font-medium", s.belowMin && "text-amber-600", s.hasBlocks && "text-red-600")}>
-                  ₹{Math.round(s.total)}/day
-                  {s.belowMin ? " (below min)" : ""}
-                </span>
-              </div>
-            ))}
-            {periodSchoolDays >= settings.minDays && estimatedTotal > 0 && (
-              <>
-                <Separator className="my-1.5" />
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">₹{dailyTotalBase.toFixed(0)} × {periodSchoolDays} days + 2% fee</span>
-                  <span className="font-bold">₹{estimatedTotal.toFixed(2)}</span>
-                </div>
-                {walletBalance !== null && (
-                  <p className={cn("text-xs", walletBalance < estimatedTotal ? "text-red-600" : "text-emerald-600")}>
-                    Wallet: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— top up needed" : "✓"}
-                  </p>
-                )}
-              </>
-            )}
-            <p className="text-xs text-muted-foreground pt-1">Min ₹{settings.minOrderValue}/child · {settings.minDays}+ school days</p>
-          </div>
-        )}
-
-        <Button
-          className="w-full h-11 rounded-xl"
-          disabled={
-            creating ||
-            allocations.length === 0 ||
-            hasBelowMin ||
-            hasBlocks ||
-            periodSchoolDays < settings.minDays ||
-            periodSchoolDays <= 0 ||
-            (walletBalance !== null && walletBalance < estimatedTotal)
-          }
-          onClick={createPreOrders}
-        >
-          {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {allocations.length > 0 && estimatedTotal > 0 ? `Review & Pay ₹${estimatedTotal.toFixed(2)}` : "Create Pass"}
-        </Button>
-      </div>
-
-      {/* ── Active Passes ─────────────────────────────────────── */}
+      {/* ── Active Passes ── */}
       <div className="space-y-3">
-        <h2 className="text-base font-semibold">Your Passes</h2>
+        <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+          Active
+        </p>
+
         {preOrders.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-center">
-            <CalendarClock className="h-10 w-10 text-muted-foreground/30" />
+          <div className="flex flex-col items-center gap-2 py-10 text-center">
+            <CalendarClock className="h-10 w-10 text-muted-foreground/20" />
             <p className="text-sm text-muted-foreground">No passes yet</p>
           </div>
         ) : (
           preOrders.map((po) => (
-            <div key={po.id} className="rounded-2xl border border-border/50 bg-card overflow-hidden">
-              <div className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">{po.childName}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {po.mode === "SUBSCRIPTION"
-                        ? `${po.scheduledDate} → ${po.subscriptionUntil || "—"}`
-                        : po.scheduledDate}
-                    </p>
-                  </div>
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "text-[10px] font-semibold shrink-0",
-                      po.status === "PENDING" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
-                      po.status === "CANCELLED" && "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
+            <div
+              key={po.id}
+              className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold leading-snug">
+                    {po.childName} · {po.items[0]?.breakName ?? "—"}
+                  </p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground truncate">
+                    {po.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {po.scheduledDate} → {po.subscriptionUntil || "—"}
+                    {po.mode === "SUBSCRIPTION" && po.status === "PENDING" && (
+                      <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
+                        · {countSchoolDaysInclusive(new Date().toISOString().slice(0, 10), po.subscriptionUntil || po.scheduledDate)} days left
+                      </span>
                     )}
-                  >
-                    {getDisplayStatusLabel(po)}
-                  </Badge>
+                  </p>
                 </div>
-
-                <div className="mt-3 space-y-1">
-                  {po.items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between text-sm">
-                      <span>{item.name} × {item.quantity}</span>
-                      <span className="text-xs text-muted-foreground">{breakLabelByName.get(item.breakName ?? "") ?? item.breakName ?? "—"}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {po.status === "PENDING" && (
-                <div className="border-t border-border/30 px-4 py-2.5">
+                {po.status === "PENDING" && (
                   <button
                     type="button"
                     onClick={() => openEdit(po)}
-                    className="flex items-center gap-1.5 text-xs font-medium text-primary"
+                    className="shrink-0 text-xs font-medium text-primary active:opacity-70 transition-opacity"
                   >
-                    <PencilLine className="h-3.5 w-3.5" />
-                    Edit Pass
+                    Edit
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           ))
         )}
       </div>
 
-      {/* ── Edit Pass Sheet ─────────────────────────────────────── */}
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[80]}>
-        <div className="flex flex-col gap-4 pb-4">
+      {/* ── New Pass dashed card ── */}
+      <button
+        type="button"
+        onClick={openWizard}
+        className="w-full rounded-2xl border-2 border-dashed border-primary/30 py-5 text-center text-sm font-medium text-primary active:scale-[0.98] transition-transform"
+      >
+        + New Pass
+      </button>
+
+      {/* ── New Pass Wizard Sheet ── */}
+      <BottomSheet
+        open={wizardOpen}
+        onClose={() => { if (!creating) setWizardOpen(false); }}
+        snapPoints={[92]}
+      >
+        <div className="px-5 pb-8 pt-2">
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-5">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={cn(
+                  "h-1 flex-1 rounded-full transition-colors",
+                  s <= wizardStep ? "bg-primary" : "bg-muted",
+                )}
+              />
+            ))}
+          </div>
+
+          {/* Step 1 — Select child + break */}
+          {wizardStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Who is this for?</h2>
+                <p className="text-[13px] text-muted-foreground mt-0.5">Pick a child and break slot</p>
+              </div>
+
+              {/* Child selection — large tap targets */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Child</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {children.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setAssignChildId(c.id)}
+                      className={cn(
+                        "rounded-2xl p-4 text-left text-sm font-medium transition-all",
+                        assignChildId === c.id
+                          ? "bg-primary/10 border border-primary text-primary"
+                          : "bg-card border border-border",
+                      )}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Break selection — large tap targets */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Break</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {settings.breaks.map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setAssignBreak(b)}
+                      className={cn(
+                        "rounded-2xl p-4 text-left transition-all",
+                        assignBreak === b
+                          ? "bg-primary/10 border border-primary"
+                          : "bg-card border border-border",
+                      )}
+                    >
+                      <p className={cn("text-sm font-medium", assignBreak === b && "text-primary")}>
+                        {b}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {settings.breakSlots.find((s) => s.name === b)?.startTime} – {settings.breakSlots.find((s) => s.name === b)?.endTime}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                className="w-full h-12 rounded-2xl"
+                disabled={!assignChildId}
+                onClick={() => setWizardStep(2)}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+
+          {/* Step 2 — Pick items */}
+          {wizardStep === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Pick items</h2>
+                <p className="text-[13px] text-muted-foreground mt-0.5">
+                  {childById.get(assignChildId)} · {assignBreak}
+                </p>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-11 rounded-full bg-muted/40 border-0 pl-9"
+                  placeholder="Search menu..."
+                />
+              </div>
+
+              {/* Menu grid — 2 columns, matching menu page card style */}
+              <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-auto overscroll-contain pb-2">
+                {filteredMenu.slice(0, 50).map((item) => {
+                  const qty = allocations
+                    .filter((a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak)
+                    .reduce((s, a) => s + a.quantity, 0);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
+                    >
+                      <div className="p-3">
+                        <p className="text-sm font-semibold truncate">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {MENU_CATEGORY_LABELS[item.category]}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-base font-bold tabular-nums">
+                            ₹{item.discountedPrice ?? item.price}
+                          </span>
+                          {qty === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => addItem(item.id)}
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md active:scale-95 transition-transform"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <div className="flex items-center gap-1 rounded-full bg-primary px-1.5 py-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const alloc = allocations.find(
+                                    (a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak,
+                                  );
+                                  if (alloc) changeQty(alloc.id, -1);
+                                }}
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="w-5 text-center text-xs font-bold text-primary-foreground tabular-nums">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => addItem(item.id)}
+                                className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {filteredMenu.length === 0 && (
+                  <p className="col-span-2 py-8 text-center text-xs text-muted-foreground">No items found</p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(1)}>
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 h-12 rounded-2xl"
+                  disabled={allocations.length === 0}
+                  onClick={() => setWizardStep(3)}
+                >
+                  Review ({allocations.reduce((s, a) => s + a.quantity, 0)} items)
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 — Review + pay */}
+          {wizardStep === 3 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Review</h2>
+                <p className="text-[13px] text-muted-foreground mt-0.5">
+                  {childById.get(assignChildId)} · {assignBreak} · {periodSchoolDays} school days
+                </p>
+              </div>
+
+              {/* Line items */}
+              <div className="space-y-3">
+                {allocations.map((row) => {
+                  const menu = menuById.get(row.menuItemId);
+                  return (
+                    <div key={row.id} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {childById.get(row.childId)} · {breakLabelByName.get(row.breakName) ?? row.breakName}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1 rounded-full border border-border px-2 py-1">
+                          <button type="button" onClick={() => changeQty(row.id, -1)} className="h-5 w-5 flex items-center justify-center">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-4 text-center text-xs font-semibold tabular-nums">{row.quantity}</span>
+                          <button type="button" onClick={() => changeQty(row.id, 1)} className="h-5 w-5 flex items-center justify-center">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-medium tabular-nums w-14 text-right">
+                          ₹{((menu?.discountedPrice ?? menu?.price ?? 0) * row.quantity).toFixed(0)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Cost summary */}
+              <Separator />
+              <div className="space-y-1.5 text-sm">
+                {Array.from(summaryByChild.entries()).map(([childId, s]) => (
+                  <div key={childId} className="flex justify-between">
+                    <span className="text-muted-foreground">{childById.get(childId)}</span>
+                    <span className={cn("tabular-nums", s.belowMin && "text-amber-600", s.hasBlocks && "text-red-600")}>
+                      ₹{Math.round(s.total)}/day
+                      {s.belowMin ? " (below min)" : ""}
+                    </span>
+                  </div>
+                ))}
+                {periodSchoolDays >= settings.minDays && estimatedTotal > 0 && (
+                  <>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>₹{dailyTotalBase.toFixed(0)} × {periodSchoolDays} days + 2% fee</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold pt-1">
+                      <span>Total</span>
+                      <span className="tabular-nums">₹{estimatedTotal.toFixed(2)}</span>
+                    </div>
+                    {walletBalance !== null && (
+                      <p className={cn("text-xs", walletBalance < estimatedTotal ? "text-red-600" : "text-emerald-600")}>
+                        Wallet: ₹{walletBalance.toFixed(2)} {walletBalance < estimatedTotal ? "— top up needed" : "✓"}
+                      </p>
+                    )}
+                  </>
+                )}
+                <p className="text-xs text-muted-foreground pt-1">Min ₹{settings.minOrderValue}/child · {settings.minDays}+ school days</p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(2)}>
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 h-12 rounded-2xl"
+                  disabled={
+                    creating ||
+                    allocations.length === 0 ||
+                    hasBelowMin ||
+                    hasBlocks ||
+                    periodSchoolDays < settings.minDays ||
+                    periodSchoolDays <= 0 ||
+                    (walletBalance !== null && walletBalance < estimatedTotal)
+                  }
+                  onClick={openPaymentDialog}
+                >
+                  Pay ₹{estimatedTotal.toFixed(0)}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* ── Edit Pass Sheet ── */}
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[85]}>
+        <div className="px-5 pb-8 pt-2 space-y-4">
           <div>
-            <h2 className="text-lg font-bold tracking-tight">Edit Pass</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {editingPreOrder?.childName} · Change food items and break slots
+            <h2 className="text-lg font-semibold tracking-tight">Edit Pass</h2>
+            <p className="text-[13px] text-muted-foreground mt-0.5">
+              {editingPreOrder?.childName}
             </p>
           </div>
 
-          <div className="max-h-[45vh] space-y-2.5 overflow-auto overscroll-contain -mx-1 px-1">
+          <div className="max-h-[50vh] space-y-2.5 overflow-auto overscroll-contain">
             {editRows.map((row) => {
               const menu = menuById.get(row.menuItemId);
               return (
-                <div key={row.id} className="rounded-xl border border-border/50 bg-card p-3 space-y-2.5">
+                <div key={row.id} className="rounded-2xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive" onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}>
+                    <button
+                      type="button"
+                      className="text-muted-foreground active:opacity-70"
+                      onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-2">
                     <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
-                      <SelectTrigger className="h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
                       <SelectContent>
                         {menuItems.map((item) => (
                           <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
@@ -857,7 +1001,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                       </SelectContent>
                     </Select>
                     <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
-                      <SelectTrigger className="h-9 rounded-lg text-xs"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue placeholder="Select break" /></SelectTrigger>
                       <SelectContent>
                         {Array.from(new Set([...settings.breaks, ...editRows.map((x) => x.breakName)])).map((breakName) => (
                           <SelectItem key={breakName} value={breakName}>{breakLabelByName.get(breakName) ?? breakName}</SelectItem>
@@ -866,13 +1010,21 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                     </Select>
                   </div>
                   <div className="flex items-center justify-center gap-3">
-                    <Button size="icon" variant="outline" className="h-8 w-8 rounded-lg" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border active:scale-95 transition-transform"
+                      onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}
+                    >
                       <Minus className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
                     <span className="w-8 text-center text-sm font-bold tabular-nums">{row.quantity}</span>
-                    <Button size="icon" variant="outline" className="h-8 w-8 rounded-lg" onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border active:scale-95 transition-transform"
+                      onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}
+                    >
                       <Plus className="h-3.5 w-3.5" />
-                    </Button>
+                    </button>
                   </div>
                 </div>
               );
@@ -882,7 +1034,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
           <Button
             type="button"
             variant="outline"
-            className="w-full rounded-xl"
+            className="w-full rounded-2xl"
             onClick={() =>
               setEditRows((prev) => [
                 ...prev,
@@ -900,11 +1052,11 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             Add Item
           </Button>
 
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setEditOpen(false)} disabled={savingEdit}>
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setEditOpen(false)} disabled={savingEdit}>
               Cancel
             </Button>
-            <Button className="flex-1 rounded-xl" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
+            <Button className="flex-1 h-12 rounded-2xl" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
               {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save
             </Button>
@@ -912,7 +1064,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         </div>
       </BottomSheet>
 
-      {/* ── Payment Confirmation BottomSheet ─────────────────────────── */}
+      {/* ── Payment Confirmation BottomSheet ── */}
       <BottomSheet
         open={paymentOpen}
         onClose={() => {
@@ -923,86 +1075,74 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
           }
         }}
         snapPoints={[85]}
-        className="bg-[#0d1117]"
       >
-        <div className="space-y-5 pb-4">
+        <div className="px-5 pb-8 pt-2 space-y-5">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <Wallet className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white leading-tight">Confirm Pre-Order</h2>
-              <p className="text-xs text-white/50 mt-0.5">Wallet deduction only</p>
+              <h2 className="text-lg font-semibold tracking-tight">Confirm Payment</h2>
+              <p className="text-[13px] text-muted-foreground mt-0.5">Wallet deduction</p>
             </div>
           </div>
 
           {/* Amount breakdown */}
-          <div className="rounded-xl bg-white/5 border border-white/10 px-4 py-3 space-y-1.5">
-            <div className="flex justify-between text-sm">
-              <span className="text-white/60">Daily meals ({children.length > 0 ? `${children.length} child${children.length > 1 ? "ren" : ""}` : ""})</span>
-              <span className="text-white">₹{dailyTotalBase.toFixed(2)}/day</span>
+          <div className="rounded-2xl bg-muted/30 p-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Daily meals</span>
+              <span className="tabular-nums">₹{dailyTotalBase.toFixed(0)}/day</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/60">Duration</span>
-              <span className="text-white">{periodSchoolDays} school days</span>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Duration</span>
+              <span>{periodSchoolDays} school days</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/60">Subtotal</span>
-              <span className="text-white">₹{(dailyTotalBase * periodSchoolDays).toFixed(2)}</span>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular-nums">₹{(dailyTotalBase * periodSchoolDays).toFixed(0)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-white/60">Platform fee (2%)</span>
-              <span className="text-primary">+₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(2)}</span>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Platform fee (2%)</span>
+              <span className="text-primary tabular-nums">+₹{(dailyTotalBase * periodSchoolDays * CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100).toFixed(0)}</span>
             </div>
-            <div className="border-t border-white/10 pt-1.5 flex justify-between">
-              <span className="font-semibold text-white">Total</span>
-              <span className="text-lg font-bold text-primary">₹{estimatedTotal.toFixed(2)}</span>
+            <Separator />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total</span>
+              <span className="tabular-nums">₹{estimatedTotal.toFixed(2)}</span>
             </div>
             {walletBalance !== null && (
-              <div className="flex justify-between text-xs mt-0.5">
-                <span className="text-white/40">Balance after</span>
-                <span className={walletBalance - estimatedTotal >= 0 ? "text-emerald-400" : "text-red-400"}>
-                  ₹{(walletBalance - estimatedTotal).toFixed(2)}
-                </span>
-              </div>
+              <p className={cn("text-xs", walletBalance - estimatedTotal >= 0 ? "text-emerald-600" : "text-red-600")}>
+                Balance after: ₹{(walletBalance - estimatedTotal).toFixed(2)}
+              </p>
             )}
           </div>
 
           {/* Period */}
-          <div className="flex gap-2 text-xs text-white/50">
-            <span>{startDate}</span>
-            <span>→</span>
-            <span>{endDate}</span>
-            <span className="ml-auto flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3 text-emerald-400" />
-              Priority queue
-            </span>
-          </div>
+          <p className="text-xs text-muted-foreground text-center">
+            {startDate} → {endDate}
+          </p>
 
           {/* Slider */}
           <div>
-            <p className="text-xs text-center text-white/35 mb-3">
+            <p className="text-xs text-center text-muted-foreground mb-3">
               {paymentConfirmed ? "Payment confirmed!" : "Slide to confirm payment"}
             </p>
 
             <div
               ref={sliderTrackRef}
-              className="relative h-14 rounded-full overflow-hidden select-none"
-              style={{
-                background: paymentConfirmed
-                  ? "linear-gradient(90deg, #065f46 0%, #047857 100%)"
-                  : "linear-gradient(90deg, rgba(212,137,26,0.12) 0%, rgba(232,162,48,0.06) 100%)",
-                border: paymentConfirmed ? "1px solid #10b981" : "1px solid rgba(255,255,255,0.10)",
-                transition: "background 0.4s, border-color 0.4s",
-              }}
+              className={cn(
+                "relative h-14 rounded-full overflow-hidden select-none border transition-colors",
+                paymentConfirmed
+                  ? "bg-emerald-100 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-700"
+                  : "bg-primary/5 border-primary/20",
+              )}
             >
               {!paymentConfirmed && (
                 <div
-                  className="absolute left-0 top-0 bottom-0 rounded-full pointer-events-none"
+                  className="absolute left-0 top-0 bottom-0 rounded-full pointer-events-none bg-primary/10"
                   style={{
                     width: `${paymentSlideX + 56}px`,
-                    background: "linear-gradient(90deg, rgba(212,137,26,0.25) 0%, rgba(232,162,48,0.08) 100%)",
                     transition: paymentSliding ? "none" : "width 0.3s ease",
                   }}
                 />
@@ -1011,11 +1151,11 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
               {paymentConfirmed && (
                 <div className="absolute inset-0 flex items-center justify-center gap-2">
                   {creating ? (
-                    <Loader2 className="h-5 w-5 animate-spin text-emerald-300" />
+                    <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
                   ) : (
-                    <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
                   )}
-                  <span className="text-sm font-semibold text-emerald-300">
+                  <span className="text-sm font-semibold text-emerald-600">
                     {creating ? "Processing…" : "Confirmed!"}
                   </span>
                 </div>
@@ -1023,8 +1163,8 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
               {!paymentConfirmed && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-sm text-white/25 tracking-wide ml-14">
-                    Slide to pay ₹{estimatedTotal.toFixed(2)} →
+                  <span className="text-sm text-muted-foreground/50 tracking-wide ml-14">
+                    Slide to pay ₹{estimatedTotal.toFixed(0)} →
                   </span>
                 </div>
               )}
@@ -1034,11 +1174,9 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                   ref={sliderThumbRef}
                   onMouseDown={(e) => { e.preventDefault(); handleSliderStart(e.clientX); }}
                   onTouchStart={(e) => { e.preventDefault(); handleSliderStart(e.touches[0].clientX); }}
-                  className="absolute top-1 bottom-1 left-1 w-12 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing z-10 touch-none"
+                  className="absolute top-1 bottom-1 left-1 w-12 rounded-full flex items-center justify-center cursor-grab active:cursor-grabbing z-10 touch-none bg-primary shadow-lg"
                   style={{
                     transform: `translateX(${paymentSlideX}px)`,
-                    background: "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)/0.8) 100%)",
-                    boxShadow: "0 2px 12px hsl(var(--primary)/0.5)",
                     transition: paymentSliding ? "none" : "transform 0.3s ease",
                   }}
                   role="slider"
@@ -1047,32 +1185,28 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                   aria-valuemax={100}
                   aria-valuenow={paymentSlideX}
                 >
-                  <ChevronRight className="h-5 w-5 text-white" />
+                  <ChevronRight className="h-5 w-5 text-primary-foreground" />
                 </div>
               )}
             </div>
 
-            <p className="text-[10px] text-center text-white/25 mt-3">
+            <p className="text-[10px] text-center text-muted-foreground mt-3">
               This will deduct ₹{estimatedTotal.toFixed(2)} from your family wallet.
             </p>
           </div>
 
           {!paymentConfirmed && (
-            <Button
-              variant="ghost"
-              className="w-full text-white/35 hover:text-white/60 hover:bg-white/5"
+            <button
+              type="button"
+              className="w-full text-center text-sm text-muted-foreground py-2 active:opacity-70 transition-opacity"
               onClick={() => { setPaymentOpen(false); setPaymentSlideX(0); }}
               disabled={creating}
             >
               Cancel
-            </Button>
+            </button>
           )}
         </div>
       </BottomSheet>
     </div>
   );
-}
-
-function LabelText({ children }: { children: string }) {
-  return <p className="mb-1 text-xs text-muted-foreground">{children}</p>;
 }

@@ -97,9 +97,7 @@ export function ParentNotificationBell({
   });
 
   const badge = !loading && unreadCount > 0 && (
-    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-background animate-in zoom-in-75 duration-300">
-      {unreadCount > 9 ? "9+" : unreadCount}
-    </span>
+    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary animate-in zoom-in-75 duration-300" />
   );
 
   const sharedClassName = cn(
@@ -116,7 +114,7 @@ export function ParentNotificationBell({
         className={sharedClassName}
         aria-label="Notifications"
       >
-        <Bell className="h-5 w-5 fill-current text-white transition-transform duration-200 group-hover:scale-110" />
+        <Bell className="h-5 w-5 text-foreground transition-transform duration-200 group-hover:scale-110" />
         {badge}
       </button>
     );
@@ -129,7 +127,7 @@ export function ParentNotificationBell({
       className={sharedClassName}
       aria-label="Notifications"
     >
-      <Bell className="h-5 w-5 fill-current text-white transition-transform duration-200 group-hover:scale-110" />
+      <Bell className="h-5 w-5 text-foreground transition-transform duration-200 group-hover:scale-110" />
       {badge}
     </Link>
   );

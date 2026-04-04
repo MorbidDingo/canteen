@@ -443,7 +443,6 @@ export function Navbar() {
       </header>
 
       {/* Mobile floating bottom nav for parents */}
-      {/* Mobile floating bottom nav for parents */}
       {session && isParent && (
         <nav className="fixed bottom-2 left-0 right-0 z-50 md:hidden flex justify-center px-4">
           <div className="relative overflow-hidden rounded-[28px] border border-white/45 bg-white/45 px-2 py-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl supports-backdrop-filter:bg-white/20 dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10 w-full max-w-xs">

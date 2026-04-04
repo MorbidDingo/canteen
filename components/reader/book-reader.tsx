@@ -560,7 +560,7 @@ export function BookReader({ bookId }: { bookId: string }) {
     if (isFullscreen) {
       hideControlsTimer.current = setTimeout(() => {
         if (activePanel === "none") setShowControls(false);
-      }, 4000);
+      }, 3000);
     }
   }, [activePanel, isFullscreen]);
 
@@ -988,12 +988,13 @@ export function BookReader({ bookId }: { bookId: string }) {
         {/* Left */}
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => {
               speechSynthesis.cancel();
               router.push("/library-reader");
             }}
             className={cn(
-              "h-8 w-8 flex items-center justify-center rounded-full transition-colors",
+              "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
               mode.btnHover,
               mode.text,
             )}
@@ -1004,12 +1005,11 @@ export function BookReader({ bookId }: { bookId: string }) {
 
         {/* Center */}
         <div className="flex-1 text-center px-3 min-w-0">
-          <p className={cn("text-xs font-semibold truncate tracking-tight", mode.text)}>
+          <p className={cn("text-[13px] font-semibold truncate tracking-tight", mode.text)}>
             {bookInfo.title}
           </p>
-          <p className={cn("text-[10px] truncate mt-0.5", mode.sub)}>
-            {chapterTitle ? `${chapterTitle}` : `Chapter ${currentChapter}`}
-            {pageSlices.length > 1 ? ` · ${pageIndex + 1}/${pageSlices.length}` : ""}
+          <p className={cn("text-[11px] truncate mt-0.5", mode.sub)}>
+            {chapterTitle ? chapterTitle : `Ch. ${currentChapter}`}
           </p>
         </div>
 
@@ -1142,13 +1142,13 @@ export function BookReader({ bookId }: { bookId: string }) {
         {/* Progress bar */}
         <div className="h-[2px] w-full overflow-hidden">
           <motion.div
-            className="h-full bg-indigo-500/60 rounded-full"
+            className="h-full bg-primary/60 rounded-full"
             animate={{ width: `${progressPct}%` }}
             transition={spring.gentle}
           />
         </div>
 
-        <div className="flex items-center justify-between px-4 h-14">
+        <div className="flex items-center justify-between px-4 h-12">
           {/* Prev */}
           <button
             onClick={() => goToPageIndex(pageIndex - 1)}
@@ -1216,7 +1216,7 @@ export function BookReader({ bookId }: { bookId: string }) {
               className={cn(
                 "h-9 w-9 flex items-center justify-center rounded-full transition-colors",
                 mode.btnHover,
-                isSpeaking ? "text-indigo-500" : mode.text,
+                isSpeaking ? "text-primary" : mode.text,
               )}
             >
               {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
@@ -1224,7 +1224,14 @@ export function BookReader({ bookId }: { bookId: string }) {
           </div>
 
           {/* Next */}
+          {/* Page counter */}
+          <span className={cn("text-[11px] tabular-nums font-mono", mode.sub)}>
+            {currentPageToBookPage()}/{bookInfo.totalPages}
+          </span>
+
+          {/* Next */}
           <button
+            type="button"
             onClick={() => goToPageIndex(pageIndex + 1)}
             disabled={isLastPage}
             className={cn(
@@ -1300,7 +1307,7 @@ export function BookReader({ bookId }: { bookId: string }) {
                           className={cn(
                             "py-2.5 px-1 rounded-xl border text-[11px] font-medium transition-all flex flex-col items-center gap-1",
                             readingMode === m
-                              ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                              ? "border-primary/60 bg-primary/10 text-primary"
                               : cn(mc.bg, "border-transparent opacity-70"),
                           )}
                         >
@@ -1343,7 +1350,7 @@ export function BookReader({ bookId }: { bookId: string }) {
                     </button>
                     <div className="flex-1 relative h-1.5 rounded-full bg-current/10">
                       <div
-                        className="absolute left-0 top-0 h-full bg-indigo-500/70 rounded-full transition-all"
+                        className="absolute left-0 top-0 h-full bg-primary/70 rounded-full transition-all"
                         style={{ width: `${((fontSize - 13) / (26 - 13)) * 100}%` }}
                       />
                     </div>
@@ -1384,7 +1391,7 @@ export function BookReader({ bookId }: { bookId: string }) {
                         className={cn(
                           "flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all",
                           lineHeight === lh
-                            ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                            ? "border-primary/60 bg-primary/10 text-primary"
                             : cn(mode.btnHover, "border-current/10", mode.sub),
                         )}
                       >
@@ -1407,7 +1414,7 @@ export function BookReader({ bookId }: { bookId: string }) {
                         className={cn(
                           "flex-1 py-1.5 rounded-lg border text-[11px] font-medium transition-all flex flex-col items-center gap-0.5",
                           contentWidth === w.px
-                            ? "border-indigo-500/60 bg-indigo-500/10 text-indigo-600"
+                            ? "border-primary/60 bg-primary/10 text-primary"
                             : cn(mode.btnHover, "border-current/10", mode.sub),
                         )}
                       >
@@ -1470,21 +1477,21 @@ export function BookReader({ bookId }: { bookId: string }) {
                     className={cn(
                       "w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors flex items-center gap-3 mb-0.5",
                       ch.chapterNumber === currentChapter
-                        ? "bg-indigo-500/10 text-indigo-600 font-medium"
+                        ? "bg-primary/10 text-primary font-medium"
                         : cn(mode.btnHover, mode.text),
                     )}
                   >
                     <span
                       className={cn(
                         "text-[10px] tabular-nums w-7 shrink-0",
-                        ch.chapterNumber === currentChapter ? "text-indigo-500" : mode.sub,
+                        ch.chapterNumber === currentChapter ? "text-primary" : mode.sub,
                       )}
                     >
                       {ch.chapterNumber}
                     </span>
                     <span className="truncate">{ch.title}</span>
                     {ch.chapterNumber === currentChapter && (
-                      <span className="ml-auto shrink-0 h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                      <span className="ml-auto shrink-0 h-1.5 w-1.5 rounded-full bg-primary" />
                     )}
                   </button>
                 ))}
@@ -1543,7 +1550,7 @@ export function BookReader({ bookId }: { bookId: string }) {
                     className={cn(
                       "pb-2 text-xs font-medium border-b-2 -mb-px transition-colors capitalize",
                       annotationTab === tab
-                        ? cn("border-indigo-500", mode.accent)
+                        ? cn("border-primary", mode.accent)
                         : cn("border-transparent", mode.sub),
                     )}
                   >
@@ -1752,7 +1759,7 @@ export function BookReader({ bookId }: { bookId: string }) {
             className={cn(
               "fixed z-50 bottom-24 left-1/2 -translate-x-1/2",
               "flex items-center gap-2 px-4 py-2 rounded-full shadow-xl text-xs font-medium",
-              "bg-indigo-600 text-white",
+              "bg-primary text-primary-foreground",
             )}
           >
             <RotateCcw className="h-3 w-3" />

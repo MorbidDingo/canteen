@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { child, certeSubscription } from "@/lib/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { child } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { AccessDeniedError, requireLinkedAccount } from "@/lib/auth-server";
 import { getRecommendations } from "@/lib/ml/recommendation-engine";
 
@@ -19,26 +19,6 @@ export async function GET() {
   const session = access.session;
   const userId = session.user.id;
   const orgId = access.activeOrganizationId!;
-
-  // Certe+ gate
-  const [activeSub] = await db
-    .select({ id: certeSubscription.id })
-    .from(certeSubscription)
-    .where(
-      and(
-        eq(certeSubscription.parentId, userId),
-        eq(certeSubscription.status, "ACTIVE"),
-        gte(certeSubscription.endDate, new Date()),
-      ),
-    )
-    .limit(1);
-
-  if (!activeSub) {
-    return NextResponse.json(
-      { error: "Certe+ subscription required", code: "SUBSCRIPTION_REQUIRED" },
-      { status: 403 },
-    );
-  }
 
   // Get first child (default) for recommendations
   const children = await db

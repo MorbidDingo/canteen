@@ -16,9 +16,9 @@ interface OrderFeedbackSheetProps {
 }
 
 const RATING_LABELS = {
-  healthyRating: "Healthiness",
-  tasteRating: "Taste",
-  quantityRating: "Quantity",
+  healthyRating: "Food",
+  tasteRating: "Packaging",
+  quantityRating: "Service",
 } as const;
 
 function StarPicker({
@@ -31,22 +31,22 @@ function StarPicker({
   label: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-sm font-medium w-24 shrink-0">{label}</span>
-      <div className="flex gap-1">
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm font-medium w-20 shrink-0">{label}</span>
+      <div className="flex gap-1.5">
         {[1, 2, 3, 4, 5].map((star) => (
           <button
             key={star}
             type="button"
             onClick={() => onChange(star)}
-            className="p-0.5 transition-transform active:scale-90"
+            className="p-0.5 active:scale-90 transition-transform"
           >
             <Star
               className={cn(
                 "h-7 w-7 transition-colors",
                 star <= value
                   ? "fill-amber-400 text-amber-400"
-                  : "text-muted-foreground/30",
+                  : "text-muted-foreground/20",
               )}
             />
           </button>
@@ -107,52 +107,45 @@ export function OrderFeedbackSheet({
     <BottomSheet
       open={open}
       onClose={() => onOpenChange(false)}
-      snapPoints={[70]}
+      snapPoints={[50]}
     >
-      <div className="px-4 pb-6 space-y-5">
+      <div className="px-5 pb-8 pt-2 space-y-5">
         <div>
-          <h3 className="text-lg font-semibold">Rate your order</h3>
-          <p className="text-sm text-muted-foreground">
-            Help us improve the canteen experience
+          <h3 className="text-lg font-semibold tracking-tight">Rate your order</h3>
+          <p className="text-[13px] text-muted-foreground mt-0.5">
+            Help us improve
           </p>
         </div>
 
         <div className="space-y-4">
           <StarPicker
-            label="Healthiness"
+            label="Food"
             value={healthyRating}
             onChange={setHealthyRating}
           />
           <StarPicker
-            label="Taste"
+            label="Packaging"
             value={tasteRating}
             onChange={setTasteRating}
           />
           <StarPicker
-            label="Quantity"
+            label="Service"
             value={quantityRating}
             onChange={setQuantityRating}
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            Overall review{" "}
-            <span className="text-muted-foreground font-normal">
-              (optional)
-            </span>
-          </label>
-          <Textarea
-            value={overallReview}
-            onChange={(e) => setOverallReview(e.target.value)}
-            placeholder="How was the food?"
-            maxLength={500}
-            rows={3}
-          />
-        </div>
+        <Textarea
+          value={overallReview}
+          onChange={(e) => setOverallReview(e.target.value)}
+          placeholder="Anything else? (optional)"
+          maxLength={500}
+          rows={2}
+          className="rounded-xl text-sm"
+        />
 
         <Button
-          className="w-full"
+          className="w-full h-12 rounded-2xl"
           disabled={!canSubmit || submitting}
           onClick={handleSubmit}
         >

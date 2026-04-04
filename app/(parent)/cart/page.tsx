@@ -7,14 +7,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { emitEvent } from "@/lib/events";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -23,14 +15,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import {
   Minus,
   Plus,
   Trash2,
   ShoppingCart,
   Loader2,
-  UtensilsCrossed,
   CreditCard,
   Wallet,
   Check,
@@ -39,7 +29,7 @@ import {
   Store,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CERTE_PLUS, PREDEFINED_INSTRUCTIONS } from "@/lib/constants";
+import { CERTE_PLUS, getSuggestedInstructions } from "@/lib/constants";
 import Link from "next/link";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
@@ -328,6 +318,18 @@ export default function CartPage() {
   const hasEnoughBalance =
     familyWalletRequired > 0 &&
     familyWalletBalance >= familyWalletRequired;
+
+  // Check if all items are fully allocated to children
+  const allItemsAllocated = useMemo(() => {
+    if (children.length <= 1) return true; // single child = auto-allocated
+    return items.every((item) => {
+      const assigned = Object.values(itemChildAllocations[item.menuItemId] || {}).reduce(
+        (sum, qty) => sum + qty,
+        0
+      );
+      return assigned === item.quantity;
+    });
+  }, [items, itemChildAllocations, children.length]);
 
   const buildChildOrderGroups = () => {
     const groups = new Map<string, typeof items>();
@@ -646,781 +648,520 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="app-shell flex flex-col items-center justify-center py-16 text-center">
-        <ShoppingCart className="h-16 w-16 text-muted-foreground/30 mb-4" />
-        <h1 className="text-2xl font-bold">Your cart is empty</h1>
-        <p className="mt-2 text-muted-foreground">
-          Add some items from the menu to get started
-        </p>
-        <Link href="/menu">
-          <Button className="mt-6 gap-2 btn-gradient">
-            <UtensilsCrossed className="h-4 w-4" />
-            Browse Menu
-          </Button>
+      <div className="app-shell flex flex-col items-center justify-center py-20 text-center">
+        <ShoppingCart className="h-12 w-12 text-muted-foreground/20 mb-4" />
+        <h1 className="text-xl font-semibold tracking-tight">Nothing here yet</h1>
+        <Link href="/menu" className="mt-3 text-[13px] font-medium text-primary">
+          Browse the menu
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
-      <div className="app-header-card mb-5 animate-fade-in">
-        <h1 className="app-title">Cart</h1>
-        <p className="app-subtitle">
-          Review your items and place your order
-        </p>
-        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-          <Store className="h-3.5 w-3.5 text-[#d4891a]" />
-          <span>
-            Ordering from {orderingCanteenName}
-          </span>
-        </div>
+    <div className="app-shell pb-48">
+      {/* Canteen label */}
+      <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-5">
+        <Store className="h-3.5 w-3.5" />
+        <span>Ordering from {orderingCanteenName}</span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Cart Items */}
-        <div className="space-y-4 lg:col-span-2">
-          {items.map((item, index) => (
-            <Card
-              key={item.menuItemId}
-              className="animate-fade-in-up glass-card"
-              style={{ animationDelay: `${index * 60}ms` }}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">{item.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {item.discountedPrice != null ? (
-                        <>
-                          <span className="line-through">₹{item.price}</span>{" "}
-                          <span className="text-emerald-600 font-medium">₹{item.discountedPrice}</span> each
-                        </>
-                      ) : (
-                        <>₹{item.price} each</>
-                      )}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => removeItem(item.menuItemId)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Quantity controls */}
-                <div className="flex items-center gap-3">
-                  <Label className="text-sm">Qty:</Label>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() =>
-                        updateQuantity(item.menuItemId, item.quantity - 1)
-                      }
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <span className="w-8 text-center font-medium">
-                      {item.quantity}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() =>
-                        updateQuantity(item.menuItemId, item.quantity + 1)
-                      }
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <span className="ml-auto font-semibold">
-                    ₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-
-                {children.length > 0 && (
-                  <div className="space-y-2">
-                    <Label className="text-sm">Split between children</Label>
-                    <div className="space-y-2 rounded-md border p-2.5">
-                      {children.map((c) => {
-                        const allocatedQty =
-                          itemChildAllocations[item.menuItemId]?.[c.id] || 0;
-                        const remainingQty = getItemRemainingQty(
-                          item.menuItemId,
-                          item.quantity
-                        );
-                        return (
-                          <div key={c.id} className="flex items-center justify-between gap-3">
-                            <span className="text-sm text-muted-foreground">{c.name}</span>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() =>
-                                  updateChildAllocation(
-                                    item.menuItemId,
-                                    c.id,
-                                    allocatedQty - 1
-                                  )
-                                }
-                                disabled={allocatedQty <= 0}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-5 text-center text-sm font-medium">
-                                {allocatedQty}
-                              </span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() =>
-                                  updateChildAllocation(
-                                    item.menuItemId,
-                                    c.id,
-                                    allocatedQty + 1
-                                  )
-                                }
-                                disabled={remainingQty <= 0}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {getItemRemainingQty(item.menuItemId, item.quantity) > 0 && (
-                      <p className="text-xs text-amber-600">
-                        Assign{" "}
-                        {getItemRemainingQty(item.menuItemId, item.quantity)} more to continue.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Instructions */}
-                <div className="space-y-2">
-                  <Label className="text-sm">Special Instructions:</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {PREDEFINED_INSTRUCTIONS.map((instr) => (
-                      <Badge
-                        key={instr}
-                        variant={
-                          item.instructions.toggles.includes(instr)
-                            ? "default"
-                            : "outline"
-                        }
-                        className="cursor-pointer select-none"
-                        onClick={() =>
-                          toggleInstruction(item.menuItemId, instr)
-                        }
-                      >
-                        {instr}
-                      </Badge>
-                    ))}
-                  </div>
-                  <Input
-                    placeholder="Any other requests..."
-                    value={item.instructions.text}
-                    onChange={(e) =>
-                      updateInstructions(item.menuItemId, {
-                        ...item.instructions,
-                        text: e.target.value,
-                      })
-                    }
-                    className="text-sm"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Order Summary — Desktop only */}
-        <div className="hidden lg:block lg:col-span-1">
-          <Card className="sticky top-20 animate-scale-in glass-card">
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {items.map((item) => (
-                <div
-                  key={item.menuItemId}
-                  className="flex justify-between text-sm"
-                >
-                  <span className="text-muted-foreground">
-                    {item.name} × {item.quantity}
-                    {getAllocationSummary(item.menuItemId)}
-                  </span>
-                  <span>₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
-              <Separator />
-              <div className="flex justify-between font-semibold text-lg">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Platform Fee ({CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT}%)</span>
-                <span>₹{platformFee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-semibold text-lg">
-                <span>Total</span>
-                <span>₹{total.toFixed(2)}</span>
-              </div>
-
-              {/* Payment Method */}
-              <div className="pt-3 space-y-3">
-                <Label className="text-sm text-muted-foreground">
-                  Payment Method
-                </Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Razorpay Option */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("ONLINE")}
-                    className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
-                      paymentMethod === "ONLINE"
-                        ? "border-primary bg-gradient-to-br from-primary/5 to-primary/10 shadow-md shadow-primary/10"
-                        : "border-border hover:border-primary/30 hover:bg-muted/50"
-                    }`}
-                  >
-                    <div
-                      className={`rounded-full p-2.5 transition-all duration-300 ${
-                        paymentMethod === "ONLINE"
-                          ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">Razorpay</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        UPI · Cards · Wallets
-                      </p>
-                    </div>
-                    {paymentMethod === "ONLINE" && (
-                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-0.5 animate-scale-in">
-                        <Check className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                    )}
-                  </button>
-
-                  <button
-                      type="button"
-                      onClick={() => setPaymentMethod("WALLET")}
-                      className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-300 ${
-                        paymentMethod === "WALLET"
-                          ? "border-emerald-500 bg-gradient-to-br from-emerald-500/5 to-emerald-500/10 shadow-md shadow-emerald-500/10"
-                          : "border-border hover:border-emerald-500/30 hover:bg-muted/50"
-                      }`}
-                    >
-                      <div
-                        className={`rounded-full p-2.5 transition-all duration-300 ${
-                          paymentMethod === "WALLET"
-                            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/25"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        <Wallet className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Wallet</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          Instant pay
-                        </p>
-                      </div>
-                      {paymentMethod === "WALLET" && (
-                        <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5 animate-scale-in">
-                          <Check className="h-3 w-3 text-white" />
-                        </div>
-                      )}
-                    </button>
-                </div>
-                {children.length > 1 && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Online checkout currently supports one child per order. Use Wallet for multi-child checkout.
-                  </p>
-                )}
-
-                {/* Razorpay info panel */}
-                {paymentMethod === "ONLINE" && (
-                  <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent animate-in fade-in slide-in-from-top-2 duration-300">
-                    <CardContent className="py-3 text-center space-y-1.5">
-                      <p className="text-sm font-medium text-primary">
-                        Secure payment via Razorpay
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        You&apos;ll be redirected after placing the order
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Wallet panel */}
-                {paymentMethod === "WALLET" && (
-                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {walletsLoading ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : wallets.length === 0 ? (
-                      <Card className="border-dashed">
-                        <CardContent className="py-4 text-center">
-                          <Wallet className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">
-                            No wallets found. Add a child first.
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <>
-                        {/* Child selector */}
-                        {wallets.length > 1 && (
-                          <Select
-                            value={selectedChildId}
-                            onValueChange={setSelectedChildId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select child" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {wallets.map((w) => (
-                                <SelectItem key={w.childId} value={w.childId}>
-                                  {w.childName} — ₹{w.balance.toFixed(2)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-
-                        {/* Balance card */}
-                        {selectedWallet && (
-                          <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden shadow-xl">
-                            <CardContent className="py-3 flex items-center justify-between">
-                              <div>
-                                <p className="text-xs text-orange-200/70 tracking-wide">
-                                  {selectedWallet.childName}&apos;s Balance
-                                </p>
-
-                                <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
-                                  <IndianRupee className="h-4 w-4 text-orange-400" />
-                                  {selectedWallet.balance.toFixed(2)}
-                                </p>
-                              </div>
-
-                              {!hasEnoughBalance && (
-                                <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px] font-medium">
-                                  Insufficient
-                                </Badge>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {childTotals.size > 0 && (
-                          <Card className="border-dashed">
-                            <CardContent className="py-3 space-y-2">
-                              <p className="text-xs font-medium text-muted-foreground">
-                                Required per child wallet
-                              </p>
-                              {[...childPayableTotals.entries()].map(([childId, amount]) => {
-                                const childName = childNameById.get(childId);
-                                const wallet = wallets.find((w) => w.childId === childId);
-                                const amountClassName =
-                                  familyWalletBalance >= amount
-                                    ? "text-emerald-600"
-                                    : "text-destructive";
-                                return (
-                                  <div
-                                    key={childId}
-                                    className="flex items-center justify-between text-sm"
-                                  >
-                                    <span>{childName || wallet?.childName || "Child"}</span>
-                                    <span className={amountClassName}>
-                                      Need ₹{amount.toFixed(2)}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                              <Separator />
-                              <div className="flex items-center justify-between text-sm font-semibold">
-                                <span>Total required</span>
-                                <span className={familyWalletBalance >= familyWalletRequired ? "text-emerald-600" : "text-destructive"}>
-                                  ₹{familyWalletRequired.toFixed(2)} / ₹{familyWalletBalance.toFixed(2)}
-                                </span>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Slide-to-pay */}
-                        {selectedWallet && (
-                          <div className="pt-1">
-                            <div
-                              ref={slideTrackRef}
-                              className={`relative h-14 rounded-full overflow-hidden transition-colors duration-300 ${
-                                slideState === "paid"
-                                  ? "bg-emerald-500"
-                                  : slideState === "paying"
-                                    ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
-                                    : hasEnoughBalance
-                                      ? "bg-gradient-to-r from-muted to-muted/80"
-                                      : "bg-muted/50 opacity-50"
-                              }`}
-                            >
-                              {/* Track label */}
-                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                {slideState === "idle" && (
-                                  <span
-                                    className={`text-sm font-medium transition-opacity duration-200 ${
-                                      slideX > 20 ? "opacity-0" : "opacity-60"
-                                    }`}
-                                  >
-                                    {hasEnoughBalance
-                                      ? "Slide to pay"
-                                      : "Insufficient balance"}
-                                  </span>
-                                )}
-                                {slideState === "paying" && (
-                                  <div className="flex items-center gap-2 text-emerald-600">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span className="text-sm font-medium">
-                                      Processing...
-                                    </span>
-                                  </div>
-                                )}
-                                {slideState === "paid" && (
-                                  <div className="flex items-center gap-2 text-white animate-scale-in">
-                                    <Check className="h-5 w-5" />
-                                    <span className="text-sm font-bold">
-                                      Paid ₹{total.toFixed(2)}!
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Sliding progress fill */}
-                              {slideState === "idle" && slideX > 0 && (
-                                <div
-                                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500/20 to-emerald-500/30 rounded-full transition-none"
-                                  style={{ width: slideX + THUMB_SIZE }}
-                                />
-                              )}
-
-                              {/* Thumb */}
-                              {slideState === "idle" && (
-                                <div
-                                  className={`absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none ${
-                                    hasEnoughBalance
-                                      ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing active:scale-95"
-                                      : "bg-muted text-muted-foreground cursor-not-allowed"
-                                  }`}
-                                  style={{
-                                    transform: `translateX(${slideX}px)`,
-                                    transition: isDragging.current
-                                      ? "none"
-                                      : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
-                                  }}
-                                  onPointerDown={handlePointerDown}
-                                  onPointerMove={handlePointerMove}
-                                  onPointerUp={handlePointerUp}
-                                  onPointerCancel={handlePointerUp}
-                                >
-                                  <ArrowRight className="h-5 w-5" />
-                                </div>
-                              )}
-
-                              {/* Paying spinner in thumb position */}
-                              {slideState === "paying" && (
-                                <div className="absolute top-1 right-1 h-12 w-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-lg animate-pulse">
-                                  <Loader2 className="h-5 w-5 animate-spin" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-2">
-              {paymentMethod === "ONLINE" && (
-                <Button
-                  className="w-full gap-2 btn-gradient btn-shimmer text-base h-12"
-                  size="lg"
-                  onClick={handlePlaceOrder}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+      {/* Cart items — no card borders, divider-separated */}
+      <div className="divide-y divide-border/60">
+        {items.map((item, index) => (
+          <div
+            key={item.menuItemId}
+            className="py-4 first:pt-0 animate-fade-in-up"
+            style={{ animationDelay: `${index * 40}ms` }}
+          >
+            {/* Item row */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[15px] font-semibold leading-snug">{item.name}</p>
+                <p className="text-[13px] text-muted-foreground mt-0.5">
+                  {item.discountedPrice != null ? (
+                    <>
+                      <span className="line-through">₹{item.price}</span>{" "}
+                      <span className="text-primary font-medium">₹{item.discountedPrice}</span> each
+                    </>
                   ) : (
-                    <CreditCard className="h-4 w-4" />
+                    <>₹{item.price} each</>
                   )}
-                  Place Order &amp; Pay
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-destructive hover:text-destructive"
-                onClick={clearCart}
-              >
-                Clear Cart
-              </Button>
-            </CardFooter>
-          </Card>
-        </div>
-      </div>
-
-      {/* ── Mobile: Fixed checkout bar + BottomSheet ── */}
-      {items.length > 0 && (
-        <>
-          <div className="fixed inset-x-0 bottom-[calc(5.4rem+env(safe-area-inset-bottom))] z-40 px-4 lg:hidden">
-            <button
-              type="button"
-              onClick={() => setCheckoutOpen(true)}
-              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 py-3.5 text-primary-foreground shadow-[0_8px_30px_rgba(0,0,0,0.2)] active:scale-[0.98] transition-transform"
-            >
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="h-4.5 w-4.5" />
-                <span className="text-sm font-semibold">
-                  {items.reduce((s, i) => s + i.quantity, 0)} item{items.length !== 1 ? "s" : ""}
-                </span>
-              </div>
-              <div className="text-right leading-tight">
-                <p className="text-base font-bold">Checkout · ₹{total.toFixed(2)}</p>
-                <p className="text-[11px] text-primary-foreground/85">
-                  Includes ₹{platformFee.toFixed(2)} platform fee
                 </p>
               </div>
+              <span className="text-[15px] font-bold tabular-nums shrink-0">
+                ₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(0)}
+              </span>
+            </div>
+
+            {/* Qty controls — compact pill */}
+            <div className="flex items-center gap-3 mt-2">
+              <div className="inline-flex items-center h-8 rounded-full border border-border">
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(item.menuItemId, item.quantity - 1)}
+                  className="flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
+                <span className="text-[13px] font-semibold tabular-nums min-w-[1.5ch] text-center">
+                  {item.quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateQuantity(item.menuItemId, item.quantity + 1)}
+                  className="flex items-center justify-center h-8 w-8 rounded-full text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeItem(item.menuItemId)}
+                className="text-destructive/70 hover:text-destructive transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Child allocation — 11px muted */}
+            {children.length > 1 && (
+              <div className="mt-2 space-y-1.5">
+                {children.map((c) => {
+                  const allocatedQty = itemChildAllocations[item.menuItemId]?.[c.id] || 0;
+                  const remainingQty = getItemRemainingQty(item.menuItemId, item.quantity);
+                  return (
+                    <div key={c.id} className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] text-muted-foreground">{c.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => updateChildAllocation(item.menuItemId, c.id, allocatedQty - 1)}
+                          disabled={allocatedQty <= 0}
+                          className="flex items-center justify-center h-6 w-6 rounded-full border border-border text-muted-foreground disabled:opacity-30"
+                        >
+                          <Minus className="h-2.5 w-2.5" />
+                        </button>
+                        <span className="text-[11px] font-medium tabular-nums min-w-[1ch] text-center">
+                          {allocatedQty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateChildAllocation(item.menuItemId, c.id, allocatedQty + 1)}
+                          disabled={remainingQty <= 0}
+                          className="flex items-center justify-center h-6 w-6 rounded-full border border-border text-muted-foreground disabled:opacity-30"
+                        >
+                          <Plus className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {getItemRemainingQty(item.menuItemId, item.quantity) > 0 && (
+                  <p className="text-[11px] text-primary">
+                    Assign {getItemRemainingQty(item.menuItemId, item.quantity)} more
+                  </p>
+                )}
+              </div>
+            )}
+
+            {children.length === 1 && (
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                {children[0].name}
+              </p>
+            )}
+
+            {/* Special instructions — inline toggles + text */}
+            <div className="mt-2.5 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {getSuggestedInstructions(item.category ?? "", item.name).map((instr) => (
+                  <button
+                    key={instr}
+                    type="button"
+                    onClick={() => toggleInstruction(item.menuItemId, instr)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-[11px] font-medium transition-all",
+                      item.instructions.toggles.includes(instr)
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {instr}
+                  </button>
+                ))}
+              </div>
+              <Input
+                placeholder="Any other requests..."
+                value={item.instructions.text}
+                onChange={(e) =>
+                  updateInstructions(item.menuItemId, {
+                    ...item.instructions,
+                    text: e.target.value,
+                  })
+                }
+                className="h-8 rounded-lg border-border/60 text-[12px] placeholder:text-muted-foreground/50"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Summary */}
+      <div className="mt-6 space-y-2">
+        <div className="flex justify-between text-[14px]">
+          <span>Subtotal</span>
+          <span className="tabular-nums">₹{subtotal.toFixed(0)}</span>
+        </div>
+        <div className="flex justify-between text-[12px] text-muted-foreground">
+          <span>Platform fee</span>
+          <span className="tabular-nums">₹{platformFee.toFixed(0)}</span>
+        </div>
+        <Separator />
+        <div className="flex justify-between text-[20px] font-bold">
+          <span>Total</span>
+          <span className="tabular-nums">₹{total.toFixed(0)}</span>
+        </div>
+      </div>
+
+      {/* ── Fixed bottom checkout ── */}
+      <div className="fixed inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 px-5 lg:hidden">
+        <div className="space-y-2">
+          {/* Primary CTA */}
+          <Button
+            className="w-full h-14 rounded-2xl text-[15px] font-semibold gap-2"
+            onClick={() => {
+              if (paymentMethod === "WALLET") {
+                setCheckoutOpen(true);
+              } else {
+                handlePlaceOrder();
+              }
+            }}
+            disabled={loading || !allItemsAllocated}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                Pay ₹{total.toFixed(0)} · Razorpay
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+          {/* Wallet alternative */}
+          <button
+            type="button"
+            onClick={() => {
+              setPaymentMethod("WALLET");
+              setCheckoutOpen(true);
+            }}
+            className="w-full text-center text-[13px] font-medium text-primary py-1"
+          >
+            or pay with Wallet
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop sidebar checkout */}
+      <div className="hidden lg:block mt-8">
+        <div className="max-w-md mx-auto space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("ONLINE")}
+              className={cn(
+                "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
+                paymentMethod === "ONLINE"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/30",
+              )}
+            >
+              <CreditCard className={cn("h-5 w-5", paymentMethod === "ONLINE" ? "text-primary" : "text-muted-foreground")} />
+              <p className="text-sm font-semibold">Razorpay</p>
+              {paymentMethod === "ONLINE" && (
+                <div className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-0.5">
+                  <Check className="h-3 w-3 text-primary-foreground" />
+                </div>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("WALLET")}
+              className={cn(
+                "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
+                paymentMethod === "WALLET"
+                  ? "border-emerald-500 bg-emerald-500/5"
+                  : "border-border hover:border-emerald-500/30",
+              )}
+            >
+              <Wallet className={cn("h-5 w-5", paymentMethod === "WALLET" ? "text-emerald-500" : "text-muted-foreground")} />
+              <p className="text-sm font-semibold">Wallet</p>
+              {paymentMethod === "WALLET" && (
+                <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5">
+                  <Check className="h-3 w-3 text-white" />
+                </div>
+              )}
             </button>
           </div>
 
-          <BottomSheet
-            open={checkoutOpen}
-            onClose={() => setCheckoutOpen(false)}
-            snapPoints={[85]}
-          >
-            <div className="space-y-4 pb-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold">Order Summary</h2>
-                <span className="text-sm text-muted-foreground">{items.reduce((s, i) => s + i.quantity, 0)} items</span>
-              </div>
+          {paymentMethod === "ONLINE" ? (
+            <Button
+              className="w-full h-14 rounded-2xl text-[15px] font-semibold gap-2"
+              onClick={handlePlaceOrder}
+              disabled={loading || !allItemsAllocated}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+              Pay ₹{total.toFixed(0)} with Razorpay
+            </Button>
+          ) : (
+            paymentMethod === "WALLET" && selectedWallet && (
+              <div className="space-y-3">
+                {/* Wallet balance */}
+                <div className="rounded-2xl border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden p-4">
+                  <p className="text-xs text-orange-200/70">{selectedWallet.childName}&apos;s Balance</p>
+                  <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
+                    <IndianRupee className="h-4 w-4 text-orange-400" />
+                    {selectedWallet.balance.toFixed(2)}
+                  </p>
+                </div>
 
-              {/* Line items */}
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <div key={item.menuItemId} className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      {item.name} × {item.quantity}
-                      {getAllocationSummary(item.menuItemId)}
-                    </span>
-                    <span className="font-medium">₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(2)}</span>
+                {/* Slide to pay */}
+                <div
+                  ref={slideTrackRef}
+                  className={cn(
+                    "relative h-14 rounded-full overflow-hidden transition-colors duration-300",
+                    slideState === "paid"
+                      ? "bg-emerald-500"
+                      : slideState === "paying"
+                        ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
+                        : hasEnoughBalance
+                          ? "bg-gradient-to-r from-muted to-muted/80"
+                          : "bg-muted/50 opacity-50",
+                  )}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    {slideState === "idle" && (
+                      <span className={cn("text-sm font-medium transition-opacity duration-200", slideX > 20 ? "opacity-0" : "opacity-60")}>
+                        {hasEnoughBalance ? "Slide to pay" : "Insufficient balance"}
+                      </span>
+                    )}
+                    {slideState === "paying" && (
+                      <div className="flex items-center gap-2 text-emerald-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-sm font-medium">Processing...</span>
+                      </div>
+                    )}
+                    {slideState === "paid" && (
+                      <div className="flex items-center gap-2 text-white animate-scale-in">
+                        <Check className="h-5 w-5" />
+                        <span className="text-sm font-bold">Paid ₹{total.toFixed(2)}!</span>
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-
-              <Separator />
-
-              <div className="flex justify-between font-bold text-lg">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between text-sm text-muted-foreground">
-                <span>Platform Fee ({CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT}%)</span>
-                <span>₹{platformFee.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>₹{total.toFixed(2)}</span>
-              </div>
-
-              {/* Payment method */}
-              <div className="space-y-3 pt-2">
-                <Label className="text-sm text-muted-foreground">Payment Method</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod("ONLINE")}
-                    className={cn(
-                      "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
-                      paymentMethod === "ONLINE"
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/30",
-                    )}
-                  >
-                    <div className={cn(
-                      "rounded-full p-2.5 transition-colors",
-                      paymentMethod === "ONLINE"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground",
-                    )}>
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <p className="text-sm font-semibold">Razorpay</p>
-                    <p className="text-[11px] text-muted-foreground">UPI · Cards · Wallets</p>
-                    {paymentMethod === "ONLINE" && (
-                      <div className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-0.5">
-                        <Check className="h-3 w-3 text-primary-foreground" />
-                      </div>
-                    )}
-                  </button>
-
-                  <button
-                      type="button"
-                      onClick={() => setPaymentMethod("WALLET")}
+                  {slideState === "idle" && slideX > 0 && (
+                    <div
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500/20 to-emerald-500/30 rounded-full transition-none"
+                      style={{ width: slideX + THUMB_SIZE }}
+                    />
+                  )}
+                  {slideState === "idle" && (
+                    <div
                       className={cn(
-                        "relative flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-200",
-                        paymentMethod === "WALLET"
-                          ? "border-emerald-500 bg-emerald-500/5 shadow-sm"
-                          : "border-border hover:border-emerald-500/30",
+                        "absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none",
+                        hasEnoughBalance
+                          ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing active:scale-95"
+                          : "bg-muted text-muted-foreground cursor-not-allowed",
                       )}
+                      style={{
+                        transform: `translateX(${slideX}px)`,
+                        transition: isDragging.current ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                      }}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerCancel={handlePointerUp}
                     >
-                      <div className={cn(
-                        "rounded-full p-2.5 transition-colors",
-                        paymentMethod === "WALLET"
-                          ? "bg-emerald-500 text-white"
-                          : "bg-muted text-muted-foreground",
-                      )}>
-                        <Wallet className="h-5 w-5" />
-                      </div>
-                      <p className="text-sm font-semibold">Wallet</p>
-                      <p className="text-[11px] text-muted-foreground">Instant pay</p>
-                      {paymentMethod === "WALLET" && (
-                        <div className="absolute -top-1.5 -right-1.5 rounded-full bg-emerald-500 p-0.5">
-                          <Check className="h-3 w-3 text-white" />
-                        </div>
-                      )}
-                    </button>
+                      <ArrowRight className="h-5 w-5" />
+                    </div>
+                  )}
+                  {slideState === "paying" && (
+                    <div className="absolute top-1 right-1 h-12 w-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-lg animate-pulse">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </div>
+                  )}
                 </div>
               </div>
+            )
+          )}
+        </div>
+      </div>
 
-              {/* Wallet balance (when wallet selected) */}
-              {paymentMethod === "WALLET" && selectedWallet && (
-                <Card className="border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden">
-                  <CardContent className="py-3 flex items-center justify-between">
-                    <div>
+      {/* ── Mobile wallet checkout bottom sheet ── */}
+      <BottomSheet
+        open={checkoutOpen}
+        onClose={() => setCheckoutOpen(false)}
+        snapPoints={[85]}
+      >
+        <div className="space-y-4 pb-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold">Order Summary</h2>
+            <span className="text-[12px] text-muted-foreground">{items.reduce((s, i) => s + i.quantity, 0)} items</span>
+          </div>
+
+          <div className="space-y-2">
+            {items.map((item) => (
+              <div key={item.menuItemId} className="flex justify-between text-[13px]">
+                <span className="text-muted-foreground">
+                  {item.name} × {item.quantity}
+                  {getAllocationSummary(item.menuItemId)}
+                </span>
+                <span className="font-medium tabular-nums">₹{((item.discountedPrice ?? item.price) * item.quantity).toFixed(0)}</span>
+              </div>
+            ))}
+          </div>
+
+          <Separator />
+
+          <div className="flex justify-between text-[14px]">
+            <span>Subtotal</span>
+            <span className="tabular-nums">₹{subtotal.toFixed(0)}</span>
+          </div>
+          <div className="flex justify-between text-[12px] text-muted-foreground">
+            <span>Platform fee</span>
+            <span className="tabular-nums">₹{platformFee.toFixed(0)}</span>
+          </div>
+          <div className="flex justify-between text-[20px] font-bold">
+            <span>Total</span>
+            <span className="tabular-nums">₹{total.toFixed(0)}</span>
+          </div>
+
+          {/* Wallet balance */}
+          {paymentMethod === "WALLET" && (
+            <div className="space-y-3">
+              {walletsLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : wallets.length === 0 ? (
+                <p className="text-[13px] text-muted-foreground text-center py-3">
+                  No wallets found. Add a child first.
+                </p>
+              ) : (
+                <>
+                  {wallets.length > 1 && (
+                    <Select value={selectedChildId} onValueChange={setSelectedChildId}>
+                      <SelectTrigger className="h-10 rounded-xl">
+                        <SelectValue placeholder="Select child" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {wallets.map((w) => (
+                          <SelectItem key={w.childId} value={w.childId}>
+                            {w.childName} — ₹{w.balance.toFixed(2)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {selectedWallet && (
+                    <div className="rounded-2xl border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden p-4">
                       <p className="text-xs text-orange-200/70">{selectedWallet.childName}&apos;s Balance</p>
                       <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
                         <IndianRupee className="h-4 w-4 text-orange-400" />
                         {selectedWallet.balance.toFixed(2)}
                       </p>
+                      {!hasEnoughBalance && (
+                        <p className="text-[11px] text-orange-300/80 mt-1">Insufficient balance</p>
+                      )}
                     </div>
-                    {!hasEnoughBalance && (
-                      <Badge className="bg-orange-500/15 text-orange-300 border border-orange-400/20 text-[10px]">
-                        Insufficient
-                      </Badge>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Action button */}
-              {paymentMethod === "ONLINE" ? (
-                <Button
-                  className="w-full gap-2 text-base h-13 rounded-2xl"
-                  size="lg"
-                  onClick={() => {
-                    setCheckoutOpen(false);
-                    handlePlaceOrder();
-                  }}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4" />
                   )}
-                  Pay ₹{total.toFixed(2)} with Razorpay
-                </Button>
-              ) : paymentMethod === "WALLET" && selectedWallet ? (
-                <div className="pt-1">
-                  <div
-                    ref={slideTrackRef}
-                    className={cn(
-                      "relative h-14 rounded-full overflow-hidden transition-colors duration-300",
-                      slideState === "paid"
-                        ? "bg-emerald-500"
-                        : slideState === "paying"
-                          ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
-                          : hasEnoughBalance
-                            ? "bg-gradient-to-r from-muted to-muted/80"
-                            : "bg-muted/50 opacity-50",
-                    )}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+
+                  {childTotals.size > 1 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] text-muted-foreground">Required per child</p>
+                      {[...childPayableTotals.entries()].map(([childId, amount]) => (
+                        <div key={childId} className="flex justify-between text-[12px]">
+                          <span>{childNameById.get(childId) || "Child"}</span>
+                          <span className={familyWalletBalance >= amount ? "text-emerald-600" : "text-destructive"}>
+                            ₹{amount.toFixed(0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Slide to pay */}
+                  {selectedWallet && (
+                    <div
+                      ref={slideTrackRef}
+                      className={cn(
+                        "relative h-14 rounded-full overflow-hidden transition-colors duration-300",
+                        slideState === "paid"
+                          ? "bg-emerald-500"
+                          : slideState === "paying"
+                            ? "bg-gradient-to-r from-emerald-500/20 to-emerald-500/40"
+                            : hasEnoughBalance
+                              ? "bg-gradient-to-r from-muted to-muted/80"
+                              : "bg-muted/50 opacity-50",
+                      )}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        {slideState === "idle" && (
+                          <span className={cn("text-sm font-medium transition-opacity duration-200", slideX > 20 ? "opacity-0" : "opacity-60")}>
+                            {hasEnoughBalance ? "Slide to pay" : "Insufficient balance"}
+                          </span>
+                        )}
+                        {slideState === "paying" && (
+                          <div className="flex items-center gap-2 text-emerald-600">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm font-medium">Processing...</span>
+                          </div>
+                        )}
+                        {slideState === "paid" && (
+                          <div className="flex items-center gap-2 text-white">
+                            <Check className="h-5 w-5" />
+                            <span className="text-sm font-bold">Paid ₹{total.toFixed(0)}!</span>
+                          </div>
+                        )}
+                      </div>
+                      {slideState === "idle" && slideX > 0 && (
+                        <div
+                          className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500/20 to-emerald-500/30 rounded-full transition-none"
+                          style={{ width: slideX + THUMB_SIZE }}
+                        />
+                      )}
                       {slideState === "idle" && (
-                        <span className={cn("text-sm font-medium transition-opacity duration-200", slideX > 20 ? "opacity-0" : "opacity-60")}>
-                          {hasEnoughBalance ? "Slide to pay" : "Insufficient balance"}
-                        </span>
+                        <div
+                          className={cn(
+                            "absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none",
+                            hasEnoughBalance
+                              ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing"
+                              : "bg-muted text-muted-foreground cursor-not-allowed",
+                          )}
+                          style={{
+                            transform: `translateX(${slideX}px)`,
+                            transition: isDragging.current ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                          }}
+                          onPointerDown={handlePointerDown}
+                          onPointerMove={handlePointerMove}
+                          onPointerUp={handlePointerUp}
+                          onPointerCancel={handlePointerUp}
+                        >
+                          <ArrowRight className="h-5 w-5" />
+                        </div>
                       )}
                       {slideState === "paying" && (
-                        <div className="flex items-center gap-2 text-emerald-600">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm font-medium">Processing...</span>
-                        </div>
-                      )}
-                      {slideState === "paid" && (
-                        <div className="flex items-center gap-2 text-white">
-                          <Check className="h-5 w-5" />
-                          <span className="text-sm font-bold">Paid ₹{total.toFixed(2)}!</span>
+                        <div className="absolute top-1 right-1 h-12 w-12 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center shadow-lg animate-pulse">
+                          <Loader2 className="h-5 w-5 animate-spin" />
                         </div>
                       )}
                     </div>
-                    {slideState === "idle" && (
-                      <div
-                        className={cn(
-                          "absolute top-1 left-1 h-12 w-12 rounded-full flex items-center justify-center shadow-lg touch-none select-none",
-                          hasEnoughBalance
-                            ? "bg-gradient-to-br from-emerald-500 to-emerald-600 text-white cursor-grab active:cursor-grabbing"
-                            : "bg-muted text-muted-foreground cursor-not-allowed",
-                        )}
-                        style={{
-                          transform: `translateX(${slideX}px)`,
-                          transition: isDragging.current ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
-                        }}
-                        onPointerDown={handlePointerDown}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerCancel={handlePointerUp}
-                      >
-                        <ArrowRight className="h-5 w-5" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full text-destructive hover:text-destructive"
-                onClick={() => {
-                  clearCart();
-                  setCheckoutOpen(false);
-                }}
-              >
-                Clear Cart
-              </Button>
+                  )}
+                </>
+              )}
             </div>
-          </BottomSheet>
-        </>
-      )}
+          )}
+        </div>
+      </BottomSheet>
     </div>
   );
 }

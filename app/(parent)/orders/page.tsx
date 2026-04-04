@@ -4,40 +4,25 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import {
   Loader2,
   ClipboardList,
-  XCircle,
   RefreshCw,
   CreditCard,
   Star,
-  Search,
-  Store,
-  TrendingUp,
-  IndianRupee,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  ORDER_STATUS_COLORS,
   ORDER_STATUS_LABELS,
-  PAYMENT_STATUS_COLORS,
   type OrderStatus,
-  type PaymentStatus,
 } from "@/lib/constants";
 import Link from "next/link";
 import { emitEvent, useRealtimeData } from "@/lib/events";
 import { OrderFeedbackSheet } from "@/components/order-feedback-sheet";
 import { CancelReasonSheet } from "@/components/cancel-reason-sheet";
+import { BottomSheet } from "@/components/ui/motion";
+import { cn } from "@/lib/utils";
 
 // Razorpay types for window
 declare global {
@@ -95,22 +80,36 @@ interface OrderData {
   items: OrderItemData[];
 }
 
-// Returns the Monday of the week containing the given date (local time)
-function getWeekStart(date: Date): string {
-  const d = new Date(date);
-  const day = d.getDay(); // 0 = Sun
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+// ── Status color helpers ─────────────────────────────────
+const STATUS_DOT_COLORS: Record<string, string> = {
+  PLACED: "bg-blue-500",
+  PREPARING: "bg-primary",
+  SERVED: "bg-emerald-500",
+  CANCELLED: "bg-muted-foreground/40",
+};
+
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  PLACED: "text-blue-600 dark:text-blue-400",
+  PREPARING: "text-primary",
+  SERVED: "text-emerald-600 dark:text-emerald-400",
+  CANCELLED: "text-muted-foreground",
+};
+
+// ── Date grouping ────────────────────────────────────────
+function getDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const orderDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((today.getTime() - orderDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function formatWeekLabel(weekStartStr: string): string {
-  const start = new Date(weekStartStr + "T00:00:00");
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
-  return `${start.toLocaleDateString("en-IN", opts)} – ${end.toLocaleDateString("en-IN", opts)}`;
+function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
 export default function OrdersPage() {
@@ -123,32 +122,22 @@ export default function OrdersPage() {
   const [feedbackOrderId, setFeedbackOrderId] = useState<string | null>(null);
   const [cancelReasonOrderId, setCancelReasonOrderId] = useState<string | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
+  const [detailOrder, setDetailOrder] = useState<OrderData | null>(null);
 
-  // Filtered orders based on search
-  const filteredOrders = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter((o) => {
-      const inId = o.id.toLowerCase().includes(q);
-      const inItems = o.items.some((i) => i.menuItem.name.toLowerCase().includes(q));
-      const inCanteen = o.canteen?.name.toLowerCase().includes(q) ?? false;
-      return inId || inItems || inCanteen;
-    });
-  }, [orders, searchQuery]);
-
-  // Week-wise spend (from filtered orders, only PAID and non-cancelled)
-  const weeklySpend = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const o of filteredOrders) {
-      if (o.status === "CANCELLED" || o.paymentStatus !== "PAID") continue;
-      const week = getWeekStart(new Date(o.createdAt));
-      map.set(week, (map.get(week) ?? 0) + o.totalAmount + (o.platformFee ?? 0));
+  // Group orders by date label
+  const groupedOrders = useMemo(() => {
+    const groups: { label: string; orders: OrderData[] }[] = [];
+    let current: { label: string; orders: OrderData[] } | null = null;
+    for (const o of orders) {
+      const label = getDateLabel(o.createdAt);
+      if (!current || current.label !== label) {
+        current = { label, orders: [] };
+        groups.push(current);
+      }
+      current.orders.push(o);
     }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => b.localeCompare(a)) // newest week first
-      .slice(0, 6); // show last 6 weeks
-  }, [filteredOrders]);
+    return groups;
+  }, [orders]);
 
   // Load Razorpay checkout script
   useEffect(() => {
@@ -295,17 +284,6 @@ export default function OrdersPage() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   if (loading || sessionLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -314,206 +292,182 @@ export default function OrdersPage() {
     );
   }
 
+  const orderTotal = (o: OrderData) => o.totalAmount + (o.platformFee ?? 0);
+
+  const itemsSummary = (o: OrderData) =>
+    o.items.map((i) => `${i.menuItem.name} × ${i.quantity}`).join(", ");
+
   return (
     <div className="app-shell">
-      <div className="app-header-card mb-5 flex items-center justify-between gap-3 animate-fade-in">
-        <div>
-          <h1 className="app-title">My Orders</h1>
-          <p className="app-subtitle">Track and manage your orders</p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 rounded-lg"
-          onClick={() => {
-            setLoading(true);
-            fetchOrders();
-          }}
+      {/* ── Header ── */}
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-semibold tracking-tight">Orders</h1>
+        <button
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground active:scale-95 transition-transform"
+          onClick={() => { setLoading(true); fetchOrders(); }}
         >
           <RefreshCw className="h-4 w-4" />
-          <span className="hidden sm:inline">Refresh</span>
-        </Button>
+        </button>
       </div>
 
       {orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <ClipboardList className="h-16 w-16 text-muted-foreground/30 mb-4" />
-          <h2 className="text-lg font-semibold">No orders yet</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your order history will appear here
-          </p>
-          <Link href="/menu">
-            <Button className="mt-6">Browse Menu</Button>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <ClipboardList className="h-12 w-12 text-muted-foreground/20 mb-3" />
+          <p className="text-xl font-semibold tracking-tight">No orders yet</p>
+          <Link href="/menu" className="mt-3 text-sm text-primary">
+            Browse the menu
           </Link>
         </div>
       ) : (
-        <div className="space-y-5">
-          {/* ── Search bar ── */}
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search orders, items…"
-              className="pl-9"
-            />
-          </div>
-
-          {/* ── Week-wise spend ── */}
-          {weeklySpend.length > 0 && (
-            <div className="rounded-xl border bg-card p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-[#d4891a]" />
-                <span className="text-sm font-semibold">Weekly Spend</span>
-                <span className="text-xs text-muted-foreground">(paid orders only)</span>
-              </div>
-              <div className="space-y-2">
-                {weeklySpend.map(([week, total]) => (
-                  <div key={week} className="flex items-center justify-between gap-3">
-                    <span className="text-xs text-muted-foreground">{formatWeekLabel(week)}</span>
-                    <div className="flex items-center gap-1 font-semibold text-sm">
-                      <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                      {total.toFixed(2)}
+        <div className="space-y-6">
+          {groupedOrders.map((group) => (
+            <div key={group.label}>
+              <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                {group.label}
+              </p>
+              <div className="space-y-3">
+                {group.orders.map((order) => (
+                  <button
+                    key={order.id}
+                    type="button"
+                    className="w-full rounded-2xl bg-card p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] active:scale-[0.98] transition-transform"
+                    onClick={() => setDetailOrder(order)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Square icon block */}
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted/40">
+                        <ClipboardList className="h-5 w-5 text-muted-foreground/60" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {/* Line 1 — concatenated items */}
+                        <p className="truncate text-[15px] font-semibold leading-snug">
+                          {itemsSummary(order)}
+                        </p>
+                        {/* Line 2 — price + status */}
+                        <p className="mt-1 flex items-center gap-1.5 text-[13px]">
+                          <span className="tabular-nums">₹{orderTotal(order).toFixed(0)}</span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className={cn("inline-flex items-center gap-1", STATUS_TEXT_COLORS[order.status] ?? "text-muted-foreground")}>
+                            <span className={cn("inline-block h-1.5 w-1.5 rounded-full", STATUS_DOT_COLORS[order.status] ?? "bg-muted-foreground")} />
+                            {ORDER_STATUS_LABELS[order.status as OrderStatus] ?? order.status}
+                            {order.status === "SERVED" && " ✓"}
+                          </span>
+                        </p>
+                        {/* Line 3 — canteen + time */}
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {order.canteen?.name ?? "Unknown"} · {formatTime(order.createdAt)}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
-          )}
-
-          {/* ── Order list ── */}
-          {filteredOrders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
-              <p className="text-sm text-muted-foreground">No orders match your filters</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredOrders.map((order, index) => (
-                <Card
-                  key={order.id}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 60}ms` }}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="space-y-1">
-                        <CardTitle className="text-base">
-                          Order #{order.id.slice(0, 8)}
-                        </CardTitle>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(order.createdAt)}
-                          </p>
-                          {order.canteen && (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/50 px-2 py-0.5 text-[11px] text-muted-foreground">
-                              <Store className="h-3 w-3 text-[#d4891a]" />
-                              {order.canteen.name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={ORDER_STATUS_COLORS[order.status as OrderStatus]}>
-                          {ORDER_STATUS_LABELS[order.status as OrderStatus]}
-                        </Badge>
-                        <Badge className={PAYMENT_STATUS_COLORS[order.paymentStatus as PaymentStatus]}>
-                          {order.paymentStatus}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex justify-between text-sm">
-                          <div>
-                            <span className="font-medium">{item.menuItem.name}</span>
-                            <span className="text-muted-foreground"> × {item.quantity}</span>
-                            {item.instructions && (
-                              <p className="text-xs text-muted-foreground italic mt-0.5">
-                                &quot;{item.instructions}&quot;
-                              </p>
-                            )}
-                          </div>
-                          <span>₹{(item.unitPrice * item.quantity).toFixed(2)}</span>
-                        </div>
-                      ))}
-                      <Separator />
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>Subtotal</span>
-                        <span>₹{order.totalAmount.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>Platform Fee (2%)</span>
-                        <span>₹{(order.platformFee ?? 0).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between font-semibold">
-                        <span>Total</span>
-                        <span>₹{(order.totalAmount + (order.platformFee ?? 0)).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                  {(order.status === "PLACED" ||
-                    order.status === "SERVED" ||
-                    (order.paymentStatus === "UNPAID" && order.status !== "CANCELLED")) && (
-                    <CardFooter className="flex flex-wrap gap-2">
-                      {order.paymentStatus === "UNPAID" && order.status !== "CANCELLED" && (
-                        <Button
-                          size="sm"
-                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                          onClick={() => handlePayNow(order.id)}
-                          disabled={payingId === order.id}
-                        >
-                          {payingId === order.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <CreditCard className="h-4 w-4" />
-                          )}
-                          Pay Now
-                        </Button>
-                      )}
-                      {order.status === "PLACED" && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                          onClick={() => setCancelReasonOrderId(order.id)}
-                          disabled={cancellingId === order.id}
-                        >
-                          {cancellingId === order.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <XCircle className="h-4 w-4" />
-                          )}
-                          Cancel Order
-                        </Button>
-                      )}
-                      {order.status === "SERVED" && !feedbackSubmitted.has(order.id) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2 sm:w-auto active:scale-95 transition-transform"
-                          onClick={() => setFeedbackOrderId(order.id)}
-                        >
-                          <Star className="h-4 w-4" />
-                          Rate Order
-                        </Button>
-                      )}
-                      {order.status === "SERVED" && feedbackSubmitted.has(order.id) && (
-                        <Badge variant="secondary" className="gap-1.5">
-                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                          Reviewed
-                        </Badge>
-                      )}
-                    </CardFooter>
-                  )}
-                </Card>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       )}
+
+      {/* ── Order Detail Sheet ── */}
+      <BottomSheet
+        open={!!detailOrder}
+        onClose={() => setDetailOrder(null)}
+        snapPoints={[70, 92]}
+      >
+        {detailOrder && (
+          <div className="px-5 pb-8 pt-2">
+            {/* Order ID + canteen */}
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Order #{detailOrder.id.slice(0, 8).toUpperCase()}
+            </p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              {detailOrder.canteen?.name ?? "Unknown"} · {getDateLabel(detailOrder.createdAt)}, {formatTime(detailOrder.createdAt)}
+            </p>
+
+            {/* Status */}
+            <div className="mt-4 flex items-center gap-2">
+              <span className={cn("h-2 w-2 rounded-full", STATUS_DOT_COLORS[detailOrder.status] ?? "bg-muted-foreground")} />
+              <span className={cn("text-base font-medium", STATUS_TEXT_COLORS[detailOrder.status] ?? "text-muted-foreground")}>
+                {ORDER_STATUS_LABELS[detailOrder.status as OrderStatus] ?? detailOrder.status}
+              </span>
+            </div>
+
+            {/* Line items */}
+            <div className="mt-5 space-y-3">
+              {detailOrder.items.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {item.menuItem.name} <span className="text-muted-foreground">× {item.quantity}</span>
+                    </p>
+                    {item.instructions && (
+                      <p className="text-xs italic text-muted-foreground mt-0.5">&quot;{item.instructions}&quot;</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-sm tabular-nums">₹{(item.unitPrice * item.quantity).toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Totals */}
+            <Separator className="my-4" />
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="tabular-nums">₹{detailOrder.totalAmount.toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Platform fee</span>
+                <span className="tabular-nums">₹{(detailOrder.platformFee ?? 0).toFixed(0)}</span>
+              </div>
+              <div className="flex justify-between text-lg font-bold pt-1">
+                <span>Total</span>
+                <span className="tabular-nums">₹{(detailOrder.totalAmount + (detailOrder.platformFee ?? 0)).toFixed(0)}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-6 space-y-3">
+              {/* Pay Now */}
+              {detailOrder.paymentStatus === "UNPAID" && detailOrder.status !== "CANCELLED" && (
+                <Button
+                  className="w-full h-12 rounded-2xl gap-2"
+                  onClick={() => handlePayNow(detailOrder.id)}
+                  disabled={payingId === detailOrder.id}
+                >
+                  {payingId === detailOrder.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-4 w-4" />
+                  )}
+                  Pay Now
+                </Button>
+              )}
+
+              {/* Cancel */}
+              {detailOrder.status === "PLACED" && (
+                <button
+                  className="w-full text-center text-sm text-red-500 py-2 active:opacity-70 transition-opacity disabled:opacity-40"
+                  onClick={() => { setCancelReasonOrderId(detailOrder.id); setDetailOrder(null); }}
+                  disabled={cancellingId === detailOrder.id}
+                >
+                  {cancellingId === detailOrder.id ? "Cancelling…" : "Cancel Order"}
+                </button>
+              )}
+
+              {/* Rate */}
+              {detailOrder.status === "SERVED" && !feedbackSubmitted.has(detailOrder.id) && (
+                <button
+                  className="w-full flex items-center justify-center gap-1.5 text-sm text-primary py-2 active:opacity-70 transition-opacity"
+                  onClick={() => { setFeedbackOrderId(detailOrder.id); setDetailOrder(null); }}
+                >
+                  <Star className="h-4 w-4" />
+                  Rate this order
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </BottomSheet>
 
       {/* Feedback BottomSheet */}
       {feedbackOrderId && (

@@ -2,25 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import {
-  Card,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
 import { AddToCartButton } from "@/components/add-to-cart-button";
 import {
   MENU_CATEGORIES,
@@ -32,24 +15,24 @@ import {
   Coffee,
   Cookie,
   Search,
-  SlidersHorizontal,
   X,
-  ArrowUpDown,
   Package,
-  Percent,
   Tag,
   Play,
   Pause,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  Sparkles,
+  Heart,
+  Flame,
+  TrendingUp,
+  Leaf,
+  Star,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { MenuRecommendations } from "./recommendations/menu-recs";
-import { AiQuickBar } from "./ai/ai-quick-bar";
-import { CanteenSelector } from "@/components/canteen-selector";
+import { BottomSheet } from "@/components/ui/motion";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
   SNACKS: Cookie,
@@ -320,22 +303,41 @@ interface MenuItem {
   canteenLocation?: string | null;
 }
 
-type SortOption =
-  | "default"
-  | "price-asc"
-  | "price-desc"
-  | "name-asc"
-  | "name-desc";
+type CategoryFilter = "ALL" | "FAVOURITES" | MenuCategory;
 
-type CategoryFilter = "ALL" | MenuCategory;
+/* ── Local favourites (localStorage) ── */
+const FAVS_KEY = "menu-favourites";
+function getStoredFavourites(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(FAVS_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch { return new Set(); }
+}
+function persistFavourites(ids: Set<string>) {
+  localStorage.setItem(FAVS_KEY, JSON.stringify([...ids]));
+}
 
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "default", label: "Default" },
-  { value: "price-asc", label: "Price: Low -> High" },
-  { value: "price-desc", label: "Price: High -> Low" },
-  { value: "name-asc", label: "Name: A -> Z" },
-  { value: "name-desc", label: "Name: Z -> A" },
-];
+/* ── ML insight labels — driven by recommendation engine reasons ── */
+type InsightLabel = { label: string; icon: React.ElementType; color: string };
+
+const REASON_TO_INSIGHT: Record<string, InsightLabel> = {
+  "Trending in your school": { label: "Trending", icon: TrendingUp, color: "text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-950/30" },
+  "Popular at this time": { label: "Popular Now", icon: Flame, color: "text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-950/30" },
+  "Popular with classmates": { label: "Popular", icon: Flame, color: "text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-950/30" },
+  "Highly rated": { label: "Top Rated", icon: Star, color: "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/30" },
+  "Well reviewed": { label: "Well Reviewed", icon: Star, color: "text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/30" },
+  "Matches your preferences": { label: "For You", icon: Zap, color: "text-purple-600 bg-purple-50 dark:text-purple-400 dark:bg-purple-950/30" },
+  "Often ordered with your favorites": { label: "Goes Well", icon: Leaf, color: "text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-950/30" },
+};
+
+function pickInsightFromReasons(reasons: string[]): InsightLabel | null {
+  for (const r of reasons) {
+    const match = REASON_TO_INSIGHT[r];
+    if (match) return match;
+  }
+  return null;
+}
 
 export default function MenuClient({
   items,
@@ -347,39 +349,38 @@ export default function MenuClient({
   onCanteenChange?: (v: string | null) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
-  const [sortBy, setSortBy] = useState<SortOption>("default");
-  const [maxPrice, setMaxPrice] = useState<string>("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [discountsOnly, setDiscountsOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("ALL");
-  const [dismissDiscountBanner, setDismissDiscountBanner] = useState(false);
-  const [lightboxItem, setLightboxItem] = useState<MenuItem | null>(null);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
+  const [favourites, setFavourites] = useState<Set<string>>(() => getStoredFavourites());
+  const [mlInsights, setMlInsights] = useState<Map<string, InsightLabel>>(new Map());
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const certePlusActive = certePlusStatus?.active === true;
 
+  // Fetch ML insights from recommendation engine
+  useEffect(() => {
+    fetch("/api/recommendations/daily")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data?.recommendations) return;
+        const map = new Map<string, InsightLabel>();
+        for (const rec of data.recommendations as { menuItemId: string; reasons: string[] }[]) {
+          const insight = pickInsightFromReasons(rec.reasons);
+          if (insight) map.set(rec.menuItemId, insight);
+        }
+        setMlInsights(map);
+      })
+      .catch(() => {});
+  }, []);
 
-  const discountedItems = useMemo(
-    () => items.filter((i) => i.discountedPrice != null),
-    [items],
-  );
-
-  const bestDiscount = useMemo(() => {
-    if (discountedItems.length === 0) return null;
-    return discountedItems.reduce((best, item) => {
-      const saving = item.price - (item.discountedPrice ?? item.price);
-      const bestSaving = best.price - (best.discountedPrice ?? best.price);
-      return saving > bestSaving ? item : best;
-    }, discountedItems[0]);
-  }, [discountedItems]);
-
-  const priceRange = useMemo(() => {
-    if (items.length === 0) return { min: 0, max: 100 };
-    const prices = items.map((i) => i.price);
-    return { min: Math.min(...prices), max: Math.max(...prices) };
-  }, [items]);
+  const toggleFavourite = (itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavourites((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+      persistFavourites(next);
+      return next;
+    });
+  };
 
   const categoryCounts = useMemo(() => {
     return Object.values(MENU_CATEGORIES).reduce(
@@ -391,38 +392,8 @@ export default function MenuClient({
     );
   }, [items]);
 
-  const searchSuggestions = useMemo(() => {
-    const seen = new Set<string>();
-    const names: string[] = [];
-
-    for (const item of items) {
-      const label = item.name.trim();
-      const key = label.toLowerCase();
-      if (!label || seen.has(key)) continue;
-      seen.add(key);
-      names.push(label);
-      if (names.length >= 12) break;
-    }
-
-    return names;
-  }, [items]);
-
-  useEffect(() => {
-    if (searchQuery.trim() || searchFocused || searchSuggestions.length <= 1) return;
-
-    const timer = setInterval(() => {
-      setSuggestionIndex((prev) => (prev + 1) % searchSuggestions.length);
-    }, 2200);
-
-    return () => clearInterval(timer);
-  }, [searchFocused, searchQuery, searchSuggestions.length]);
-
   const filteredItems = useMemo(() => {
     let result = [...items];
-
-    if (discountsOnly) {
-      result = result.filter((item) => item.discountedPrice != null);
-    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -433,30 +404,10 @@ export default function MenuClient({
       );
     }
 
-    const maxP = parseFloat(maxPrice);
-    if (!isNaN(maxP) && maxP > 0) {
-      result = result.filter((item) => item.price <= maxP);
-    }
-
-    if (categoryFilter !== "ALL") {
+    if (categoryFilter === "FAVOURITES") {
+      result = result.filter((item) => favourites.has(item.id));
+    } else if (categoryFilter !== "ALL") {
       result = result.filter((item) => item.category === categoryFilter);
-    }
-
-    switch (sortBy) {
-      case "price-asc":
-        result.sort((a, b) => a.price - b.price);
-        break;
-      case "price-desc":
-        result.sort((a, b) => b.price - a.price);
-        break;
-      case "name-asc":
-        result.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "name-desc":
-        result.sort((a, b) => b.name.localeCompare(a.name));
-        break;
-      default:
-        break;
     }
 
     // Sort unavailable items to the end
@@ -466,433 +417,320 @@ export default function MenuClient({
     });
 
     return result;
-  }, [items, discountsOnly, searchQuery, maxPrice, categoryFilter, sortBy]);
-
-  const hasActiveFilters =
-    searchQuery.trim() ||
-    maxPrice ||
-    sortBy !== "default" ||
-    discountsOnly ||
-    categoryFilter !== "ALL";
-
-  const clearFilters = () => {
-    setSearchQuery("");
-    setMaxPrice("");
-    setSortBy("default");
-    setDiscountsOnly(false);
-    setCategoryFilter("ALL");
-  };
-
-  const activeSuggestion =
-    searchSuggestions.length > 0
-      ? searchSuggestions[suggestionIndex % searchSuggestions.length]
-      : "menu item";
+  }, [items, searchQuery, categoryFilter]);
 
   return (
     <>
-      {/* ── Search + Canteen selector row — sticky below header+tabs ── */}
+      {/* ── Search bar ── */}
       <div
-        className="sticky z-30 mb-0 bg-background pt-3 pb-2 animate-fade-in"
-        style={{ top: 'calc(var(--header-h, 56px) + var(--tabs-h, 56px))' } as React.CSSProperties}
+        className="sticky z-30 bg-background pb-2"
+        style={{ top: 'calc(var(--header-h, 56px))' } as React.CSSProperties}
       >
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={
-                searchQuery.trim()
-                  ? "Search menu..."
-                  : `Try "${activeSuggestion}"`
-              }
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              className="rounded-xl border-border/60 bg-muted/40 pl-9 pr-9 h-10 focus:bg-background transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-          {/* Canteen selector: icon-only on mobile, full on sm+ */}
-          {onCanteenChange != null && (
-            <>
-              <div className="flex sm:hidden">
-                <CanteenSelector
-                  value={selectedCanteen}
-                  onChange={onCanteenChange}
-                  iconOnly
-                  includeInactive
-                />
-              </div>
-              <div className="hidden sm:flex">
-                <CanteenSelector
-                  value={selectedCanteen}
-                  onChange={onCanteenChange}
-                  compact
-                  includeInactive
-                  className="w-[180px]"
-                />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Category filter chips + filter icon ── */}
-      <div className="mb-4 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none animate-fade-in">
-        <button
-          type="button"
-          onClick={() => setCategoryFilter("ALL")}
-          className={cn(
-            "shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-            categoryFilter === "ALL"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "bg-muted/60 text-muted-foreground hover:bg-muted",
-          )}
-        >
-          All ({items.length})
-        </button>
-        {Object.values(MENU_CATEGORIES).map((value) => {
-          const count = categoryCounts[value] ?? 0;
-          if (count === 0) return null;
-          const CatIcon = categoryIcons[value];
-          return (
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-muted-foreground" />
+          <Input
+            placeholder="Search food..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-11 rounded-full bg-muted/40 border-0 pl-10 pr-10 text-[15px] placeholder:text-muted-foreground/60 focus-visible:ring-1 focus-visible:ring-primary/30"
+          />
+          {searchQuery && (
             <button
-              key={value}
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {/* ── Category pills ── */}
+        <div className="mt-2.5 flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("ALL")}
+            className={cn(
+              "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all",
+              categoryFilter === "ALL"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/50 text-muted-foreground hover:bg-muted",
+            )}
+          >
+            All
+          </button>
+          {favourites.size > 0 && (
+            <button
               type="button"
-              onClick={() => setCategoryFilter(value)}
+              onClick={() => setCategoryFilter("FAVOURITES")}
               className={cn(
-                "shrink-0 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all",
-                categoryFilter === value
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/60 text-muted-foreground hover:bg-muted",
+                "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all flex items-center gap-1.5",
+                categoryFilter === "FAVOURITES"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted",
               )}
             >
-              <CatIcon className="h-3 w-3" />
-              {MENU_CATEGORY_LABELS[value]} ({count})
+              <Heart className={cn("h-3.5 w-3.5", categoryFilter === "FAVOURITES" ? "fill-primary-foreground" : "fill-red-400 text-red-400")} />
+              Favourites
             </button>
-          );
-        })}
-        {/* Filter button — always at end of chip row */}
-        <Button
-          variant={showFilters ? "secondary" : "outline"}
-          size="icon"
-          onClick={() => setShowFilters(!showFilters)}
-          className="relative shrink-0 h-7 w-7 rounded-full border-border/60 ml-auto"
-        >
-          <SlidersHorizontal className="h-3 w-3" />
-          {hasActiveFilters && (
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
           )}
-        </Button>
+          {Object.values(MENU_CATEGORIES).map((value) => {
+            const count = categoryCounts[value] ?? 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCategoryFilter(value)}
+                className={cn(
+                  "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all",
+                  categoryFilter === value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {MENU_CATEGORY_LABELS[value]}
+              </button>
+            );
+          })}
+          {/* Pre-order shortcut pill */}
+          <Link
+            href="/pre-orders"
+            className="shrink-0 rounded-full px-3.5 h-9 text-[13px] font-medium bg-muted/50 text-muted-foreground hover:bg-muted transition-all flex items-center gap-1.5 border border-border/40"
+          >
+            Pre-order
+          </Link>
+          <Link
+            href="/orders"
+            className="shrink-0 rounded-full px-3.5 h-9 text-[13px] font-medium bg-muted/50 text-muted-foreground hover:bg-muted transition-all flex items-center gap-1.5 border border-border/40"
+          >
+            Orders
+          </Link>
+        </div>
       </div>
 
-      {/* ── Suggested for you — expandable */}
-      {certePlusActive && (
-        <div className="mb-4 animate-fade-in">
-          <button
-            type="button"
-            onClick={() => setShowSuggestions((prev) => !prev)}
-            className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl border border-amber-300/45 bg-gradient-to-r from-amber-50 via-white to-orange-50 px-4 py-3 text-left shadow-sm transition-all hover:border-amber-400/60 dark:border-amber-500/20 dark:from-amber-950/25 dark:via-card dark:to-orange-950/20"
-          >
-            <span className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent opacity-80 animate-shine-sweep dark:via-white/20" />
-            <div className="relative z-10 flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm">
-                <Sparkles className="h-4.5 w-4.5" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold tracking-tight">Suggested for you</p>
-                <p className="text-xs text-muted-foreground">
-                  Personalized picks, AI shortcuts, and smarter ordering.
-                </p>
-              </div>
+      {/* ── AI "For You" rail ── */}
+      {!searchQuery.trim() && categoryFilter === "ALL" && (
+        <div className="mt-4 mb-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-primary mb-3">
+            For You
+          </p>
+          <div className="overflow-x-auto scrollbar-none -mx-4 px-4">
+            <div className="flex gap-3">
+              <MenuRecommendations
+                onItemClick={(id) => {
+                  const match = items.find((i) => i.id === id);
+                  if (match) setDetailItem(match);
+                }}
+              />
             </div>
-            <ChevronDown
-              className={cn(
-                "relative z-10 h-4 w-4 shrink-0 text-amber-700 transition-transform duration-200 dark:text-amber-300",
-                showSuggestions && "rotate-180",
-              )}
-            />
-          </button>
-
-          {showSuggestions && (
-            <div className="mt-3 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
-              <AiQuickBar />
-              <MenuRecommendations />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Discount banner — slim, elegant ── */}
-      {discountedItems.length > 0 && !discountsOnly && !dismissDiscountBanner && (
-        <div className="relative mb-4 overflow-hidden rounded-xl border border-amber-200/50 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 dark:border-amber-300/15 animate-fade-in">
-          <button
-            onClick={() => setDiscountsOnly(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-              <Tag className="h-4 w-4 text-amber-700 dark:text-amber-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                {discountedItems.length} item{discountedItems.length > 1 ? "s" : ""} on discount
-              </p>
-              {bestDiscount && (
-                <p className="text-xs text-amber-700/80 dark:text-amber-400/70 truncate">
-                  Save up to ₹{(bestDiscount.price - (bestDiscount.discountedPrice ?? bestDiscount.price)).toFixed(0)} on {bestDiscount.name}
-                </p>
-              )}
-            </div>
-            <Badge variant="secondary" className="shrink-0 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border-0">
-              View
-            </Badge>
-          </button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute top-1 right-1 z-20 h-6 w-6 rounded-full text-amber-600 hover:text-amber-800 hover:bg-amber-100/60"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDismissDiscountBanner(true);
-            }}
-            aria-label="Dismiss discount banner"
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      )}
-
-      {discountsOnly && (
-        <div className="flex items-center gap-2 mb-4 animate-fade-in justify-between w-full">
-          <Badge className="border border-amber-200/70 bg-amber-100 text-amber-800 dark:border-amber-300/20 dark:bg-amber-300/15 dark:text-amber-200 gap-1 py-1 px-3">
-            <Tag className="h-3 w-3" />
-            Showing discounted items only
-          </Badge>
-          <Button variant="ghost" onClick={() => setDiscountsOnly(false)}>
-            <X className="bg-none" />
-          </Button>
-        </div>
-      )}
-
-      {/* ── Expanded filters panel ── */}
-      {showFilters && (
-        <div className="mb-4 flex flex-col sm:flex-row gap-3 rounded-xl border border-border/50 bg-muted/30 p-3 animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex-1 space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Max Price (₹)</Label>
-            <Input
-              type="number"
-              placeholder={`Up to ₹${priceRange.max}`}
-              value={maxPrice}
-              onChange={(e) => setMaxPrice(e.target.value)}
-              min={0}
-              className="h-9 rounded-lg border-border/60"
-            />
           </div>
-          <div className="flex-1 space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Sort By</Label>
-            <Select
-              value={sortBy}
-              onValueChange={(v) => setSortBy(v as SortOption)}
-            >
-              <SelectTrigger className="h-9 rounded-lg border-border/60">
-                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SORT_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {hasActiveFilters && (
-            <div className="flex items-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="text-xs gap-1 h-9"
-              >
-                <X className="h-3 w-3" />
-                Clear
-              </Button>
-            </div>
-          )}
         </div>
       )}
 
-      {hasActiveFilters && (
-        <p className="text-xs text-muted-foreground mb-3 animate-fade-in">
-          Showing {filteredItems.length} of {items.length} items
-          {searchQuery.trim() && (
-            <>
-              {" "}
-              matching &quot;
-              <span className="font-medium text-foreground">
-                {searchQuery.trim()}
-              </span>
-              &quot;
-            </>
-          )}
-          {categoryFilter !== "ALL" && (
-            <> in {MENU_CATEGORY_LABELS[categoryFilter]}</>
-          )}
-          {maxPrice && !isNaN(parseFloat(maxPrice)) && (
-            <> under ₹{parseFloat(maxPrice)}</>
-          )}
+      {/* ── Results count when searching ── */}
+      {searchQuery.trim() && (
+        <p className="text-[12px] text-muted-foreground mt-3 mb-1">
+          {filteredItems.length} result{filteredItems.length !== 1 ? "s" : ""}
         </p>
       )}
 
+      {/* ── Menu list ── */}
       {filteredItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
-          <Search className="h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h2 className="text-lg font-semibold">No items found</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Search className="h-12 w-12 text-muted-foreground/20 mb-4" />
+          <h2 className="text-xl font-semibold tracking-tight">No items found</h2>
+          <p className="text-[13px] text-muted-foreground mt-1">
             Try adjusting your search or filters
           </p>
-          <Button variant="link" className="mt-2" onClick={clearFilters}>
-            Clear all filters
-          </Button>
+          <button
+            onClick={() => { setSearchQuery(""); setCategoryFilter("ALL"); }}
+            className="mt-3 text-[13px] font-medium text-primary"
+          >
+            Clear filters
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredItems.map((item, index) => (
-            <Card
-              key={item.id}
-              className={cn(
-                "flex min-h-[7.4rem] flex-row card-interactive animate-fade-in-up overflow-hidden p-0 group h-auto",
-                !item.available && "opacity-60",
-              )}
-              style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
-            >
-              {/* Content — left side */}
-              <div className="flex min-w-0 flex-1 flex-col justify-between py-3.5 pl-3 pr-2">
-                <div className="space-y-1">
-                  <CardTitle className="text-sm leading-snug line-clamp-1">{item.name}</CardTitle>
-                  <div className="flex items-center gap-1.5">
-                    {item.discountedPrice != null ? (
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">₹{item.discountedPrice}</span>
-                        <span className="text-[10px] text-muted-foreground line-through">₹{item.price}</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm font-bold">₹{item.price}</span>
-                    )}
-                    {item.discountedPrice != null && item.discountInfo && (
-                      <Badge className="h-4 bg-emerald-600 hover:bg-emerald-600 text-white text-[8px] px-1 py-0 gap-0.5">
-                        <Percent className="h-2 w-2" />
-                        {item.discountInfo.type === "PERCENTAGE"
-                          ? `${item.discountInfo.value}%`
-                          : `₹${item.discountInfo.value}`}
-                      </Badge>
-                    )}
-                    {item.availableUnits != null && item.availableUnits > 0 && (
-                      <Badge variant="secondary" className="text-[9px] h-4 px-1 ml-auto">
-                        {item.availableUnits} left
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-1.5">
-                  <AddToCartButton
-                    menuItemId={item.id}
-                    name={item.name}
-                    price={item.price}
-                    discountedPrice={item.discountedPrice}
-                    availableUnits={item.availableUnits}
-                    available={item.available}
-                    canteenId={item.canteenId ?? ""}
-                    canteenName={item.canteenName ?? "Unknown"}
-                    compact
-                  />
-                </div>
-              </div>
-
-              {/* Image — right side, small square; click to open lightbox */}
-              <div
-                role="button"
-                tabIndex={0}
-                aria-label="View photos"
-                onClick={() => setLightboxItem(item)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setLightboxItem(item);
-                  }
-                }}
-                className="relative aspect-square w-28 shrink-0 overflow-hidden bg-muted/40 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:w-32"
+        <div className="flex flex-col gap-3 mt-4">
+          {filteredItems.map((item, index) => {
+            const insight = mlInsights.get(item.id) ?? null;
+            const isFav = favourites.has(item.id);
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setDetailItem(item)}
+                className={cn(
+                  "group relative flex overflow-hidden rounded-xl bg-card text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all active:scale-[0.99] animate-fade-in-up",
+                  !item.available && "opacity-60",
+                )}
+                style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}
               >
-                <MenuItemMedia item={item} />
-                {/* Sold out overlay */}
-                {item.availableUnits === 0 && item.available && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
-                    <Badge variant="destructive" className="text-[9px] font-semibold px-1.5 py-0.5">
-                      Sold Out
-                    </Badge>
+                {/* Left — text content */}
+                <div className="flex flex-1 flex-col justify-between p-3 pr-0 min-w-0">
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-[15px] font-bold leading-snug line-clamp-2 pr-2">
+                      {item.name}
+                    </p>
+                    {item.canteenName && (
+                      <p className="text-[12px] text-muted-foreground truncate pr-2">
+                        {item.canteenName}
+                      </p>
+                    )}
+                    {/* Price */}
+                    <div className="pt-0.5">
+                      {item.discountedPrice != null ? (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[15px] font-bold tabular-nums">₹{item.discountedPrice}</span>
+                          <span className="text-[11px] text-muted-foreground line-through tabular-nums">₹{item.price}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[15px] font-bold tabular-nums">₹{item.price}</span>
+                      )}
+                    </div>
                   </div>
-                )}
-                {/* Unavailable overlay */}
-                {!item.available && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
-                    <Badge variant="outline" className="text-[9px] font-semibold px-1.5 py-0.5 border-muted-foreground/40 text-muted-foreground">
-                      N/A
-                    </Badge>
+
+                  {/* Bottom row — favourite + ML insight */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => toggleFavourite(item.id, e)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFavourite(item.id, e as unknown as React.MouseEvent); } }}
+                      className="shrink-0 flex items-center"
+                    >
+                      <Heart
+                        className={cn(
+                          "h-4 w-4 transition-colors",
+                          isFav
+                            ? "fill-red-500 text-red-500"
+                            : "text-muted-foreground/40 hover:text-muted-foreground",
+                        )}
+                      />
+                    </div>
+                    {insight && (
+                      <span className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2 py-px text-[10px] font-medium leading-tight",
+                        insight.color,
+                      )}>
+                        <insight.icon className="h-2.5 w-2.5" />
+                        {insight.label}
+                      </span>
+                    )}
+                    {item.discountedPrice != null && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 text-primary px-2 py-px text-[10px] font-bold leading-tight">
+                        <Tag className="h-2.5 w-2.5" />
+                        {item.discountInfo?.type === "PERCENTAGE"
+                          ? `${item.discountInfo.value}% off`
+                          : `₹${item.discountInfo?.value} off`}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            </Card>
-          ))}
+                </div>
+
+                {/* Right — square image + add button */}
+                <div className="relative w-[120px] shrink-0 self-stretch">
+                  <div className="absolute inset-0 overflow-hidden bg-muted/40">
+                    <MenuItemMedia item={item} />
+                    {/* Sold out / unavailable overlay */}
+                    {(item.availableUnits === 0 || !item.available) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {!item.available ? "Unavailable" : "Sold Out"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Add button — anchored at bottom of image */}
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10" onClick={(e) => e.stopPropagation()}>
+                    <AddToCartButton
+                      menuItemId={item.id}
+                      name={item.name}
+                      price={item.price}
+                      discountedPrice={item.discountedPrice}
+                      availableUnits={item.availableUnits}
+                      available={item.available}
+                      category={item.category}
+                      canteenId={item.canteenId ?? ""}
+                      canteenName={item.canteenName ?? "Unknown"}
+                      showLabel
+                      compact
+                    />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Photo lightbox */}
-      {lightboxItem && (
-        <Dialog open={!!lightboxItem} onOpenChange={(open) => { if (!open) setLightboxItem(null); }}>
-          <DialogContent className="max-w-[360px] gap-0 overflow-hidden rounded-2xl p-0">
-            <div className="relative aspect-square w-full overflow-hidden bg-muted">
-              <MenuItemMedia item={lightboxItem} expanded />
+      {/* ── Item detail bottom sheet ── */}
+      {detailItem && (
+        <BottomSheet
+          open={!!detailItem}
+          onClose={() => setDetailItem(null)}
+          snapPoints={[65]}
+        >
+          <div className="space-y-4">
+            {/* Large image carousel with video */}
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted">
+              <MenuItemMedia item={detailItem} expanded />
             </div>
-            <div className="px-4 py-3">
-              <h3 className="font-semibold text-sm leading-snug">{lightboxItem.name}</h3>
-              {lightboxItem.description && (
-                <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{lightboxItem.description}</p>
-              )}
-              <div className="mt-2.5 flex items-center justify-between gap-2">
-                {lightboxItem.discountedPrice != null ? (
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">₹{lightboxItem.discountedPrice}</span>
-                    <span className="text-[10px] text-muted-foreground line-through">₹{lightboxItem.price}</span>
-                  </div>
-                ) : (
-                  <span className="text-sm font-bold">₹{lightboxItem.price}</span>
-                )}
-                <AddToCartButton
-                  menuItemId={lightboxItem.id}
-                  name={lightboxItem.name}
-                  price={lightboxItem.price}
-                  discountedPrice={lightboxItem.discountedPrice}
-                  availableUnits={lightboxItem.availableUnits}
-                  available={lightboxItem.available}
-                  canteenId={lightboxItem.canteenId ?? ""}
-                  canteenName={lightboxItem.canteenName ?? "Unknown"}
-                  compact
-                />
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
 
+            {/* Title row with favourite */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[22px] font-bold tracking-tight">{detailItem.name}</h3>
+                {detailItem.canteenName && (
+                  <p className="text-[13px] text-muted-foreground mt-0.5">{detailItem.canteenName}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => toggleFavourite(detailItem.id, e)}
+                className="shrink-0 mt-1"
+              >
+                <Heart className={cn(
+                  "h-6 w-6 transition-colors",
+                  favourites.has(detailItem.id)
+                    ? "fill-red-500 text-red-500"
+                    : "text-muted-foreground/40",
+                )} />
+              </button>
+            </div>
+
+            {/* Description */}
+            {detailItem.description && (
+              <p className="text-[14px] text-muted-foreground leading-relaxed">
+                {detailItem.description}
+              </p>
+            )}
+
+            {/* Price */}
+            <div>
+              {detailItem.discountedPrice != null ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[24px] font-bold tabular-nums">₹{detailItem.discountedPrice}</span>
+                  <span className="text-[14px] text-muted-foreground line-through tabular-nums">₹{detailItem.price}</span>
+                </div>
+              ) : (
+                <span className="text-[24px] font-bold tabular-nums">₹{detailItem.price}</span>
+              )}
+            </div>
+
+            {/* Add to cart button — full width */}
+            <AddToCartButton
+              menuItemId={detailItem.id}
+              name={detailItem.name}
+              price={detailItem.price}
+              discountedPrice={detailItem.discountedPrice}
+              availableUnits={detailItem.availableUnits}
+              available={detailItem.available}
+              canteenId={detailItem.canteenId ?? ""}
+              canteenName={detailItem.canteenName ?? "Unknown"}
+            />
+          </div>
+        </BottomSheet>
+      )}
     </>
   );
 }

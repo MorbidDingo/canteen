@@ -2,18 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -21,14 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Shield,
   Loader2,
   Save,
   X,
-  AlertTriangle,
-  BookOpen,
   Search,
   Clock,
   Sparkles,
@@ -362,39 +353,36 @@ export default function ControlsPage() {
   }
 
   return (
-    <div className="app-shell-compact space-y-6">
-      <div className="app-header-card">
-        <h1 className="app-title flex items-center gap-2">
-          <Shield className="h-6 w-6 text-[#d4891a]" />
-          Controls
-        </h1>
-        <p className="app-subtitle">
-          Manage canteen and library restrictions for your child
-        </p>
-      </div>
-
+    <div className="px-5 space-y-6 pt-2">
       {/* AI Anomaly Insights */}
       <AnomalyInsights />
 
-      <div className="grid grid-cols-2 gap-2 rounded-xl border p-1">
-        <Button
+      {/* Mode pills */}
+      <div className="flex gap-2">
+        <button
           type="button"
-          variant={controlMode === "canteen" ? "default" : "ghost"}
-          className="gap-2"
           onClick={() => switchControlMode("canteen")}
+          className={cn(
+            "h-9 rounded-full px-5 text-[13px] font-medium transition-colors",
+            controlMode === "canteen"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted/50 text-foreground hover:bg-muted",
+          )}
         >
-          <Shield className="h-4 w-4" />
           Canteen
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
-          variant={controlMode === "library" ? "default" : "ghost"}
-          className="gap-2"
           onClick={() => switchControlMode("library")}
+          className={cn(
+            "h-9 rounded-full px-5 text-[13px] font-medium transition-colors",
+            controlMode === "library"
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted/50 text-foreground hover:bg-muted",
+          )}
         >
-          <BookOpen className="h-4 w-4" />
           Library
-        </Button>
+        </button>
       </div>
 
       {children.length > 1 && (
@@ -414,289 +402,252 @@ export default function ControlsPage() {
 
       {controlMode === "canteen" ? (
         <>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Spending Limits</CardTitle>
-              <CardDescription>Leave empty for no limit</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="dailyLimit">Daily Spend Limit (₹)</Label>
+          {/* Spending Limits */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-4">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Spending Limits</p>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="dailyLimit" className="text-[13px]">Daily Spend Limit (₹)</Label>
                 <Input
                   id="dailyLimit"
                   type="number"
                   min="0"
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(e.target.value)}
-                  placeholder="e.g. 200"
+                  placeholder="No limit"
+                  className="h-10 rounded-xl"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="orderLimit">Per-Order Limit (₹)</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="orderLimit" className="text-[13px]">Per-Order Limit (₹)</Label>
                 <Input
                   id="orderLimit"
                   type="number"
                   min="0"
                   value={orderLimit}
                   onChange={(e) => setOrderLimit(e.target.value)}
-                  placeholder="e.g. 100"
+                  placeholder="No limit"
+                  className="h-10 rounded-xl"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-[#f58220]" />
-                Blocked Categories
-              </CardTitle>
-              <CardDescription>
-                Child will not be able to order from blocked categories
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {ALL_CATEGORIES.map((cat) => {
-                  const isBlocked = blockedCategories.includes(cat);
-                  return (
-                    <Button
-                      key={cat}
-                      type="button"
-                      variant={isBlocked ? "destructive" : "outline"}
-                      size="sm"
-                      onClick={() => toggleCategory(cat)}
-                      className="gap-1"
-                    >
-                      {isBlocked && <X className="h-3 w-3" />}
-                      {MENU_CATEGORY_LABELS[cat]}
-                    </Button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Blocked Categories — toggle rows */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Blocked Categories</p>
+            <div className="space-y-0">
+              {ALL_CATEGORIES.map((cat) => {
+                const isBlocked = blockedCategories.includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => toggleCategory(cat)}
+                    className="flex w-full items-center justify-between py-3 border-b border-border/30 last:border-0"
+                  >
+                    <span className="text-[14px]">{MENU_CATEGORY_LABELS[cat]}</span>
+                    <div className={cn(
+                      "h-6 w-11 rounded-full transition-colors relative",
+                      isBlocked ? "bg-destructive" : "bg-muted/60",
+                    )}>
+                      <div className={cn(
+                        "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                        isBlocked ? "translate-x-5" : "translate-x-0.5",
+                      )} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </>
       ) : (
         <>
           {preIssueDeclinedUntil && new Date(preIssueDeclinedUntil) > new Date() && (
-            <Card className="border-amber-300 bg-amber-50">
-              <CardContent className="pt-4 text-sm text-amber-900">
-                Child declined pre-issue. Next pre-issue can be requested after{" "}
-                <span className="font-semibold">
-                  {new Date(preIssueDeclinedUntil).toLocaleString("en-IN")}
-                </span>
-                .
-              </CardContent>
-            </Card>
+            <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/20 p-4 text-sm text-amber-900 dark:text-amber-200">
+              Member declined pre-issue. Next request available after{" "}
+              <span className="font-semibold">
+                {new Date(preIssueDeclinedUntil).toLocaleString("en-IN")}
+              </span>
+            </div>
           )}
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Blocked Book Categories</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
+          {/* Blocked Book Categories — toggle rows */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Blocked Book Categories</p>
+            <div className="space-y-0">
               {ALL_BOOK_CATEGORIES.map((cat) => {
                 const isBlocked = blockedBookCategories.includes(cat);
                 return (
-                  <Button
+                  <button
                     key={cat}
                     type="button"
-                    size="sm"
-                    variant={isBlocked ? "destructive" : "outline"}
                     onClick={() => toggleBookCategory(cat)}
+                    className="flex w-full items-center justify-between py-3 border-b border-border/30 last:border-0"
                   >
-                    {BOOK_CATEGORY_LABELS[cat]}
-                  </Button>
+                    <span className="text-[14px]">{BOOK_CATEGORY_LABELS[cat]}</span>
+                    <div className={cn(
+                      "h-6 w-11 rounded-full transition-colors relative",
+                      isBlocked ? "bg-destructive" : "bg-muted/60",
+                    )}>
+                      <div className={cn(
+                        "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+                        isBlocked ? "translate-x-5" : "translate-x-0.5",
+                      )} />
+                    </div>
+                  </button>
                 );
               })}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Blocked Authors</CardTitle>
-              <CardDescription>Add author names to block all their books</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  value={authorInput}
-                  onChange={(e) => setAuthorInput(e.target.value)}
-                  placeholder="Type author name"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addAuthor();
-                    }
-                  }}
-                />
-                <Button type="button" variant="outline" onClick={addAuthor}>
-                  Add
-                </Button>
-              </div>
+          {/* Blocked Authors */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Blocked Authors</p>
+            <div className="flex gap-2">
+              <Input
+                value={authorInput}
+                onChange={(e) => setAuthorInput(e.target.value)}
+                placeholder="Type author name"
+                className="h-10 rounded-xl"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addAuthor();
+                  }
+                }}
+              />
+              <Button type="button" variant="outline" onClick={addAuthor} className="rounded-xl shrink-0">
+                Add
+              </Button>
+            </div>
+            {blockedBookAuthors.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {blockedBookAuthors.map((author) => (
-                  <Badge key={author} variant="secondary" className="gap-1">
+                  <Badge key={author} variant="secondary" className="gap-1 rounded-full">
                     {author}
-                    <button
-                      type="button"
-                      className="ml-1"
-                      onClick={() => removeAuthor(author)}
-                    >
+                    <button type="button" className="ml-1" onClick={() => removeAuthor(author)}>
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </div>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Blocked Books (Search)</CardTitle>
-              <CardDescription>
-                Search by title, author, or ISBN and block specific books
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={bookSearchQuery}
-                  onChange={(e) => setBookSearchQuery(e.target.value)}
-                  placeholder="Search books to block"
-                  className="pl-9"
-                />
+          {/* Blocked Books (Search) */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Blocked Books</p>
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={bookSearchQuery}
+                onChange={(e) => setBookSearchQuery(e.target.value)}
+                placeholder="Search books to block"
+                className="pl-9 h-10 rounded-xl"
+              />
+            </div>
+            {bookSearchLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching...
               </div>
-              {bookSearchLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Searching...
-                </div>
-              ) : (
-                bookSearchQuery.length >= 2 && (
-                  <div className="space-y-2 max-h-52 overflow-auto">
-                    {bookSearchResults.map((b) => (
-                      <button
-                        type="button"
-                        key={b.id}
-                        className="w-full rounded-md border px-3 py-2 text-left hover:bg-muted/40"
-                        onClick={() => addBlockedBook(b)}
-                      >
-                        <p className="text-sm font-medium">{b.title}</p>
-                        <p className="text-xs text-muted-foreground">{b.author}</p>
-                      </button>
-                    ))}
-                    {bookSearchResults.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No books found</p>
-                    )}
-                  </div>
-                )
-              )}
-
-              <Separator />
-
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Currently Blocked Books</p>
-                {blockedBooks.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No specific books blocked</p>
-                ) : (
-                  <div className="space-y-2">
-                    {blockedBooks.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{b.title}</p>
-                          <p className="text-xs text-muted-foreground truncate">{b.author}</p>
-                        </div>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeBlockedBook(b.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
+            ) : bookSearchQuery.length >= 2 && (
+              <div className="space-y-1 max-h-52 overflow-auto">
+                {bookSearchResults.map((b) => (
+                  <button
+                    type="button"
+                    key={b.id}
+                    className="w-full rounded-xl px-3 py-2 text-left hover:bg-muted/40"
+                    onClick={() => addBlockedBook(b)}
+                  >
+                    <p className="text-sm font-medium">{b.title}</p>
+                    <p className="text-xs text-muted-foreground">{b.author}</p>
+                  </button>
+                ))}
+                {bookSearchResults.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No books found</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Pre-Issue Request (12 hours)</CardTitle>
-              <CardDescription>
-                Request one book in advance. Child will get a yes/no prompt at library counter.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={preIssueSearchQuery}
-                  onChange={(e) => setPreIssueSearchQuery(e.target.value)}
-                  placeholder="Search book for pre-issue"
-                  className="pl-9"
-                />
-              </div>
-
-              {preIssueSearchLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Searching...
-                </div>
-              ) : (
-                preIssueSearchQuery.length >= 2 && (
-                  <div className="space-y-2 max-h-44 overflow-auto">
-                    {preIssueResults.map((b) => (
-                      <button
-                        type="button"
-                        key={b.id}
-                        className="w-full rounded-md border px-3 py-2 text-left hover:bg-muted/40"
-                        onClick={() => setPreIssueBook(b)}
-                      >
-                        <p className="text-sm font-medium">{b.title}</p>
-                        <p className="text-xs text-muted-foreground">{b.author}</p>
-                      </button>
-                    ))}
-                    {preIssueResults.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No books found</p>
-                    )}
+            )}
+            {blockedBooks.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-border/30">
+                {blockedBooks.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{b.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{b.author}</p>
+                    </div>
+                    <button type="button" onClick={() => removeBlockedBook(b.id)} className="shrink-0 p-1.5 rounded-lg hover:bg-muted">
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
                   </div>
-                )
-              )}
+                ))}
+              </div>
+            )}
+          </div>
 
-              {preIssueBook ? (
-                <div className="rounded-md border p-3 space-y-1">
-                  <p className="text-sm font-medium">Selected: {preIssueBook.title}</p>
-                  <p className="text-xs text-muted-foreground">{preIssueBook.author}</p>
-                  {preIssueExpiresAt && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      Expires at {new Date(preIssueExpiresAt).toLocaleString("en-IN")}
-                    </p>
-                  )}
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setPreIssueBook(null)}>
-                    Clear request
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">No pre-issue request selected</p>
-              )}
-            </CardContent>
-          </Card>
+          {/* Pre-Issue Request */}
+          <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-3">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pre-Issue Request</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5">Request one book in advance (12h window)</p>
+            </div>
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={preIssueSearchQuery}
+                onChange={(e) => setPreIssueSearchQuery(e.target.value)}
+                placeholder="Search book for pre-issue"
+                className="pl-9 h-10 rounded-xl"
+              />
+            </div>
+            {preIssueSearchLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Searching...
+              </div>
+            ) : preIssueSearchQuery.length >= 2 && (
+              <div className="space-y-1 max-h-44 overflow-auto">
+                {preIssueResults.map((b) => (
+                  <button
+                    type="button"
+                    key={b.id}
+                    className="w-full rounded-xl px-3 py-2 text-left hover:bg-muted/40"
+                    onClick={() => setPreIssueBook(b)}
+                  >
+                    <p className="text-sm font-medium">{b.title}</p>
+                    <p className="text-xs text-muted-foreground">{b.author}</p>
+                  </button>
+                ))}
+                {preIssueResults.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No books found</p>
+                )}
+              </div>
+            )}
+            {preIssueBook ? (
+              <div className="rounded-xl bg-muted/30 p-3 space-y-1">
+                <p className="text-sm font-medium">{preIssueBook.title}</p>
+                <p className="text-xs text-muted-foreground">{preIssueBook.author}</p>
+                {preIssueExpiresAt && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    Expires {new Date(preIssueExpiresAt).toLocaleString("en-IN")}
+                  </p>
+                )}
+                <button type="button" onClick={() => setPreIssueBook(null)} className="text-[12px] font-medium text-primary mt-1">
+                  Clear request
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No pre-issue request selected</p>
+            )}
+          </div>
         </>
       )}
 
-      <Button onClick={handleSave} disabled={saving} className="w-full" size="lg">
-        {saving ? (
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        ) : (
-          <Save className="h-4 w-4 mr-2" />
-        )}
+      <Button onClick={handleSave} disabled={saving} className="w-full h-12 rounded-xl text-[15px] font-semibold" variant="premium">
+        {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+        <Save className="h-4 w-4 mr-2" />
         Save {controlMode === "library" ? "Library" : "Canteen"} Controls
       </Button>
     </div>
