@@ -892,7 +892,7 @@ export default function LibraryShowcasePage() {
                     ? `${issueLimit.activeCount}/${issueLimit.maxBooks} books issued`
                     : pendingRequests.length > 0
                       ? "Only one active request allowed at a time"
-                      : activeBook.availableCopies <= 0
+                      : (activeBook.availableCopies ?? 0) <= 0
                         ? "No copies are currently available"
                         : ""}
                 </p>
