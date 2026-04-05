@@ -43,6 +43,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useTheme } from "next-themes";
+import { toast } from "sonner";
 
 type ParentMode = "canteen" | "library" | "content";
 type WalletSnapshot = {
@@ -354,14 +355,28 @@ function ParentLayoutContent({
     "PAYMENT_EVENT_CREATED", "PAYMENT_EVENT_REMINDER", "PAYMENT_COMPLETED",
   ]), []);
 
+  const EVENT_NOTIF_TYPES = useMemo(() => new Set([
+    "GATE_ENTRY", "GATE_EXIT", "ATTENDANCE",
+  ]), []);
+
   const getNotifRoute = useCallback((type: string): string => {
     if (type.startsWith("ORDER") || type === "KIOSK_ORDER_GIVEN" || type === "KIOSK_ORDER_PICKED") return "/orders";
     if (type.startsWith("WALLET") || type === "WALLET_TOPUP") return "/wallet?mode=canteen";
     if (type.startsWith("PRE_ORDER")) return "/pre-orders";
-    if (type.startsWith("GATE") || type === "GATE_ENTRY" || type === "GATE_EXIT") return "/notifications?mode=canteen";
-    if (type.startsWith("ATTENDANCE")) return "/notifications?mode=canteen";
     if (type.startsWith("LIBRARY")) return "/library-history";
+    if (type.startsWith("GATE") || type.startsWith("ATTENDANCE")) return "/calendar";
     return "/notifications?mode=canteen";
+  }, []);
+
+  const isEventNotifType = useCallback((type: string): boolean => {
+    return EVENT_NOTIF_TYPES.has(type) || type.startsWith("GATE") || type.startsWith("ATTENDANCE");
+  }, [EVENT_NOTIF_TYPES]);
+
+  const getNotifEventLabel = useCallback((type: string): string => {
+    if (type === "GATE_ENTRY") return "Gate Entry";
+    if (type === "GATE_EXIT") return "Gate Exit";
+    if (type.startsWith("ATTENDANCE")) return "Attendance";
+    return "Event";
   }, []);
 
   const markNotifAsRead = useCallback(async (notificationId: string, type?: string) => {
@@ -377,11 +392,14 @@ function ParentLayoutContent({
       setNotificationDrawerOpen(false);
       if (PAYMENT_NOTIF_TYPES.has(type)) {
         void openPaymentsDrawer();
+      } else if (isEventNotifType(type)) {
+        toast(`${getNotifEventLabel(type)} event recorded`, { icon: "📅" });
+        router.push("/calendar");
       } else {
         router.push(getNotifRoute(type));
       }
     }
-  }, [getNotifRoute, router, PAYMENT_NOTIF_TYPES, openPaymentsDrawer]);
+  }, [getNotifRoute, getNotifEventLabel, isEventNotifType, router, PAYMENT_NOTIF_TYPES, openPaymentsDrawer]);
 
   const markAllNotifsRead = useCallback(async () => {
     setNotifItems((prev) =>
@@ -711,42 +729,58 @@ function ParentLayoutContent({
         </div>
       ) : (
         <div className="space-y-1">
-          {activityNotifs.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              onClick={() => void markNotifAsRead(n.id, n.type)}
-              className={cn(
-                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
-                n.readAt
-                  ? "hover:bg-card/70"
-                  : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
-              )}
-            >
-              <div className="flex items-start gap-2">
-                {PAYMENT_NOTIF_TYPES.has(n.type) && (
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                    <IndianRupee className="h-3.5 w-3.5 text-primary" />
-                  </div>
+          {activityNotifs.map((n) => {
+            const isPayment = PAYMENT_NOTIF_TYPES.has(n.type);
+            const isEvent = isEventNotifType(n.type);
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => void markNotifAsRead(n.id, n.type)}
+                className={cn(
+                  "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                  isPayment && !n.readAt
+                    ? "bg-emerald-50/70 hover:bg-emerald-50 dark:bg-emerald-950/10 dark:hover:bg-emerald-950/20 border border-emerald-200/40 dark:border-emerald-800/20"
+                    : n.readAt
+                    ? "hover:bg-card/70"
+                    : "bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20",
                 )}
-                <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    <p className="text-[10px] text-muted-foreground/70">
-                      {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                    {PAYMENT_NOTIF_TYPES.has(n.type) && (
-                      <span className="text-[10px] font-medium text-primary">View payment →</span>
-                    )}
+              >
+                <div className="flex items-start gap-2.5">
+                  {isPayment ? (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/40">
+                      <IndianRupee className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                  ) : isEvent ? (
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100/70 dark:bg-blue-950/30">
+                      <IoCalendar className="h-3.5 w-3.5 text-blue-500" />
+                    </div>
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-sm leading-tight", !n.readAt && "font-semibold")}>{n.title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <p className="text-[10px] text-muted-foreground/70">
+                        {n.childName} · {new Date(n.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                      {isPayment && (
+                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">View payment →</span>
+                      )}
+                      {isEvent && (
+                        <span className="text-[10px] font-medium text-blue-500">View in calendar →</span>
+                      )}
+                    </div>
                   </div>
+                  {!n.readAt && (
+                    <span className={cn(
+                      "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                      isPayment ? "bg-emerald-500" : "bg-orange-500",
+                    )} />
+                  )}
                 </div>
-                {!n.readAt && (
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-orange-500" />
-                )}
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </>
@@ -790,7 +824,7 @@ function ParentLayoutContent({
           </div>
 
         {/* Right: Cart + Bell + Avatar */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {parentMode === "canteen" && (
             <button
               type="button"
@@ -883,7 +917,7 @@ function ParentLayoutContent({
       </BottomSheet>
 
       {/* Content */}
-      <div className="pb-20">
+      <div className="pb-24">
         {children}
       </div>
 
