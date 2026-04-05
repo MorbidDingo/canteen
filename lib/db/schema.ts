@@ -2009,6 +2009,42 @@ export const contentPermission = pgTable("content_permission", {
   uniqueOrgUser: unique("content_permission_org_user_unique").on(table.organizationId, table.userId),
 }));
 
+export const contentFolder = pgTable("content_folder", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  authorUserId: text("author_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+export const contentFolderAudience = pgTable("content_folder_audience", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  folderId: text("folder_id")
+    .notNull()
+    .references(() => contentFolder.id, { onDelete: "cascade" }),
+  audienceType: text("audience_type", { enum: ["ALL_ORG", "CLASS", "SECTION", "USER", "GROUP"] }).notNull(),
+  className: text("class_name"),
+  section: text("section"),
+  userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+  groupId: text("group_id").references(() => contentGroup.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+}, (table) => ({
+  uniqueFolderAudience: unique("content_folder_audience_target_unique").on(
+    table.folderId,
+    table.audienceType,
+    table.className,
+    table.section,
+    table.userId,
+    table.groupId,
+  ),
+}));
+
 export const contentPost = pgTable("content_post", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   organizationId: text("organization_id")
@@ -2017,6 +2053,7 @@ export const contentPost = pgTable("content_post", {
   authorUserId: text("author_user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").references(() => contentFolder.id, { onDelete: "set null" }),
   type: text("type", { enum: ["ASSIGNMENT", "NOTE"] }).notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
@@ -2188,6 +2225,27 @@ export const contentPermissionRelations = relations(contentPermission, ({ one })
   }),
 }));
 
+export const contentFolderRelations = relations(contentFolder, ({ one, many }) => ({
+  organization: one(organization, { fields: [contentFolder.organizationId], references: [organization.id] }),
+  authorUser: one(user, {
+    fields: [contentFolder.authorUserId],
+    references: [user.id],
+    relationName: "content_folder_author",
+  }),
+  audiences: many(contentFolderAudience),
+  posts: many(contentPost),
+}));
+
+export const contentFolderAudienceRelations = relations(contentFolderAudience, ({ one }) => ({
+  folder: one(contentFolder, { fields: [contentFolderAudience.folderId], references: [contentFolder.id] }),
+  user: one(user, {
+    fields: [contentFolderAudience.userId],
+    references: [user.id],
+    relationName: "content_folder_audience_user",
+  }),
+  group: one(contentGroup, { fields: [contentFolderAudience.groupId], references: [contentGroup.id] }),
+}));
+
 export const contentPostRelations = relations(contentPost, ({ one, many }) => ({
   organization: one(organization, { fields: [contentPost.organizationId], references: [organization.id] }),
   authorUser: one(user, {
@@ -2195,6 +2253,7 @@ export const contentPostRelations = relations(contentPost, ({ one, many }) => ({
     references: [user.id],
     relationName: "content_post_author",
   }),
+  folder: one(contentFolder, { fields: [contentPost.folderId], references: [contentFolder.id] }),
   attachments: many(contentPostAttachment),
   audiences: many(contentPostAudience),
   submissions: many(contentSubmission),

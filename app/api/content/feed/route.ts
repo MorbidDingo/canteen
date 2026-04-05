@@ -8,12 +8,16 @@ import {
   contentSubmission,
   contentTag,
   contentGroupMember,
+  organizationMembership,
   child,
   user,
 } from "@/lib/db/schema";
 import { eq, and, inArray, sql, or } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { getContentPermission } from "@/lib/content-permission";
+
+/** Roles that can see all org content regardless of audience targeting */
+const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
 
 // GET — content feed for the current user (audience-resolved)
 export async function GET(request: NextRequest) {
@@ -44,6 +48,19 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
   const offset = (page - 1) * limit;
+
+  // 0. Check if user has a management role (sees all content)
+  const userMemberships = await db
+    .select({ role: organizationMembership.role })
+    .from(organizationMembership)
+    .where(
+      and(
+        eq(organizationMembership.organizationId, organizationId),
+        eq(organizationMembership.userId, userId),
+        eq(organizationMembership.status, "ACTIVE"),
+      ),
+    );
+  const isManagementRole = userMemberships.some((m) => MANAGEMENT_ROLES.has(m.role));
 
   // 1. Resolve caller's children → (className, section) pairs
   const children = await db
@@ -110,6 +127,19 @@ export async function GET(request: NextRequest) {
         eq(contentPostAudience.audienceType, "GROUP"),
         inArray(contentPostAudience.groupId, groupIds),
       )!,
+    );
+  }
+
+  // Management roles see all audience types
+  if (isManagementRole) {
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "CLASS"),
+    );
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "SECTION"),
+    );
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "GROUP"),
     );
   }
 

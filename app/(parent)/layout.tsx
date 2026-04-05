@@ -119,7 +119,8 @@ function getParentMode(pathname: string, requestedMode: string | null): ParentMo
 }
 
 function getActiveBottomTab(pathname: string): "food" | "library" | "notes" | "pass" | "settings" {
-  if (pathname === "/pre-orders" || pathname.startsWith("/pre-orders/")) {
+  if (pathname === "/pre-orders" || pathname.startsWith("/pre-orders/") ||
+      pathname === "/certe-pass") {
     return "pass";
   }
   if (pathname === "/menu" || pathname === "/orders" || pathname === "/cart" ||
@@ -142,6 +143,7 @@ function getPageTitle(pathname: string, searchParams?: URLSearchParams): string 
   if (pathname === "/orders") return "Orders";
   if (pathname === "/cart") return "Cart";
   if (pathname === "/pre-orders") return "Pass";
+  if (pathname === "/certe-pass") return "Certe Pass";
   if (pathname === "/library-showcase") return "Library";
   if (pathname.startsWith("/library-reader")) return "Reader";
   if (pathname === "/library-history") return "History";
@@ -789,7 +791,7 @@ function ParentLayoutContent({
   const bottomTabs = useMemo(() => [
     { key: "food" as const, href: "/menu", icon: IoRestaurant, label: "Food" },
     { key: "library" as const, href: "/library-showcase", icon: IoBook, label: "Library" },
-    { key: "pass" as const, href: "/pre-orders", icon: IoShieldCheckmark, label: "Pass" },
+    { key: "pass" as const, href: "/certe-pass", icon: IoSparkles, label: "Pass" },
     { key: "notes" as const, href: "/assignments", icon: IoDocumentText, label: "Board" },
   ], []);
 
@@ -921,19 +923,16 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      {/* Bottom tab bar — iOS floating glass pill + profile bubble */}
+      {/* Bottom tab bar — refined floating glass pill + profile bubble */}
       <nav
-        className="fixed bottom-3 left-0 right-0 z-50 flex items-end justify-center gap-2.5 px-4"
+        className="fixed bottom-3 left-0 right-0 z-50 flex items-end justify-center gap-2 px-4"
         style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}
       >
-        <div className="relative overflow-hidden rounded-full border border-white/45 bg-white/45 px-3 py-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10 w-full max-w-sm">
-          {/* Decorative light streaks */}
-          <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/80" />
-          <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-black/5 dark:bg-white/10" />
-          <div className="pointer-events-none absolute -left-6 bottom-1 h-14 w-24 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
-          <div className="pointer-events-none absolute right-4 top-1 h-10 w-20 rounded-full bg-sky-200/35 blur-2xl dark:bg-sky-300/10" />
+        <div className="relative overflow-hidden rounded-[22px] border border-white/30 bg-white/60 px-2 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] backdrop-blur-3xl dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/[0.06] w-full max-w-sm">
+          {/* Subtle top highlight */}
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/15" />
 
-          <div className="relative flex items-center justify-around gap-1">
+          <div className="relative flex items-center justify-around">
             {bottomTabs.map((tab) => {
               const isActive = bottomTab === tab.key;
               const Icon = tab.icon;
@@ -942,19 +941,30 @@ function ParentLayoutContent({
                   key={tab.key}
                   href={tab.href}
                   className={cn(
-                    "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-3 py-2 transition-all duration-200",
+                    "relative flex min-w-0 flex-1 flex-col items-center gap-[3px] rounded-2xl px-2 py-2 transition-all duration-300",
                     isActive
-                      ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                      : "text-slate-600 dark:text-slate-300",
+                      ? "bg-slate-900/[0.07] dark:bg-white/[0.12]"
+                      : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
                   )}
                 >
                   <span className="relative">
-                    <Icon className="h-5 w-5" />
+                    <Icon className={cn(
+                      "h-[21px] w-[21px] transition-colors duration-300",
+                      isActive ? "text-slate-900 dark:text-white" : "",
+                    )} />
                     {tab.key === "pass" && certePlusActive && (
-                      <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-1 ring-white dark:ring-slate-900" />
+                      <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-[1.5px] ring-white dark:ring-slate-900" />
                     )}
                   </span>
-                  <span className="text-[10px] font-medium">{tab.label}</span>
+                  <span className={cn(
+                    "text-[10px] font-semibold tracking-wide transition-colors duration-300",
+                    isActive ? "text-slate-900 dark:text-white" : "",
+                  )}>
+                    {tab.label}
+                  </span>
+                  {isActive && (
+                    <span className="absolute -bottom-0.5 h-[3px] w-5 rounded-full bg-slate-900 dark:bg-white" />
+                  )}
                 </Link>
               );
             })}
@@ -965,11 +975,11 @@ function ParentLayoutContent({
         <button
           type="button"
           onClick={() => setProfileSheetOpen(true)}
-          className="relative bottom-2 shrink-0 h-[57px] w-[57px] overflow-hidden rounded-full border border-white/45 bg-white/45 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl transition-all duration-200 hover:bg-white/60 active:scale-95 dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10"
+          className="relative bottom-1 shrink-0 h-[52px] w-[52px] overflow-hidden rounded-2xl border border-white/30 bg-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] backdrop-blur-3xl transition-all duration-200 hover:bg-white/70 active:scale-95 dark:border-white/10 dark:bg-slate-950/50 dark:ring-white/[0.06]"
           aria-label="Profile"
         >
-          <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/40 to-transparent dark:from-white/10" />
-          <div className="relative flex h-full w-full items-center justify-center text-[15px] font-bold text-slate-800 dark:text-slate-100">
+          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-transparent dark:from-white/5" />
+          <div className="relative flex h-full w-full items-center justify-center text-[14px] font-bold text-slate-700 dark:text-slate-200">
             {mounted ? getInitials(session?.user?.name) : "?"}
           </div>
         </button>
