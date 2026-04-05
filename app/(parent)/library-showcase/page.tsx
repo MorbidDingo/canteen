@@ -131,6 +131,12 @@ interface ShowcaseData {
   };
   selectedLibraryId?: string | null;
   libraries?: Array<{ id: string; name: string; location: string | null }>;
+  issueLimit?: {
+    maxBooks: number;
+    activeCount: number;
+    pendingCount: number;
+    limitReached: boolean;
+  };
   catalog: ShelfBook[];
   pendingRequests: PendingIssueRequest[];
   rails: {
@@ -595,6 +601,7 @@ export default function LibraryShowcasePage() {
   const hasActiveFilters = query.length > 0 || category !== "ALL";
   const filteredCatalog = data?.catalog ?? [];
   const pendingRequests = data?.pendingRequests ?? [];
+  const issueLimit = data?.issueLimit;
 
   if (loading && !data) {
     return (
@@ -703,32 +710,64 @@ export default function LibraryShowcasePage() {
           </div>
         )}
 
-        {/* Pending requests — compact banner */}
+        {/* Pending requests — show requested books with cover and name */}
         {pendingRequests.length > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl bg-primary/5 p-4">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
               <Clock3 className="h-4 w-4 text-primary" />
-            </span>
-            <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-foreground">
                 {pendingRequests.length} pending {pendingRequests.length === 1 ? "request" : "requests"}
               </p>
-              <p className="text-[12px] text-muted-foreground">Confirm at library kiosk</p>
+              <p className="text-[12px] text-muted-foreground">· Confirm at library kiosk</p>
             </div>
-            {pendingRequests.length === 1 && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="shrink-0 text-xs text-destructive hover:text-destructive"
-                disabled={cancellingRequestId === pendingRequests[0].requestId}
-                onClick={() => void cancelIssueRequest(pendingRequests[0].requestId)}
-              >
-                {cancellingRequestId === pendingRequests[0].requestId ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : "Cancel"}
-              </Button>
-            )}
+            {pendingRequests.map((req) => (
+              <div key={req.requestId} className="flex items-center gap-3 rounded-2xl bg-primary/5 p-3">
+                <div className="h-14 w-10 shrink-0 overflow-hidden rounded-lg bg-muted shadow-sm">
+                  {req.coverImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={req.coverImageUrl} alt={req.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold text-foreground">{req.title}</p>
+                  <p className="truncate text-[12px] text-muted-foreground">{req.author}</p>
+                  <p className="text-[11px] text-primary">Hold expires {formatDateTime(req.expiresAt)}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 text-xs text-destructive hover:text-destructive"
+                  disabled={cancellingRequestId === req.requestId}
+                  onClick={() => void cancelIssueRequest(req.requestId)}
+                >
+                  {cancellingRequestId === req.requestId ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : "Cancel"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Issue limit info */}
+        {issueLimit && issueLimit.limitReached && pendingRequests.length === 0 && (
+          <div className="flex items-center gap-3 rounded-2xl bg-muted/40 p-4">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-foreground">
+                Issue limit reached
+              </p>
+              <p className="text-[12px] text-muted-foreground">
+                {issueLimit.activeCount}/{issueLimit.maxBooks} books issued. Return a book to request more.
+              </p>
+            </div>
           </div>
         )}
 
@@ -841,8 +880,23 @@ export default function LibraryShowcasePage() {
                   ? "Already Pending"
                   : activeBook.canRequest
                     ? `Request for ${data.children.find((c) => c.id === (selectedChildId || data.selectedChildId || data.children[0]?.id))?.name ?? "member"}`
-                    : "Unavailable"}
+                    : issueLimit?.limitReached
+                      ? "Issue Limit Reached"
+                      : pendingRequests.length > 0
+                        ? "Cancel pending request first"
+                        : "Unavailable"}
               </Button>
+              {!activeBook.canRequest && !activeBook.requestId && issueLimit && (
+                <p className="mt-2 text-center text-[12px] text-muted-foreground">
+                  {issueLimit.limitReached
+                    ? `${issueLimit.activeCount}/${issueLimit.maxBooks} books issued`
+                    : pendingRequests.length > 0
+                      ? "Only one active request allowed at a time"
+                      : activeBook.availableCopies <= 0
+                        ? "No copies are currently available"
+                        : ""}
+                </p>
+              )}
             </div>
 
             {/* Action row — favourite + AI summary */}

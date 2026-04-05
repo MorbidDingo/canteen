@@ -17,6 +17,8 @@ import {
   RotateCcw,
   FileText,
   Film,
+  ShieldX,
+  FileQuestion,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
@@ -65,6 +67,7 @@ export default function PostDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState<PostDetail | null>(null);
+  const [errorState, setErrorState] = useState<"not_found" | "no_permission" | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
 
@@ -81,9 +84,12 @@ export default function PostDetailPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/content/posts/${postId}`);
-      if (!res.ok) {
-        toast.error("Post not found or access denied");
-        router.push("/assignments");
+      if (res.status === 403) {
+        setErrorState("no_permission");
+        return;
+      }
+      if (res.status === 404 || !res.ok) {
+        setErrorState("not_found");
         return;
       }
       const data = await res.json();
@@ -91,11 +97,11 @@ export default function PostDetailPage() {
       setAttachments(data.attachments || []);
       setTags(data.tags || []);
     } catch {
-      toast.error("Failed to load post");
+      setErrorState("not_found");
     } finally {
       setLoading(false);
     }
-  }, [postId, router]);
+  }, [postId]);
 
   const fetchMySubmission = useCallback(async () => {
     try {
@@ -216,7 +222,50 @@ export default function PostDetailPage() {
     );
   }
 
-  if (!post) return null;
+  if (!post) {
+    return (
+      <div className="px-5 pb-28 sm:px-8">
+        <button
+          type="button"
+          onClick={() => router.push("/assignments")}
+          className="mb-6 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+
+        <div className="flex flex-col items-center gap-3 py-20 text-center">
+          {errorState === "no_permission" ? (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
+                <ShieldX className="h-8 w-8 text-destructive/50" />
+              </div>
+              <p className="text-[17px] font-semibold">No Permission</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                You don&apos;t have access to this content. Contact your organization&apos;s management to request access.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
+                <FileQuestion className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-[17px] font-semibold">Not Found</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                This post may have been removed or you followed an invalid link.
+              </p>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => router.push("/assignments")}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go to Board
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-5 pb-28 sm:px-8">

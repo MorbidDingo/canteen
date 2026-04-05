@@ -1063,23 +1063,23 @@ function ParentLayoutContent({
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </button>
             </div>
+          </div>
 
-            {/* Sign out */}
-            <div className="mt-6 pb-8">
-              <button
-                type="button"
-                onClick={() =>
-                  signOut({
-                    fetchOptions: {
-                      onSuccess: () => { window.location.href = "/login"; },
-                    },
-                  })
-                }
-                className="w-full py-3 text-[15px] text-primary"
-              >
-                Sign Out
-              </button>
-            </div>
+          {/* Sign out — sticky at bottom */}
+          <div className="shrink-0 border-t border-border/30 px-5 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <button
+              type="button"
+              onClick={() =>
+                signOut({
+                  fetchOptions: {
+                    onSuccess: () => { window.location.href = "/login"; },
+                  },
+                })
+              }
+              className="w-full py-3 text-[15px] text-primary"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </BottomSheet>
