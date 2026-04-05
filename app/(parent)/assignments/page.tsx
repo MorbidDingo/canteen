@@ -85,6 +85,7 @@ export default function AssignmentsFeedPage() {
   const [tagFilter, setTagFilter] = useState("all");
   const [tags, setTags] = useState<Tag[]>([]);
   const [canCreate, setCanCreate] = useState(false);
+  const [permissionScope, setPermissionScope] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [tagSheetOpen, setTagSheetOpen] = useState(false);
@@ -107,6 +108,7 @@ export default function AssignmentsFeedPage() {
       setPosts(data.posts);
       setTotal(data.total);
       setCanCreate(data.canCreate ?? false);
+      setPermissionScope(data.permissionScope ?? null);
     } catch {
       toast.error("Failed to load feed");
     } finally {
@@ -139,7 +141,7 @@ export default function AssignmentsFeedPage() {
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="space-y-6 px-5 pt-2 pb-24 sm:px-8">
+    <div className="space-y-6 px-5 pt-2 pb-32 sm:px-8">
 
       {/* Tab pills */}
       <div className="flex items-center gap-2 pt-3">
@@ -215,9 +217,9 @@ export default function AssignmentsFeedPage() {
                 {group.label}
               </p>
 
-              <div className="space-y-4">
+              <div className="flex flex-col gap-3">
                 {group.posts.map((post) => (
-                  <Link key={post.id} href={`/assignments/${post.id}`}>
+                  <Link key={post.id} href={`/assignments/${post.id}`} className="block">
                     <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30">
                       {/* Title */}
                       <p className="line-clamp-2 text-[16px] font-semibold leading-snug">{post.title}</p>
@@ -317,43 +319,47 @@ export default function AssignmentsFeedPage() {
         </div>
       </BottomSheet>
 
-      {/* Create post bottom sheet */}
+      {/* Create post bottom sheet — only shown when both types are permitted */}
       <BottomSheet open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} snapPoints={[30]}>
         <div className="space-y-3 p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Create new</p>
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => {
-                setCreateMenuOpen(false);
-                router.push("/content/new?type=ASSIGNMENT");
-              }}
-              className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                <ClipboardList className="h-5 w-5 text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold">New Assignment</p>
-                <p className="text-[12px] text-muted-foreground">Create a task with a due date</p>
-              </div>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCreateMenuOpen(false);
-                router.push("/content/new?type=NOTE");
-              }}
-              className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
-                <StickyNote className="h-5 w-5 text-orange-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-semibold">New Note</p>
-                <p className="text-[12px] text-muted-foreground">Share an announcement or info</p>
-              </div>
-            </button>
+            {(permissionScope === "BOTH" || permissionScope === "ASSIGNMENT") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  router.push("/content/new?type=ASSIGNMENT");
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                  <ClipboardList className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold">New Assignment</p>
+                  <p className="text-[12px] text-muted-foreground">Create a task with a due date</p>
+                </div>
+              </button>
+            )}
+            {(permissionScope === "BOTH" || permissionScope === "NOTE") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  router.push("/content/new?type=NOTE");
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10">
+                  <StickyNote className="h-5 w-5 text-orange-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold">New Note</p>
+                  <p className="text-[12px] text-muted-foreground">Share an announcement or info</p>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </BottomSheet>
@@ -362,8 +368,17 @@ export default function AssignmentsFeedPage() {
       {canCreate && !createMenuOpen && (
         <button
           type="button"
-          onClick={() => setCreateMenuOpen(true)}
-          className="fixed bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 hover:bg-primary/90"
+          onClick={() => {
+            // If only one type is permitted, navigate directly without showing the menu
+            if (permissionScope === "ASSIGNMENT") {
+              router.push("/content/new?type=ASSIGNMENT");
+            } else if (permissionScope === "NOTE") {
+              router.push("/content/new?type=NOTE");
+            } else {
+              setCreateMenuOpen(true);
+            }
+          }}
+          className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95 hover:bg-primary/90"
           aria-label="Create post"
         >
           <Plus className="h-6 w-6" />

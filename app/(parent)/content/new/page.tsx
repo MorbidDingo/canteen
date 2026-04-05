@@ -306,7 +306,7 @@ export default function NewPostPage() {
   const isFormValid = title.trim() && body.trim() && audiences.length > 0;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-36">
+    <div className="mx-auto max-w-2xl px-4 pb-40">
       {/* ── Header ── */}
       <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 pb-3 pt-4">
         <button
@@ -539,7 +539,7 @@ export default function NewPostPage() {
 
       {/* ── Sticky bottom bar ── */}
       {(canCreateAssignment || canCreateNote) && (
-        <div className="fixed bottom-[max(4.5rem,calc(4.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/30 bg-background/90 backdrop-blur-md px-4 py-2.5">
+        <div className="fixed bottom-[max(5.5rem,calc(5.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/30 bg-background/90 backdrop-blur-md px-4 py-2.5">
           <div className="mx-auto flex max-w-2xl items-center gap-2">
             <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted">
               <Paperclip className="h-4 w-4 text-muted-foreground" />

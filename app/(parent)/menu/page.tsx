@@ -147,7 +147,7 @@ export default function MenuPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-5 right-5 z-40 md:hidden pointer-events-auto"
+            className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] left-5 right-5 z-40 md:hidden pointer-events-auto"
           >
             <button
               type="button"

@@ -824,7 +824,7 @@ export default function CartPage() {
       </div>
 
       {/* ── Fixed bottom checkout ── */}
-      <div className="fixed inset-x-0 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 px-5 lg:hidden">
+      <div className="fixed inset-x-0 bottom-[calc(6.5rem+env(safe-area-inset-bottom))] z-40 px-5 lg:hidden">
         <div className="space-y-2">
           {/* Primary CTA */}
           <Button
