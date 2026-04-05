@@ -300,8 +300,7 @@ export default function OrdersPage() {
   return (
     <div className="app-shell">
       {/* ── Header ── */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">Orders</h1>
+      <div className="mb-6 flex items-center justify-end">
         <button
           className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground active:scale-95 transition-transform"
           onClick={() => { setLoading(true); fetchOrders(); }}

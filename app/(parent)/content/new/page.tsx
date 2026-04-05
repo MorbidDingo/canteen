@@ -524,6 +524,7 @@ export default function NewPostPage() {
                       type="file"
                       className="hidden"
                       multiple
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
                       onChange={(e) => {
                         if (e.target.files) setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
                         e.target.value = "";
@@ -539,20 +540,24 @@ export default function NewPostPage() {
 
       {/* ── Sticky bottom bar ── */}
       {(canCreateAssignment || canCreateNote) && (
-        <div className="fixed bottom-[max(5.5rem,calc(5.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/30 bg-background/90 backdrop-blur-md px-4 py-2.5">
+        <div className="fixed bottom-[max(6.5rem,calc(6.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/30 bg-background/95 backdrop-blur-xl px-4 py-3">
           <div className="mx-auto flex max-w-2xl items-center gap-2">
-            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted">
+            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted active:scale-95">
               <Paperclip className="h-4 w-4 text-muted-foreground" />
               <input
                 type="file"
                 className="hidden"
                 multiple
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
                 onChange={(e) => {
                   if (e.target.files) setFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
                   e.target.value = "";
                 }}
               />
             </label>
+            {files.length > 0 && (
+              <span className="text-[11px] tabular-nums text-muted-foreground">{files.length} file{files.length > 1 ? "s" : ""}</span>
+            )}
             <div className="flex-1" />
             <Button
               variant="ghost"
@@ -566,7 +571,7 @@ export default function NewPostPage() {
             </Button>
             <Button
               size="sm"
-              className="h-9 rounded-full px-5 text-[13px] font-semibold"
+              className="h-9 rounded-full px-5 text-[13px] font-semibold shadow-sm"
               disabled={submitting || !isFormValid}
               onClick={() => handleSubmit(false)}
             >

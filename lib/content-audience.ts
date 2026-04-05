@@ -2,13 +2,18 @@ import { db } from "@/lib/db";
 import {
   contentPostAudience,
   contentGroupMember,
+  organizationMembership,
   child,
 } from "@/lib/db/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 
+/** Roles that can see all org content regardless of audience targeting */
+const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
+
 /**
  * Check if a user has audience access to a specific post.
- * Resolves ALL_ORG, USER, CLASS, SECTION, and GROUP audience types.
+ * Management roles (OWNER, ADMIN, MANAGEMENT, OPERATOR) have implicit access.
+ * Resolves ALL_ORG, USER, CLASS, SECTION, and GROUP audience types for others.
  */
 export async function checkAudienceAccess(
   organizationId: string,
@@ -28,6 +33,20 @@ export async function checkAudienceAccess(
     if (a.audienceType === "ALL_ORG") return true;
     if (a.audienceType === "USER" && a.userId === userId) return true;
   }
+
+  // Management roles can see all published content in their org
+  const memberships = await db
+    .select({ role: organizationMembership.role })
+    .from(organizationMembership)
+    .where(
+      and(
+        eq(organizationMembership.organizationId, organizationId),
+        eq(organizationMembership.userId, userId),
+        eq(organizationMembership.status, "ACTIVE"),
+      ),
+    );
+
+  if (memberships.some((m) => MANAGEMENT_ROLES.has(m.role))) return true;
 
   // Check CLASS / SECTION audiences against caller's children
   const classAudiences = audiences.filter((a) => a.audienceType === "CLASS" || a.audienceType === "SECTION");
@@ -58,7 +77,7 @@ export async function checkAudienceAccess(
   const groupAudiences = audiences.filter((a) => a.audienceType === "GROUP" && a.groupId);
   if (groupAudiences.length > 0) {
     const targetGroupIds = groupAudiences.map((a) => a.groupId!);
-    const memberships = await db
+    const groupMemberships = await db
       .select({ groupId: contentGroupMember.groupId })
       .from(contentGroupMember)
       .where(
@@ -68,7 +87,7 @@ export async function checkAudienceAccess(
         ),
       );
 
-    if (memberships.length > 0) return true;
+    if (groupMemberships.length > 0) return true;
   }
 
   return false;
