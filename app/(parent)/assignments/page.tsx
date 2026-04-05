@@ -178,25 +178,11 @@ export default function AssignmentsFeedPage() {
           href="/calendar"
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40",
-            tags.length === 0 && !canCreate && "ml-auto",
+            tags.length === 0 && "ml-auto",
           )}
         >
           <Calendar className="h-4 w-4" />
         </Link>
-
-        {/* Create button — only when user has content permission */}
-        {canCreate && (
-          <button
-            type="button"
-            onClick={() => setCreateMenuOpen(true)}
-            className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90",
-              tags.length === 0 && "ml-auto",
-            )}
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       {/* Feed list */}
@@ -229,7 +215,7 @@ export default function AssignmentsFeedPage() {
                 {group.label}
               </p>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {group.posts.map((post) => (
                   <Link key={post.id} href={`/assignments/${post.id}`}>
                     <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30">

@@ -423,8 +423,8 @@ export default function MenuClient({
     <>
       {/* ── Search bar ── */}
       <div
-        className="sticky z-30 bg-background pb-2"
-        style={{ top: 'calc(var(--header-h, 56px))' } as React.CSSProperties}
+        className="sticky z-30 bg-background pb-2 -mt-1"
+        style={{ top: 'calc(var(--header-h, 56px) - 4px)' } as React.CSSProperties}
       >
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-muted-foreground" />

@@ -10,6 +10,7 @@ import {
   child,
   library,
   libraryAppIssueRequest,
+  librarySetting,
   parentControl,
 } from "@/lib/db/schema";
 import {
@@ -27,6 +28,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { LIBRARY_SETTINGS_DEFAULTS } from "@/lib/constants";
 
 const ACTIVE_ISSUANCE_STATUSES = ["ISSUED", "OVERDUE", "RETURN_PENDING"] as const;
 const GOAT_MIN_ISSUES = 3;
@@ -337,6 +339,7 @@ export async function GET(request: NextRequest) {
     pendingRequestRows,
     favouriteCountRows,
     userFavouriteRows,
+    settingRows,
   ] = await Promise.all([
     db
       .select({
@@ -537,7 +540,23 @@ export async function GET(request: NextRequest) {
           eq(bookFavourite.organizationId, organizationId),
         ),
       ),
+    db
+      .select({ key: librarySetting.key, value: librarySetting.value })
+      .from(librarySetting)
+      .where(
+        and(
+          eq(librarySetting.organizationId, organizationId),
+          eq(librarySetting.key, "max_books_per_student"),
+        ),
+      )
+      .limit(1),
   ]);
+
+  const maxBooksPerStudent =
+    parseInt(settingRows[0]?.value ?? LIBRARY_SETTINGS_DEFAULTS.max_books_per_student, 10) ||
+    parseInt(LIBRARY_SETTINGS_DEFAULTS.max_books_per_student, 10);
+  const activeIssueCount = activeIssuanceRows.length;
+  const issueLimitReached = activeIssueCount >= maxBooksPerStudent;
 
   const blockedBookCategories = new Set(parseJsonArray(controlRow[0]?.blockedBookCategories ?? null));
   const blockedBookIds = new Set(parseJsonArray(controlRow[0]?.blockedBookIds ?? null));
@@ -627,7 +646,8 @@ export async function GET(request: NextRequest) {
         item.availableCopies > 0 &&
         !issued &&
         !pending &&
-        !hasScopedPendingRequest,
+        !hasScopedPendingRequest &&
+        !issueLimitReached,
       metaLabel: null,
     };
   });
@@ -822,6 +842,12 @@ export async function GET(request: NextRequest) {
     libraries: orgLibraries,
     canUseAi,
     aiModeEnabled,
+    issueLimit: {
+      maxBooks: maxBooksPerStudent,
+      activeCount: activeIssueCount,
+      pendingCount: pendingRequestRows.length,
+      limitReached: issueLimitReached,
+    },
     filters: {
       query,
       category,
