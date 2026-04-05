@@ -364,10 +364,13 @@ function ParentLayoutContent({
     if (type.startsWith("WALLET") || type === "WALLET_TOPUP") return "/wallet?mode=canteen";
     if (type.startsWith("PRE_ORDER")) return "/pre-orders";
     if (type.startsWith("LIBRARY")) return "/library-history";
-    if (type.startsWith("GATE") || type === "GATE_ENTRY" || type === "GATE_EXIT") return "/calendar";
-    if (type.startsWith("ATTENDANCE")) return "/calendar";
+    if (type.startsWith("GATE") || type.startsWith("ATTENDANCE")) return "/calendar";
     return "/notifications?mode=canteen";
   }, []);
+
+  const isEventNotifType = useCallback((type: string): boolean => {
+    return EVENT_NOTIF_TYPES.has(type) || type.startsWith("GATE") || type.startsWith("ATTENDANCE");
+  }, [EVENT_NOTIF_TYPES]);
 
   const getNotifEventLabel = useCallback((type: string): string => {
     if (type === "GATE_ENTRY") return "Gate Entry";
@@ -389,14 +392,14 @@ function ParentLayoutContent({
       setNotificationDrawerOpen(false);
       if (PAYMENT_NOTIF_TYPES.has(type)) {
         void openPaymentsDrawer();
-      } else if (EVENT_NOTIF_TYPES.has(type) || type.startsWith("GATE") || type.startsWith("ATTENDANCE")) {
+      } else if (isEventNotifType(type)) {
         toast(`${getNotifEventLabel(type)} event recorded`, { icon: "📅" });
         router.push("/calendar");
       } else {
         router.push(getNotifRoute(type));
       }
     }
-  }, [getNotifRoute, getNotifEventLabel, router, PAYMENT_NOTIF_TYPES, EVENT_NOTIF_TYPES, openPaymentsDrawer]);
+  }, [getNotifRoute, getNotifEventLabel, isEventNotifType, router, PAYMENT_NOTIF_TYPES, openPaymentsDrawer]);
 
   const markAllNotifsRead = useCallback(async () => {
     setNotifItems((prev) =>
@@ -728,7 +731,7 @@ function ParentLayoutContent({
         <div className="space-y-1">
           {activityNotifs.map((n) => {
             const isPayment = PAYMENT_NOTIF_TYPES.has(n.type);
-            const isEvent = EVENT_NOTIF_TYPES.has(n.type) || n.type.startsWith("GATE") || n.type.startsWith("ATTENDANCE");
+            const isEvent = isEventNotifType(n.type);
             return (
               <button
                 key={n.id}

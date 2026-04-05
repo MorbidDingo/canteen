@@ -319,7 +319,7 @@ export default function AssignmentsFeedPage() {
         </div>
       </BottomSheet>
 
-      {/* Create post bottom sheet — only shown when both types are permitted */}
+      {/* Create post bottom sheet — shown when BOTH permission types are available */}
       <BottomSheet open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} snapPoints={[30]}>
         <div className="space-y-3 p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Create new</p>
