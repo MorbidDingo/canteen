@@ -67,7 +67,7 @@ export default function PostDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState<PostDetail | null>(null);
-  const [errorState, setErrorState] = useState<"not_found" | "no_permission" | null>(null);
+  const [errorState, setErrorState] = useState<"not_found" | "no_permission" | "error" | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
 
@@ -97,7 +97,7 @@ export default function PostDetailPage() {
       setAttachments(data.attachments || []);
       setTags(data.tags || []);
     } catch {
-      setErrorState("not_found");
+      setErrorState("error");
     } finally {
       setLoading(false);
     }
@@ -244,7 +244,7 @@ export default function PostDetailPage() {
                 You don&apos;t have access to this content. Contact your organization&apos;s management to request access.
               </p>
             </>
-          ) : (
+          ) : errorState === "not_found" ? (
             <>
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
                 <FileQuestion className="h-8 w-8 text-muted-foreground/40" />
@@ -252,6 +252,16 @@ export default function PostDetailPage() {
               <p className="text-[17px] font-semibold">Not Found</p>
               <p className="max-w-[260px] text-[13px] text-muted-foreground">
                 This post may have been removed or you followed an invalid link.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
+                <FileQuestion className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-[17px] font-semibold">Something went wrong</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                Failed to load this post. Check your connection and try again.
               </p>
             </>
           )}

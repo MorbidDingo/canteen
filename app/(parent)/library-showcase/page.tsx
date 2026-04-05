@@ -754,7 +754,8 @@ export default function LibraryShowcasePage() {
           </div>
         )}
 
-        {/* Issue limit info */}
+        {/* Issue limit info — only shown when no pending requests, since the pending requests
+           section above already conveys that the user cannot request more books */}
         {issueLimit && issueLimit.limitReached && pendingRequests.length === 0 && (
           <div className="flex items-center gap-3 rounded-2xl bg-muted/40 p-4">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
