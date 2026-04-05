@@ -95,17 +95,12 @@ export default function NewPostPage() {
   const canCreateNote = permissionScope === "BOTH" || permissionScope === "NOTE";
 
   const fetchLookups = useCallback(async () => {
-    const promises: Promise<Response>[] = [
+    const [tagsRes, groupsRes, classesRes, feedRes] = await Promise.all([
       fetch("/api/content/tags"),
       fetch("/api/content/groups"),
       fetch("/api/content/classes"),
       fetch("/api/content/feed?limit=1"),
-    ];
-    if (urlFolderId) {
-      promises.push(fetch(`/api/content/folders/${urlFolderId}`));
-    }
-    const results = await Promise.all(promises);
-    const [tagsRes, groupsRes, classesRes, feedRes] = results;
+    ]);
     if (tagsRes.ok) setTags((await tagsRes.json()).tags);
     if (groupsRes.ok) setGroups((await groupsRes.json()).groups);
     if (classesRes.ok) setClasses((await classesRes.json()).classes);
@@ -115,9 +110,14 @@ export default function NewPostPage() {
       // Auto-select the allowed type
       if (feedData.permissionScope === "NOTE") setType("NOTE");
     }
-    if (urlFolderId && results[4]?.ok) {
-      const folderData = await results[4].json();
-      setFolderName(folderData.folder?.name ?? null);
+    if (urlFolderId) {
+      try {
+        const folderRes = await fetch(`/api/content/folders/${urlFolderId}`);
+        if (folderRes.ok) {
+          const folderData = await folderRes.json();
+          setFolderName(folderData.folder?.name ?? null);
+        }
+      } catch { /* ignore */ }
     }
     setPermissionLoaded(true);
   }, [urlFolderId]);
