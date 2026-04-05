@@ -477,7 +477,7 @@ export default function NewPostPage() {
               </div>
               <Plus className="h-4 w-4 shrink-0 text-muted-foreground/40" />
             </button>
-            )
+            )}
 
             {/* Tags */}
             <div className="flex items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5">
