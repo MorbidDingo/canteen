@@ -54,6 +54,7 @@ export default function NewPostPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlType = searchParams.get("type");
+  const urlFolderId = searchParams.get("folderId");
 
   const [type, setType] = useState<"ASSIGNMENT" | "NOTE">(
     urlType === "NOTE" ? "NOTE" : "ASSIGNMENT",
@@ -65,6 +66,7 @@ export default function NewPostPage() {
   const [audiences, setAudiences] = useState<AudienceRow[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [folderName, setFolderName] = useState<string | null>(null);
 
   // Permission
   const [permissionScope, setPermissionScope] = useState<string | null>(null);
@@ -93,12 +95,17 @@ export default function NewPostPage() {
   const canCreateNote = permissionScope === "BOTH" || permissionScope === "NOTE";
 
   const fetchLookups = useCallback(async () => {
-    const [tagsRes, groupsRes, classesRes, feedRes] = await Promise.all([
+    const promises: Promise<Response>[] = [
       fetch("/api/content/tags"),
       fetch("/api/content/groups"),
       fetch("/api/content/classes"),
       fetch("/api/content/feed?limit=1"),
-    ]);
+    ];
+    if (urlFolderId) {
+      promises.push(fetch(`/api/content/folders/${urlFolderId}`));
+    }
+    const results = await Promise.all(promises);
+    const [tagsRes, groupsRes, classesRes, feedRes] = results;
     if (tagsRes.ok) setTags((await tagsRes.json()).tags);
     if (groupsRes.ok) setGroups((await groupsRes.json()).groups);
     if (classesRes.ok) setClasses((await classesRes.json()).classes);
@@ -108,8 +115,12 @@ export default function NewPostPage() {
       // Auto-select the allowed type
       if (feedData.permissionScope === "NOTE") setType("NOTE");
     }
+    if (urlFolderId && results[4]?.ok) {
+      const folderData = await results[4].json();
+      setFolderName(folderData.folder?.name ?? null);
+    }
     setPermissionLoaded(true);
-  }, []);
+  }, [urlFolderId]);
 
   useEffect(() => { fetchLookups(); }, [fetchLookups]);
 
@@ -235,7 +246,8 @@ export default function NewPostPage() {
   async function handleSubmit(asDraft: boolean) {
     if (!title.trim()) { toast.error("Title is required"); return; }
     if (!body.trim()) { toast.error("Body is required"); return; }
-    if (audiences.length === 0) { toast.error("Add at least one audience target"); return; }
+    // Only require audience if not in a folder
+    if (!urlFolderId && audiences.length === 0) { toast.error("Add at least one audience target"); return; }
 
     setSubmitting(true);
     try {
@@ -247,7 +259,8 @@ export default function NewPostPage() {
           title: title.trim(),
           body: body.trim(),
           dueAt: dueAt || null,
-          audience: audiences.map((a) => ({
+          folderId: urlFolderId || undefined,
+          audience: urlFolderId ? undefined : audiences.map((a) => ({
             audienceType: a.audienceType,
             className: a.className,
             section: a.section,
@@ -286,7 +299,7 @@ export default function NewPostPage() {
       }
 
       toast.success(asDraft ? "Draft saved" : "Post published");
-      router.push("/assignments");
+      router.push(urlFolderId ? `/assignments/folder/${urlFolderId}` : "/assignments");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create post");
     } finally {
@@ -303,7 +316,7 @@ export default function NewPostPage() {
     GROUP: <Users className="h-3 w-3" />,
   };
 
-  const isFormValid = title.trim() && body.trim() && audiences.length > 0;
+  const isFormValid = title.trim() && body.trim() && (urlFolderId || audiences.length > 0);
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-40">
@@ -311,7 +324,7 @@ export default function NewPostPage() {
       <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 pb-3 pt-4">
         <button
           type="button"
-          onClick={() => router.push("/assignments")}
+          onClick={() => router.push(urlFolderId ? `/assignments/folder/${urlFolderId}` : "/assignments")}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/50 transition-colors active:scale-95"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -320,6 +333,9 @@ export default function NewPostPage() {
           <h1 className="text-[15px] font-semibold leading-tight">
             {type === "ASSIGNMENT" ? "New Assignment" : "New Note"}
           </h1>
+          {folderName && (
+            <p className="text-[11px] text-muted-foreground">in {folderName}</p>
+          )}
         </div>
         {(canCreateAssignment || canCreateNote) && (
           <button
@@ -421,7 +437,16 @@ export default function NewPostPage() {
               </div>
             )}
 
-            {/* Audience */}
+            {/* Audience — hidden when inside a folder (inherits folder audience) */}
+            {urlFolderId ? (
+              <div className="flex items-center gap-3 rounded-xl bg-violet-50/50 dark:bg-violet-950/20 px-3.5 py-2.5">
+                <Eye className="h-4 w-4 shrink-0 text-violet-500/60" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium text-violet-500/60 uppercase tracking-wider">Audience</p>
+                  <p className="text-[13px] text-violet-600 dark:text-violet-400">Inherited from folder</p>
+                </div>
+              </div>
+            ) : (
             <button
               type="button"
               onClick={() => setAudienceSheetOpen(true)}
@@ -452,6 +477,7 @@ export default function NewPostPage() {
               </div>
               <Plus className="h-4 w-4 shrink-0 text-muted-foreground/40" />
             </button>
+            )
 
             {/* Tags */}
             <div className="flex items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5">

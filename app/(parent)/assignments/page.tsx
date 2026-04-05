@@ -13,6 +13,9 @@ import {
   Plus,
   ClipboardList,
   X,
+  FolderOpen,
+  Folder,
+  ChevronRight,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
@@ -35,6 +38,15 @@ type FeedPost = {
   tags: { id: string; name: string; color: string | null }[];
   hasSubmitted: boolean;
   attachments: FeedAttachment[];
+};
+
+type FolderItem = {
+  id: string;
+  name: string;
+  description: string | null;
+  authorName: string;
+  postCount: number;
+  createdAt: string;
 };
 
 type Tag = { id: string; name: string; color: string | null };
@@ -80,6 +92,7 @@ export default function AssignmentsFeedPage() {
   const { data: session } = useSession();
   const urlType = searchParams.get("type") === "NOTE" ? "NOTE" : "ASSIGNMENT";
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [folders, setFolders] = useState<FolderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"ASSIGNMENT" | "NOTE">(urlType);
   const [tagFilter, setTagFilter] = useState("all");
@@ -102,13 +115,23 @@ export default function AssignmentsFeedPage() {
       });
       if (tagFilter !== "all") params.set("tagId", tagFilter);
 
-      const res = await fetch(`/api/content/feed?${params}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setPosts(data.posts);
-      setTotal(data.total);
-      setCanCreate(data.canCreate ?? false);
-      setPermissionScope(data.permissionScope ?? null);
+      const [feedRes, foldersRes] = await Promise.all([
+        fetch(`/api/content/feed?${params}`),
+        fetch("/api/content/folders"),
+      ]);
+      if (feedRes.ok) {
+        const data = await feedRes.json();
+        setPosts(data.posts);
+        setTotal(data.total);
+        setCanCreate(data.canCreate ?? false);
+        setPermissionScope(data.permissionScope ?? null);
+      } else {
+        throw new Error();
+      }
+      if (foldersRes.ok) {
+        const data = await foldersRes.json();
+        setFolders(data.folders ?? []);
+      }
     } catch {
       toast.error("Failed to load feed");
     } finally {
@@ -192,7 +215,7 @@ export default function AssignmentsFeedPage() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : sortedPosts.length === 0 ? (
+      ) : sortedPosts.length === 0 && folders.length === 0 ? (
         <div className="py-16 text-center">
           <StickyNote className="mx-auto h-10 w-10 text-muted-foreground/20" />
           <p className="mt-3 text-[15px] text-muted-foreground">
@@ -211,6 +234,34 @@ export default function AssignmentsFeedPage() {
         </div>
       ) : (
         <div className="space-y-6">
+          {/* Folders section */}
+          {folders.length > 0 && (
+            <section className="space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                Folders
+              </p>
+              <div className="flex flex-col gap-2">
+                {folders.map((folder) => (
+                  <Link key={folder.id} href={`/assignments/folder/${folder.id}`} className="block">
+                    <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                        <Folder className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[15px] font-semibold leading-snug">{folder.name}</p>
+                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                          {folder.postCount} item{folder.postCount !== 1 ? "s" : ""} · {folder.authorName}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Posts section */}
           {grouped.map((group) => (
             <section key={group.label} className="space-y-2">
               <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -320,7 +371,7 @@ export default function AssignmentsFeedPage() {
       </BottomSheet>
 
       {/* Create post bottom sheet — shown when BOTH permission types are available */}
-      <BottomSheet open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} snapPoints={[30]}>
+      <BottomSheet open={createMenuOpen} onClose={() => setCreateMenuOpen(false)} snapPoints={[40]}>
         <div className="space-y-3 p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Create new</p>
           <div className="space-y-2">
@@ -357,6 +408,24 @@ export default function AssignmentsFeedPage() {
                 <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-semibold">New Note</p>
                   <p className="text-[12px] text-muted-foreground">Share an announcement or info</p>
+                </div>
+              </button>
+            )}
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  router.push("/content/new-folder");
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3.5 text-left transition-colors active:bg-muted/50"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10">
+                  <FolderOpen className="h-5 w-5 text-violet-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold">New Folder</p>
+                  <p className="text-[12px] text-muted-foreground">Group notes &amp; assignments with shared audience</p>
                 </div>
               </button>
             )}
