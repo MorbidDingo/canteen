@@ -1,478 +1,593 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
-import { useSession } from "@/lib/auth-client";
-import { useCertePlusStore } from "@/lib/store/certe-plus-store";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  CERTE_PLUS_PLAN_LIST,
-  CERTE_PLUS_PLANS,
-  CERTE_PLUS,
-} from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import {
-  IoSparkles,
-  IoShieldCheckmark,
-  IoBookOutline,
-  IoWalletOutline,
-  IoRestaurantOutline,
-  IoChatbubblesOutline,
-  IoAnalyticsOutline,
-  IoLeafOutline,
-} from "react-icons/io5";
-import {
-  Loader2,
-  Check,
-  Sparkles,
-  Wallet,
-  CreditCard,
-  IndianRupee,
+  ArrowLeft,
+  Download,
+  Paperclip,
+  Upload,
+  X,
+  Loader2,
+  CheckCircle2,
+  Send,
+  RotateCcw,
+  FileText,
+  Film,
+  ShieldX,
+  FileQuestion,
 } from "lucide-react";
+import { BottomSheet } from "@/components/ui/motion";
+import { SafeHtml } from "@/components/ui/safe-html";
+import { cn } from "@/lib/utils";
 
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => RazorpayInstance;
-  }
-}
+type PostDetail = {
+  id: string;
+  type: "ASSIGNMENT" | "NOTE";
+  title: string;
+  body: string;
+  dueAt: string | null;
+  status: string;
+  createdAt: string;
+  authorName?: string;
+};
 
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpayResponse) => void;
-  prefill?: { name?: string; email?: string; contact?: string };
-  theme?: { color?: string };
-  modal?: { ondismiss?: () => void };
-}
+type Attachment = {
+  id: string;
+  storageBackend: string;
+  storageKey: string;
+  originalFileName: string | null;
+  mimeType: string;
+  size: number;
+};
 
-interface RazorpayResponse {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-}
+type Tag = { id: string; name: string; color: string | null };
 
-interface RazorpayInstance {
-  open: () => void;
-  close: () => void;
-}
+type Submission = {
+  id: string;
+  textContent: string | null;
+  status: string;
+  submittedAt: string;
+};
 
-const benefits = [
-  {
-    icon: IoChatbubblesOutline,
-    title: "AI Personal Assistant",
-    description: "Get instant help with orders, smart recommendations, and spending insights.",
-    badge: "AI",
-  },
-  {
-    icon: IoBookOutline,
-    title: "Library Protection",
-    description: `${CERTE_PLUS.LIBRARY_PENALTY_ALLOWANCE} late-return protections per cycle across your family.`,
-  },
-  {
-    icon: IoRestaurantOutline,
-    title: "Meal Pre-Orders",
-    description: "Schedule meals ahead for faster pickups and planned spending.",
-  },
-  {
-    icon: IoWalletOutline,
-    title: "Wallet Safety Net",
-    description: `Checkout even on low balance with overdraft up to ₹${CERTE_PLUS.WALLET_OVERDRAFT_LIMIT}.`,
-    parentOnly: true,
-  },
-  {
-    icon: IoShieldCheckmark,
-    title: "Advanced Controls",
-    description: "Spend limits, item restrictions, and family-level control.",
-  },
-  {
-    icon: IoAnalyticsOutline,
-    title: "AI Spending Insights",
-    description: "Spot unusual spending patterns with proactive alerts.",
-    badge: "AI",
-  },
-  {
-    icon: IoLeafOutline,
-    title: "Healthy Food Access",
-    description: "Priority access when curated healthy menus launch.",
-    comingSoon: true,
-  },
-];
+type SubmissionAttachment = {
+  id: string;
+  storageBackend: string;
+  storageKey: string;
+  mimeType: string;
+  size: number;
+};
 
-export default function CertePassPage() {
-  const router = useRouter();
-  const { data: session } = useSession();
-  const certePlus = useCertePlusStore((s) => s.status);
-  const refreshCertePlusStatus = useCertePlusStore((s) => s.refresh);
-  const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
-  const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
-  const [subscribing, setSubscribing] = useState(false);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"WALLET" | "RAZORPAY">("WALLET");
-  const isGeneralAccount = session?.user?.role === "GENERAL";
-  const certePlusResolved = certePlus !== null;
-  const isActive = certePlus?.active === true;
+export default function PostDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const postId = params.id as string;
 
-  useEffect(() => {
-    void ensureCertePlusFresh(45_000);
-  }, [ensureCertePlusFresh]);
+  const [loading, setLoading] = useState(true);
+  const [post, setPost] = useState<PostDetail | null>(null);
+  const [errorState, setErrorState] = useState<
+    "not_found" | "no_permission" | "error" | null
+  >(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.Razorpay) {
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.async = true;
-      document.head.appendChild(script);
-    }
-  }, []);
+  // Submission state
+  const [submission, setSubmission] = useState<Submission | null>(null);
+  const [subAttachments, setSubAttachments] = useState<SubmissionAttachment[]>(
+    [],
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [submitText, setSubmitText] = useState("");
+  const [submitFiles, setSubmitFiles] = useState<File[]>([]);
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch wallet balance for parent accounts
-  useEffect(() => {
-    if (isGeneralAccount) return;
-    fetch("/api/wallet", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data: Array<{ balance: number }>) => {
-        const total = data.reduce((sum, w) => sum + w.balance, 0);
-        setWalletBalance(total);
-      })
-      .catch(() => null);
-  }, [isGeneralAccount]);
+  const fetchPost = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/content/posts/${postId}`);
+      if (res.status === 403) {
+        setErrorState("no_permission");
+        return;
+      }
+      if (res.status === 404 || !res.ok) {
+        setErrorState("not_found");
+        return;
+      }
+      const data = await res.json();
+      setPost(data.post);
+      setAttachments(data.attachments || []);
+      setTags(data.tags || []);
+    } catch {
+      setErrorState("error");
+    } finally {
+      setLoading(false);
+    }
+  }, [postId]);
 
-  const openRazorpay = useCallback(
-    ({
-      razorpayOrderId,
-      amount,
-      keyId,
-    }: {
-      razorpayOrderId: string;
-      amount: number;
-      keyId: string;
-    }) =>
-      new Promise<RazorpayResponse>((resolve, reject) => {
-        if (!window.Razorpay) {
-          reject(new Error("Payment SDK not loaded. Please refresh and try again."));
-          return;
-        }
-        const instance = new window.Razorpay({
-          key: keyId,
-          amount: amount * 100,
-          currency: "INR",
-          name: "certe",
-          description: "Certe Pass subscription",
-          order_id: razorpayOrderId,
-          handler: (response) => resolve(response),
-          prefill: {
-            name: session?.user?.name || "",
-            email: session?.user?.email || "",
-          },
-          theme: { color: "#0f172a" },
-          modal: { ondismiss: () => reject(new Error("Payment cancelled")) },
-        });
-        instance.open();
-      }),
-    [session?.user?.email, session?.user?.name],
-  );
+  const fetchMySubmission = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/content/posts/${postId}/my-submission`);
+      if (res.ok) {
+        const data = await res.json();
+        setSubmission(data.submission);
+        setSubAttachments(data.attachments || []);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [postId]);
 
-  const handleSubscribe = async () => {
-    setSubscribing(true);
-    try {
-      if (isGeneralAccount || paymentMethod === "RAZORPAY") {
-        const startRes = await fetch("/api/certe-plus", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paymentMethod: "RAZORPAY", plan: selectedPlan }),
-        });
-        const startData = await startRes.json();
-        if (!startRes.ok) { toast.error(startData.error || "Subscription failed"); return; }
+  useEffect(() => {
+    fetchPost();
+    fetchMySubmission();
+  }, [fetchPost, fetchMySubmission]);
 
-        if (!startData.requiresPayment) {
-          toast.success("Welcome to Certe Pass! Your subscription is now active.");
-          await refreshCertePlusStatus({ silent: true });
-          return;
-        }
+  async function handleSubmit() {
+    if (!submitText.trim() && submitFiles.length === 0) {
+      toast.error("Add text or a file to submit");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append("textContent", submitText.trim());
+      for (const file of submitFiles) {
+        formData.append("files", file);
+      }
 
-        const payment = await openRazorpay({
-          razorpayOrderId: startData.razorpayOrderId,
-          amount: startData.amount,
-          keyId: startData.keyId,
-        });
+      const isResubmit = !!submission;
+      const res = await fetch(`/api/content/posts/${postId}/submit`, {
+        method: isResubmit ? "PATCH" : "POST",
+        body: formData,
+      });
 
-        const finalizeRes = await fetch("/api/certe-plus", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            paymentMethod: "RAZORPAY",
-            plan: selectedPlan,
-            razorpay_payment_id: payment.razorpay_payment_id,
-            razorpay_order_id: payment.razorpay_order_id,
-            razorpay_signature: payment.razorpay_signature,
-          }),
-        });
-        const finalizeData = await finalizeRes.json();
-        if (!finalizeRes.ok) { toast.error(finalizeData.error || "Verification failed"); return; }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Submission failed");
+      }
 
-        toast.success("Welcome to Certe Pass! Your subscription is now active.");
-        await refreshCertePlusStatus({ silent: true });
-        return;
-      }
+      const data = await res.json();
+      setSubmission(data.submission);
+      setSubAttachments(data.attachments || []);
+      setSubmitText("");
+      setSubmitFiles([]);
+      setShowSubmitForm(false);
+      toast.success(
+        isResubmit ? "Resubmitted successfully" : "Submitted successfully",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Submission failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
-      // Wallet payment for parent accounts
-      const res = await fetch("/api/certe-plus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethod: "WALLET", plan: selectedPlan }),
-      });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Subscription failed"); return; }
-      toast.success("Welcome to Certe Pass! Your subscription is now active.");
-      await refreshCertePlusStatus({ silent: true });
-      // Refresh wallet balance
-      if (!isGeneralAccount) {
-        fetch("/api/wallet", { cache: "no-store" })
-          .then((r) => r.json())
-          .then((d: Array<{ balance: number }>) => setWalletBalance(d.reduce((s, w) => s + w.balance, 0)))
-          .catch(() => null);
-      }
-    } catch (error) {
-      if (error instanceof Error && error.message === "Payment cancelled") {
-        toast.info("Payment cancelled");
-      } else {
-        toast.error("Failed to subscribe");
-      }
-    } finally {
-      setSubscribing(false);
-    }
-  };
+  function formatDate(d: string) {
+    return new Date(d).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
 
-  const currentPlanInfo =
-    CERTE_PLUS_PLANS[selectedPlan as keyof typeof CERTE_PLUS_PLANS] ??
-    CERTE_PLUS_PLANS.MONTHLY;
+  function formatDateTime(d: string) {
+    return new Date(d).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
-  const visibleBenefits = benefits.filter(
-    (b) => !b.parentOnly || !isGeneralAccount,
-  );
+  function isPastDue(dueAt: string) {
+    return new Date(dueAt).getTime() < Date.now();
+  }
 
-  const canAffordWallet = walletBalance !== null && walletBalance >= currentPlanInfo.price;
+  function isDueSoon(dueAt: string) {
+    const diff = new Date(dueAt).getTime() - Date.now();
+    return diff > 0 && diff < 48 * 60 * 60 * 1000;
+  }
 
-  return (
-    <div className="mx-auto max-w-lg px-5 pb-32">
-      {/* Hero */}
-      <div className="relative mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white dark:from-slate-800 dark:via-slate-900 dark:to-black">
-        <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl" />
-        <div className="pointer-events-none absolute right-1/3 top-1/2 h-24 w-24 rounded-full bg-violet-400/10 blur-2xl" />
+  function getFileName(att: {
+    storageKey: string;
+    originalFileName?: string | null;
+  }) {
+    if (att.originalFileName) return att.originalFileName;
+    return att.storageKey.split("/").pop()?.split("?")[0] || "file";
+  }
 
-        <div className="relative">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm ring-1 ring-white/10">
-              <Sparkles className="h-5 w-5 text-amber-300" />
-            </div>
-            <div>
-              <h1 className="text-[24px] font-bold tracking-tight">Certe Pass</h1>
-              <p className="text-[12px] text-white/50 font-medium">Premium Features & AI</p>
-            </div>
-          </div>
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
-          {isActive ? (
-            <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/15 px-4 py-3 ring-1 ring-emerald-400/20">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
-                <Check className="h-4 w-4 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-[14px] font-semibold text-emerald-300">Your pass is active</p>
-                {certePlus?.subscription && (
-                  <p className="text-[12px] text-emerald-300/60">
-                    Expires {new Date(certePlus.subscription.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                  </p>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-[14px] leading-relaxed text-white/65 text-pretty">
-              Unlock AI assistance, spending controls, and premium features for your whole family.
-            </p>
-          )}
-        </div>
-      </div>
+  function handleDownload(attachmentId: string, type: "post" | "submission") {
+    // Use fetch to download the file with proper naming
+    const url = `/api/content/file/${type}/${attachmentId}?download=1`;
+    // Open in new tab — the server will redirect with fl_attachment for Cloudinary
+    // or presigned URL for S3
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 
-      {/* Benefits */}
-      <div className="mb-8">
-        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          What&apos;s included
-        </p>
-        <div className="grid grid-cols-1 gap-2.5">
-          {visibleBenefits.map((benefit, i) => {
-            const Icon = benefit.icon;
-            return (
-              <div
-                key={i}
-                className="group flex items-start gap-4 rounded-2xl bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-colors"
-              >
-                <div className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                  benefit.badge === "AI"
-                    ? "bg-amber-100/80 dark:bg-amber-900/30"
-                    : "bg-muted/60",
-                )}>
-                  <Icon className={cn(
-                    "h-[19px] w-[19px]",
-                    benefit.badge === "AI"
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-foreground/65",
-                  )} />
-                </div>
-                <div className="min-w-0 flex-1 pt-0.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-[14px] font-semibold leading-tight">{benefit.title}</p>
-                    {benefit.badge && (
-                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                        {benefit.badge}
-                      </span>
-                    )}
-                    {benefit.comingSoon && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                        Soon
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground text-pretty">
-                    {benefit.description}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+  const canSubmit =
+    post?.type === "ASSIGNMENT" &&
+    post?.status === "PUBLISHED" &&
+    (!post?.dueAt || !isPastDue(post.dueAt));
 
-      {/* Plan selector + Payment — only show if not active */}
-      {!isActive && (
-        <>
-          <div className="mb-5">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              Choose your plan
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {CERTE_PLUS_PLAN_LIST.map((plan) => {
-                const isSelected = selectedPlan === plan.key;
-                return (
-                  <button
-                    key={plan.key}
-                    type="button"
-                    onClick={() => setSelectedPlan(plan.key)}
-                    className={cn(
-                      "relative flex flex-col items-center gap-0.5 rounded-2xl border-2 p-4 transition-all active:scale-[0.98]",
-                      isSelected
-                        ? "border-primary bg-primary/5 dark:bg-primary/10"
-                        : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-                    )}
-                  >
-                    <span className={cn("text-[18px] font-bold", isSelected ? "text-primary" : "")}>₹{plan.price}</span>
-                    <span className="text-[11px] text-muted-foreground">{plan.label}</span>
-                    {isSelected && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                        <Check className="h-3 w-3 text-primary-foreground" />
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+  const backHref =
+    post?.type === "NOTE" ? "/assignments?type=NOTE" : "/assignments";
 
-          {/* Payment method (parent accounts only) */}
-          {!isGeneralAccount && (
-            <div className="mb-5">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                Pay with
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("WALLET")}
-                  className={cn(
-                    "flex flex-col gap-2 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.98]",
-                    paymentMethod === "WALLET"
-                      ? "border-primary bg-primary/5 dark:bg-primary/10"
-                      : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-                  )}
-                >
-                  <div className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-xl",
-                    paymentMethod === "WALLET" ? "bg-primary/15" : "bg-muted/60",
-                  )}>
-                    <Wallet className={cn("h-4 w-4", paymentMethod === "WALLET" ? "text-primary" : "text-muted-foreground")} />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-semibold">Wallet</p>
-                    {walletBalance !== null ? (
-                      <p className={cn(
-                        "text-[11px] font-medium flex items-center gap-0.5",
-                        canAffordWallet ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
-                      )}>
-                        <IndianRupee className="h-2.5 w-2.5" />
-                        {walletBalance.toFixed(0)} balance
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-muted-foreground">Instant</p>
-                    )}
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod("RAZORPAY")}
-                  className={cn(
-                    "flex flex-col gap-2 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.98]",
-                    paymentMethod === "RAZORPAY"
-                      ? "border-primary bg-primary/5 dark:bg-primary/10"
-                      : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
-                  )}
-                >
-                  <div className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-xl",
-                    paymentMethod === "RAZORPAY" ? "bg-primary/15" : "bg-muted/60",
-                  )}>
-                    <CreditCard className={cn("h-4 w-4", paymentMethod === "RAZORPAY" ? "text-primary" : "text-muted-foreground")} />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-semibold">Card / UPI</p>
-                    <p className="text-[11px] text-muted-foreground">via Razorpay</p>
-                  </div>
-                </button>
-              </div>
-              {paymentMethod === "WALLET" && !canAffordWallet && walletBalance !== null && (
-                <p className="mt-2 text-[12px] text-destructive">
-                  Insufficient balance — need ₹{(currentPlanInfo.price - walletBalance).toFixed(2)} more. Top up your wallet or pay via card.
-                </p>
-              )}
-            </div>
-          )}
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-          {/* Subscribe button */}
-          <button
-            type="button"
-            onClick={handleSubscribe}
-            disabled={subscribing || !certePlusResolved || (!isGeneralAccount && paymentMethod === "WALLET" && !canAffordWallet)}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50"
-          >
-            {subscribing ? (
-              <Loader2 className="h-4.5 w-4.5 animate-spin" />
-            ) : (
-              <>
-                {paymentMethod === "WALLET" && !isGeneralAccount ? (
-                  <Wallet className="h-4 w-4" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                Get Certe Pass · ₹{currentPlanInfo.price}/{currentPlanInfo.label.toLowerCase()}
-              </>
-            )}
-          </button>
-        </>
-      )}
-    </div>
-  );
+  if (!post) {
+    return (
+      <div className="px-5 pb-28 sm:px-8">
+        <button
+          type="button"
+          onClick={() => router.push(backHref)}
+          className="mb-6 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+
+        <div className="flex flex-col items-center gap-3 py-20 text-center">
+          {errorState === "no_permission" ? (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10">
+                <ShieldX className="h-8 w-8 text-destructive/50" />
+              </div>
+              <p className="text-[17px] font-semibold">No Permission</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                You don&apos;t have access to this content. Contact your
+                organization&apos;s management to request access.
+              </p>
+            </>
+          ) : errorState === "not_found" ? (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
+                <FileQuestion className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-[17px] font-semibold">Not Found</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                This post may have been removed or you followed an invalid link.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
+                <FileQuestion className="h-8 w-8 text-muted-foreground/40" />
+              </div>
+              <p className="text-[17px] font-semibold">Something went wrong</p>
+              <p className="max-w-[260px] text-[13px] text-muted-foreground">
+                Failed to load this post. Check your connection and try again.
+              </p>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => router.push(backHref)}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Go to Board
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pb-28 sm:px-8">
+      {/* Back arrow */}
+      <button
+        type="button"
+        onClick={() => router.push(backHref)}
+        className="mb-6 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </button>
+
+      {/* Title */}
+      <h1 className="text-[28px] font-bold leading-tight tracking-tight">
+        {post.title}
+      </h1>
+
+      {/* Meta line */}
+      <p className="mt-2 text-[13px] text-muted-foreground">
+        {post.authorName || "Unknown"}
+        {post.dueAt && (
+          <>
+            {" · "}
+            <span
+              className={cn(
+                isPastDue(post.dueAt)
+                  ? "text-destructive font-medium"
+                  : isDueSoon(post.dueAt)
+                    ? "text-primary font-medium"
+                    : "",
+              )}
+            >
+              {isPastDue(post.dueAt)
+                ? "Overdue"
+                : `Due ${formatDate(post.dueAt)}`}
+            </span>
+          </>
+        )}
+        {post.status === "CLOSED" && (
+          <span className="text-muted-foreground/60"> · Closed</span>
+        )}
+      </p>
+
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <span
+              key={tag.id}
+              className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[12px] font-medium text-primary"
+            >
+              #{tag.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Body */}
+      <article className="mt-6">
+        <SafeHtml
+          html={post.body}
+          className="text-[16px] leading-[1.7] text-foreground/90"
+        />
+      </article>
+
+      {/* Attachments */}
+      {attachments.length > 0 && (
+        <div className="mt-8 space-y-3">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Attachments
+          </p>
+
+          {/* Image gallery */}
+          {attachments.filter((a) => a.mimeType.startsWith("image/")).length >
+            0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {attachments
+                .filter((a) => a.mimeType.startsWith("image/"))
+                .map((att) => (
+                  <button
+                    key={att.id}
+                    type="button"
+                    onClick={() => handleDownload(att.id, "post")}
+                    className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-muted/30"
+                  >
+                    <Image
+                      src={`/api/content/file/post/${att.id}`}
+                      alt="Attachment"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {/* File rows */}
+          {attachments
+            .filter((a) => !a.mimeType.startsWith("image/"))
+            .map((att) => {
+              const isPdf = att.mimeType === "application/pdf";
+              const isVideo = att.mimeType.startsWith("video/");
+              return (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => handleDownload(att.id, "post")}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                >
+                  {isPdf ? (
+                    <FileText className="h-5 w-5 shrink-0 text-red-500" />
+                  ) : isVideo ? (
+                    <Film className="h-5 w-5 shrink-0 text-purple-500" />
+                  ) : (
+                    <Paperclip className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  )}
+                  <div className="min-w-0 flex-1 text-left">
+                    <p className="truncate text-[14px] font-medium">
+                      {getFileName(att)}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground">
+                      {formatFileSize(att.size)}
+                    </p>
+                  </div>
+                  <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              );
+            })}
+        </div>
+      )}
+
+      {/* Submission section — only for ASSIGNMENT */}
+      {post.type === "ASSIGNMENT" && (
+        <div className="mt-8">
+          {/* Existing submission — shown inline */}
+          {submission ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <span className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  {submission.status === "RESUBMITTED"
+                    ? "Resubmitted"
+                    : "Submitted"}
+                </span>
+                <span className="text-[12px] text-muted-foreground">
+                  · {formatDateTime(submission.submittedAt)}
+                </span>
+              </div>
+
+              {submission.textContent && (
+                <p className="whitespace-pre-wrap rounded-xl bg-muted/30 p-3 text-[14px] text-foreground/80">
+                  {submission.textContent}
+                </p>
+              )}
+
+              {subAttachments.length > 0 && (
+                <div className="space-y-1.5">
+                  {subAttachments.map((att) => (
+                    <button
+                      key={att.id}
+                      type="button"
+                      onClick={() => handleDownload(att.id, "submission")}
+                      className="flex w-full items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-[13px] transition-colors active:bg-muted/50"
+                    >
+                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-left">
+                        {getFileName(att)}
+                      </span>
+                      <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {canSubmit && (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary"
+                  onClick={() => {
+                    setShowSubmitForm(true);
+                    setSubmitText(submission.textContent || "");
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Resubmit
+                </button>
+              )}
+            </div>
+          ) : canSubmit ? (
+            <button
+              type="button"
+              className="h-14 w-full rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
+              onClick={() => setShowSubmitForm(true)}
+            >
+              Submit Assignment
+            </button>
+          ) : (
+            <p className="text-center text-[13px] text-muted-foreground">
+              {post.status === "CLOSED"
+                ? "This assignment is closed for submissions."
+                : post.dueAt && isPastDue(post.dueAt)
+                  ? "The due date has passed."
+                  : "Submissions are not available."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Submission Bottom Sheet */}
+      <BottomSheet
+        open={showSubmitForm && canSubmit}
+        onClose={() => {
+          setShowSubmitForm(false);
+          setSubmitText("");
+          setSubmitFiles([]);
+        }}
+        snapPoints={[70]}
+      >
+        <div className="space-y-5 p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            {submission ? "Resubmit" : "Submit"} your work
+          </p>
+
+          {/* Response */}
+          <Textarea
+            value={submitText}
+            onChange={(e) => setSubmitText(e.target.value)}
+            rows={5}
+            placeholder="Type your response here..."
+            className="rounded-xl border-border/40 text-[15px]"
+          />
+
+          {/* Files */}
+          <div className="space-y-2">
+            {submitFiles.map((file, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-[13px]"
+              >
+                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                <span className="shrink-0 text-[12px] text-muted-foreground">
+                  {(file.size / 1024).toFixed(0)}KB
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSubmitFiles((prev) => prev.filter((_, j) => j !== i))
+                  }
+                >
+                  <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                </button>
+              </div>
+            ))}
+
+            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border/60 px-4 py-3 text-[13px] text-muted-foreground transition-colors hover:bg-muted/20">
+              <Upload className="h-4 w-4" />
+              <span>Add files</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={(e) => {
+                  if (e.target.files)
+                    setSubmitFiles((prev) => [
+                      ...prev,
+                      ...Array.from(e.target.files!),
+                    ]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Submit button */}
+          <button
+            type="button"
+            className={cn(
+              "flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-transform active:scale-[0.98]",
+              (submitting ||
+                (!submitText.trim() && submitFiles.length === 0)) &&
+                "opacity-50 pointer-events-none",
+            )}
+            disabled={
+              submitting || (!submitText.trim() && submitFiles.length === 0)
+            }
+            onClick={handleSubmit}
+          >
+            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Send className="h-4 w-4" />
+            {submission ? "Resubmit" : "Submit"}
+          </button>
+        </div>
+      </BottomSheet>
+    </div>
+  );
 }
