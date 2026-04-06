@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -321,20 +322,20 @@ export default function NewPostPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 pb-40">
       {/* ── Header ── */}
-      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 bg-background/80 backdrop-blur-md px-4 pb-3 pt-4">
+      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 border-b border-border/20 bg-background/90 backdrop-blur-md px-4 pb-3 pt-4">
         <button
           type="button"
           onClick={() => router.push(urlFolderId ? `/assignments/folder/${urlFolderId}` : "/assignments")}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-muted/50 transition-colors active:scale-95"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted/50 transition-colors active:scale-95"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex-1">
-          <h1 className="text-[15px] font-semibold leading-tight">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[17px] font-semibold leading-tight truncate">
             {type === "ASSIGNMENT" ? "New Assignment" : "New Note"}
           </h1>
           {folderName && (
-            <p className="text-[11px] text-muted-foreground">in {folderName}</p>
+            <p className="text-[12px] text-muted-foreground truncate">in {folderName}</p>
           )}
         </div>
         {(canCreateAssignment || canCreateNote) && (
@@ -342,7 +343,7 @@ export default function NewPostPage() {
             type="button"
             disabled={submitting || !isFormValid}
             onClick={() => handleSubmit(false)}
-            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40"
+            className="flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40 shrink-0"
           >
             {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Publish"}
           </button>
@@ -355,40 +356,42 @@ export default function NewPostPage() {
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40">
             <ClipboardList className="h-8 w-8 text-muted-foreground/40" />
           </div>
-          <p className="text-sm font-medium">No Content Permission</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base font-semibold">No Content Permission</p>
+          <p className="text-sm text-muted-foreground text-pretty max-w-xs">
             Contact your organization&apos;s management to request access.
           </p>
         </div>
       )}
 
       {(canCreateAssignment || canCreateNote) && (
-        <div className="space-y-5 pt-2">
+        <div className="pt-5 space-y-0">
           {/* ── Type toggle ── */}
           {canCreateAssignment && canCreateNote && (
-            <div className="flex rounded-xl bg-muted/40 p-1">
+            <div className="mb-5 flex rounded-2xl bg-muted/40 p-1">
               <button
                 type="button"
                 onClick={() => setType("ASSIGNMENT")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-medium transition-all ${
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-medium transition-all",
                   type === "ASSIGNMENT"
                     ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
+                    : "text-muted-foreground hover:text-foreground/70",
+                )}
               >
-                <ClipboardList className="h-3.5 w-3.5" />
+                <ClipboardList className="h-4 w-4" />
                 Assignment
               </button>
               <button
                 type="button"
                 onClick={() => setType("NOTE")}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[13px] font-medium transition-all ${
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-[14px] font-medium transition-all",
                   type === "NOTE"
                     ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground"
-                }`}
+                    : "text-muted-foreground hover:text-foreground/70",
+                )}
               >
-                <StickyNote className="h-3.5 w-3.5" />
+                <StickyNote className="h-4 w-4" />
                 Note
               </button>
             </div>
@@ -399,34 +402,33 @@ export default function NewPostPage() {
             placeholder={type === "ASSIGNMENT" ? "Assignment title…" : "Note title…"}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="border-0 bg-transparent px-0 text-xl font-semibold placeholder:text-muted-foreground/30 focus-visible:ring-0 h-auto py-0"
+            className="mb-4 border-0 bg-transparent px-0 text-2xl font-bold placeholder:text-muted-foreground/25 focus-visible:ring-0 h-auto py-1 leading-tight"
           />
 
           {/* ── Body ── */}
-          <RichTextEditor
-            placeholder="Write details or instructions…"
-            value={body}
-            onChange={setBody}
-            disabled={submitting}
-            className="border-0 bg-transparent px-0"
-          />
-
-          {/* ── Separator ── */}
-          <div className="h-px bg-border/30" />
+          <div className="mb-5 min-h-[180px] rounded-2xl border border-border/30 bg-muted/10 px-1 py-1">
+            <RichTextEditor
+              placeholder="Write details or instructions…"
+              value={body}
+              onChange={setBody}
+              disabled={submitting}
+              title={title || (type === "ASSIGNMENT" ? "New Assignment" : "New Note")}
+            />
+          </div>
 
           {/* ── Metadata strip ── */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {/* Due date (assignments) */}
             {type === "ASSIGNMENT" && (
-              <div className="flex items-center gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5">
-                <Calendar className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <div className="flex items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3">
+                <Calendar className="h-4.5 w-4.5 shrink-0 text-muted-foreground/60" />
                 <div className="flex-1">
-                  <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">Due</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-0.5">Due date</p>
                   <Input
                     type="datetime-local"
                     value={dueAt}
                     onChange={(e) => setDueAt(e.target.value)}
-                    className="border-0 bg-transparent px-0 text-[13px] focus-visible:ring-0 h-6"
+                    className="border-0 bg-transparent px-0 text-[14px] focus-visible:ring-0 h-6"
                   />
                 </div>
                 {dueAt && (
@@ -439,28 +441,28 @@ export default function NewPostPage() {
 
             {/* Audience — hidden when inside a folder (inherits folder audience) */}
             {urlFolderId ? (
-              <div className="flex items-center gap-3 rounded-xl bg-violet-50/50 dark:bg-violet-950/20 px-3.5 py-2.5">
-                <Eye className="h-4 w-4 shrink-0 text-violet-500/60" />
+              <div className="flex items-center gap-3 rounded-2xl bg-violet-50/50 dark:bg-violet-950/20 px-4 py-3">
+                <Eye className="h-4.5 w-4.5 shrink-0 text-violet-500/60" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium text-violet-500/60 uppercase tracking-wider">Audience</p>
-                  <p className="text-[13px] text-violet-600 dark:text-violet-400">Inherited from folder</p>
+                  <p className="text-[11px] font-semibold text-violet-500/60 uppercase tracking-wider mb-0.5">Audience</p>
+                  <p className="text-[14px] text-violet-600 dark:text-violet-400">Inherited from folder</p>
                 </div>
               </div>
             ) : (
             <button
               type="button"
               onClick={() => setAudienceSheetOpen(true)}
-              className="flex w-full items-center gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5 text-left transition-colors active:bg-muted/50"
+              className="flex w-full items-center gap-3 rounded-2xl bg-muted/30 px-4 py-3 text-left transition-colors active:bg-muted/50"
             >
-              <Eye className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              <Eye className="h-4.5 w-4.5 shrink-0 text-muted-foreground/60" />
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">Audience</p>
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-0.5">Audience</p>
                 {audiences.length === 0 ? (
-                  <p className="text-[13px] text-muted-foreground/40">Tap to select…</p>
+                  <p className="text-[14px] text-muted-foreground/40">Tap to select…</p>
                 ) : (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {audiences.map((a, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-md bg-background px-2 py-0.5 text-[11px] font-medium shadow-sm">
+                      <span key={i} className="inline-flex items-center gap-1 rounded-lg bg-background px-2.5 py-1 text-[12px] font-medium shadow-sm">
                         {audienceIconMap[a.audienceType]}
                         {a.label}
                         <button
@@ -480,10 +482,10 @@ export default function NewPostPage() {
             )}
 
             {/* Tags */}
-            <div className="flex items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5">
-              <Tag className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+            <div className="flex items-start gap-3 rounded-2xl bg-muted/30 px-4 py-3">
+              <Tag className="mt-1 h-4.5 w-4.5 shrink-0 text-muted-foreground/60" />
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5">Tags</p>
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Tags</p>
                 <div className="flex flex-wrap gap-1.5">
                   {tags.map((tag) => (
                     <button
@@ -494,7 +496,7 @@ export default function NewPostPage() {
                     >
                       <Badge
                         variant={selectedTagIds.includes(tag.id) ? "default" : "outline"}
-                        className="cursor-pointer text-[11px] rounded-md"
+                        className="cursor-pointer text-[12px] rounded-lg py-1 px-2.5"
                         style={
                           tag.color && selectedTagIds.includes(tag.id)
                             ? { backgroundColor: tag.color, borderColor: tag.color, color: "#fff" }
@@ -509,16 +511,16 @@ export default function NewPostPage() {
                   ))}
                   <div className="flex items-center gap-1">
                     <Input
-                      placeholder="New…"
+                      placeholder="New tag…"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
-                      className="h-5 w-16 rounded-md border-dashed text-[11px] px-1.5"
+                      className="h-7 w-20 rounded-lg border-dashed text-[12px] px-2"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") { e.preventDefault(); handleCreateTag(); }
                       }}
                     />
                     {newTagName.trim() && (
-                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={handleCreateTag} disabled={creatingTag}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 rounded-lg" onClick={handleCreateTag} disabled={creatingTag}>
                         {creatingTag ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                       </Button>
                     )}
@@ -528,22 +530,22 @@ export default function NewPostPage() {
             </div>
 
             {/* Attachments */}
-            <div className="flex items-start gap-3 rounded-xl bg-muted/30 px-3.5 py-2.5">
-              <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/60" />
+            <div className="flex items-start gap-3 rounded-2xl bg-muted/30 px-4 py-3">
+              <Paperclip className="mt-1 h-4.5 w-4.5 shrink-0 text-muted-foreground/60" />
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5">Files</p>
-                <div className="space-y-1.5">
+                <p className="text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Files</p>
+                <div className="space-y-2">
                   {files.map((file, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-lg bg-background px-2.5 py-1.5 shadow-sm">
+                    <div key={i} className="flex items-center gap-2.5 rounded-xl bg-background px-3 py-2 shadow-sm">
                       {getFileIcon(file)}
-                      <span className="truncate text-[12px] font-medium flex-1">{file.name}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">{formatFileSize(file.size)}</span>
+                      <span className="truncate text-[13px] font-medium flex-1">{file.name}</span>
+                      <span className="text-[11px] text-muted-foreground shrink-0">{formatFileSize(file.size)}</span>
                       <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>
-                        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                       </button>
                     </div>
                   ))}
-                  <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-border/40 px-3 py-2.5 text-[12px] text-muted-foreground/50 transition-colors hover:border-border hover:bg-background/50 active:scale-[0.98]">
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 px-3 py-3 text-[13px] text-muted-foreground/60 transition-colors hover:border-border hover:bg-background/50 active:scale-[0.98]">
                     <Upload className="h-4 w-4" />
                     <span>{files.length > 0 ? "Add more files" : "Tap to attach files"}</span>
                     <input
@@ -566,9 +568,9 @@ export default function NewPostPage() {
 
       {/* ── Sticky bottom bar ── */}
       {(canCreateAssignment || canCreateNote) && (
-        <div className="fixed bottom-[max(6.5rem,calc(6.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/30 bg-background/95 backdrop-blur-xl px-4 py-3">
+        <div className="fixed bottom-[max(6.5rem,calc(6.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/20 bg-background/95 backdrop-blur-xl px-4 py-3">
           <div className="mx-auto flex max-w-2xl items-center gap-2">
-            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted active:scale-95">
+            <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted active:scale-95 min-h-[44px] min-w-[44px]">
               <Paperclip className="h-4 w-4 text-muted-foreground" />
               <input
                 type="file"
@@ -582,26 +584,26 @@ export default function NewPostPage() {
               />
             </label>
             {files.length > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">{files.length} file{files.length > 1 ? "s" : ""}</span>
+              <span className="text-[12px] tabular-nums text-muted-foreground">{files.length} file{files.length > 1 ? "s" : ""}</span>
             )}
             <div className="flex-1" />
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 rounded-full px-4 text-[13px] font-medium text-muted-foreground"
+              className="h-10 rounded-full px-5 text-[14px] font-medium text-muted-foreground min-h-[44px]"
               disabled={submitting || !isFormValid}
               onClick={() => handleSubmit(true)}
             >
-              {submitting && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-              Draft
+              {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              Save Draft
             </Button>
             <Button
               size="sm"
-              className="h-9 rounded-full px-5 text-[13px] font-semibold shadow-sm"
+              className="h-10 rounded-full px-6 text-[14px] font-semibold shadow-sm min-h-[44px]"
               disabled={submitting || !isFormValid}
               onClick={() => handleSubmit(false)}
             >
-              {submitting && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+              {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               Publish
             </Button>
           </div>

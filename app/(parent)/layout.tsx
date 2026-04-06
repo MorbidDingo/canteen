@@ -8,14 +8,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { IndianRupee, CheckCircle2, AlertCircle, CreditCard, Landmark, ChevronLeft, ChevronRight, Moon, Sun, Store, BookOpen, MapPin, Check, ChevronDown } from "lucide-react";
 import {
   IoRestaurant,
+  IoRestaurantOutline,
   IoCart,
   IoBook,
+  IoBookOutline,
   IoWallet,
   IoShieldCheckmark,
   IoSparkles,
+  IoSparklesOutline,
   IoNotifications,
   IoCalendar,
   IoDocumentText,
+  IoDocumentTextOutline,
   IoSettings,
   IoClose,
 } from "react-icons/io5";
@@ -792,11 +796,11 @@ function ParentLayoutContent({
   );
 
   const bottomTabs = useMemo(() => [
-    { key: "food" as const, href: "/menu", icon: IoRestaurant, label: "Food" },
-    { key: "library" as const, href: "/library-showcase", icon: IoBook, label: "Library" },
-    { key: "pass" as const, href: "/certe-pass", icon: IoSparkles, label: "Pass" },
-    { key: "notes" as const, href: "/assignments", icon: IoDocumentText, label: "Board" },
-  ], []);
+    { key: "food" as const, href: "/menu", icon: IoRestaurant, iconOutline: IoRestaurantOutline, label: "Food" },
+    { key: "library" as const, href: "/library-showcase", icon: IoBook, iconOutline: IoBookOutline, label: "Library" },
+    { key: "pass" as const, href: certePlusActive ? "/pre-orders" : "/certe-pass", icon: IoSparkles, iconOutline: IoSparklesOutline, label: "Pass" },
+    { key: "notes" as const, href: "/assignments", icon: IoDocumentText, iconOutline: IoDocumentTextOutline, label: "Board" },
+  ], [certePlusActive]);
 
   return (
     <>
@@ -926,48 +930,54 @@ function ParentLayoutContent({
         {children}
       </div>
 
-      {/* Bottom tab bar — refined floating glass pill + profile bubble */}
+      {/* Bottom tab bar — iOS-style floating glass pill */}
       <nav
         className="fixed bottom-3 left-0 right-0 z-50 flex items-end justify-center gap-2 px-4"
         style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}
       >
-        <div className="relative overflow-hidden rounded-[22px] border border-white/30 bg-white/60 px-2 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] backdrop-blur-3xl dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] dark:ring-white/[0.06] w-full max-w-sm">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/40 bg-white/70 px-3 py-2 shadow-[0_12px_40px_rgba(0,0,0,0.14),0_3px_10px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04] backdrop-blur-3xl dark:border-white/10 dark:bg-slate-950/60 dark:shadow-[0_12px_40px_rgba(0,0,0,0.5)] dark:ring-white/[0.07] w-full max-w-sm">
           {/* Subtle top highlight */}
-          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/70 to-transparent dark:via-white/15" />
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-white/15" />
 
-          <div className="relative flex items-center justify-around">
+          <div className="relative flex items-center justify-around gap-1">
             {bottomTabs.map((tab) => {
               const isActive = bottomTab === tab.key;
-              const Icon = tab.icon;
+              const ActiveIcon = tab.icon;
+              const InactiveIcon = tab.iconOutline;
               return (
                 <Link
                   key={tab.key}
                   href={tab.href}
                   className={cn(
-                    "relative flex min-w-0 flex-1 flex-col items-center gap-[3px] rounded-2xl px-2 py-2 transition-all duration-300",
+                    "relative flex min-w-0 flex-1 flex-col items-center gap-[3px] rounded-2xl px-2 py-2 transition-all duration-200",
                     isActive
-                      ? "bg-slate-900/[0.07] dark:bg-white/[0.12]"
-                      : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
+                      ? "text-primary"
+                      : "text-slate-400 dark:text-slate-500",
                   )}
                 >
+                  {/* Active background pill */}
+                  {isActive && (
+                    <span className="absolute inset-0 rounded-2xl bg-primary/10 dark:bg-primary/20" />
+                  )}
                   <span className="relative">
-                    <Icon className={cn(
-                      "h-[21px] w-[21px] transition-colors duration-300",
-                      isActive ? "text-slate-900 dark:text-white" : "",
-                    )} />
+                    {isActive ? (
+                      <ActiveIcon className="h-[22px] w-[22px] transition-all duration-200" />
+                    ) : (
+                      <InactiveIcon className="h-[22px] w-[22px] transition-all duration-200 hover:text-slate-600 dark:hover:text-slate-300" />
+                    )}
                     {tab.key === "pass" && certePlusActive && (
                       <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-amber-400 ring-[1.5px] ring-white dark:ring-slate-900" />
                     )}
+                    {tab.key === "pass" && !certePlusActive && (
+                      <span className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-sky-400/80 ring-[1.5px] ring-white dark:ring-slate-900" />
+                    )}
                   </span>
                   <span className={cn(
-                    "text-[10px] font-semibold tracking-wide transition-colors duration-300",
-                    isActive ? "text-slate-900 dark:text-white" : "",
+                    "text-[10px] font-semibold tracking-wide transition-colors duration-200",
+                    isActive ? "text-primary" : "text-slate-400 dark:text-slate-500",
                   )}>
                     {tab.label}
                   </span>
-                  {isActive && (
-                    <span className="absolute -bottom-0.5 h-[3px] w-5 rounded-full bg-slate-900 dark:bg-white" />
-                  )}
                 </Link>
               );
             })}
@@ -978,10 +988,10 @@ function ParentLayoutContent({
         <button
           type="button"
           onClick={() => setProfileSheetOpen(true)}
-          className="relative bottom-1 shrink-0 h-[52px] w-[52px] overflow-hidden rounded-2xl border border-white/30 bg-white/60 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-black/[0.03] backdrop-blur-3xl transition-all duration-200 hover:bg-white/70 active:scale-95 dark:border-white/10 dark:bg-slate-950/50 dark:ring-white/[0.06]"
+          className="relative bottom-1 shrink-0 h-[54px] w-[54px] overflow-hidden rounded-[18px] border border-white/40 bg-white/70 shadow-[0_12px_40px_rgba(0,0,0,0.14),0_3px_10px_rgba(0,0,0,0.08)] ring-1 ring-black/[0.04] backdrop-blur-3xl transition-all duration-200 hover:bg-white/80 active:scale-95 dark:border-white/10 dark:bg-slate-950/60 dark:ring-white/[0.07]"
           aria-label="Profile"
         >
-          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-transparent dark:from-white/5" />
+          <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-b from-white/40 to-transparent dark:from-white/5" />
           <div className="relative flex h-full w-full items-center justify-center text-[14px] font-bold text-slate-700 dark:text-slate-200">
             {mounted ? getInitials(session?.user?.name) : "?"}
           </div>
@@ -1038,7 +1048,7 @@ function ParentLayoutContent({
             {/* Certe+ subscription card */}
             <button
               type="button"
-              onClick={() => { setProfileSheetOpen(false); void router.push("/pre-orders"); }}
+              onClick={() => { setProfileSheetOpen(false); void router.push("/certe-pass"); }}
               className={cn(
                 "mt-3 flex w-full items-center gap-3 rounded-2xl p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
                 certePlusActive
@@ -1059,7 +1069,7 @@ function ParentLayoutContent({
                     Active · {certePlusStatus?.subscription?.plan || "Subscribed"}
                   </p>
                 ) : (
-                  <p className="text-[12px] text-muted-foreground">Subscribe for benefits</p>
+                  <p className="text-[12px] text-muted-foreground">View benefits & subscribe</p>
                 )}
               </div>
               {!certePlusActive && (
@@ -1076,6 +1086,7 @@ function ParentLayoutContent({
           {/* Menu items */}
           <div className="flex-1 overflow-y-auto px-5">
             {[
+              ...(certePlusActive ? [{ label: "Pre-Orders", href: "/pre-orders" }] : []),
               { label: "Order History", href: "/orders" },
               { label: "Library History", href: "/library-history" },
               { label: "Calendar", href: "/calendar" },
