@@ -78,6 +78,7 @@ export default function NewPostPage() {
   /* ── Post fields ── */
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [editorMode, setEditorMode] = useState<"richtext" | "markdown">("richtext");
   const [dueAt, setDueAt] = useState("");
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
@@ -508,9 +509,9 @@ export default function NewPostPage() {
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-40">
+    <div className="mx-auto max-w-2xl px-5 pb-40 sm:px-8">
       {/* ── Header ── */}
-      <div className="sticky top-0 z-30 -mx-4 flex items-center gap-3 border-b border-border/10 bg-background/90 backdrop-blur-xl px-4 pb-3 pt-4">
+      <div className="sticky top-0 z-30 -mx-5 flex items-center gap-3 border-b border-border/10 bg-background/90 backdrop-blur-xl px-5 pb-3 pt-4">
         <button
           type="button"
           onClick={() =>
@@ -652,18 +653,62 @@ export default function NewPostPage() {
                 autoFocus
               />
 
-              {/* Body */}
-              <div className="mb-5 min-h-[160px] rounded-2xl border border-border/20 bg-muted/10 px-1 py-1">
-                <RichTextEditor
-                  placeholder="Write details or instructions…"
-                  value={body}
-                  onChange={setBody}
-                  disabled={submitting}
-                  title={
-                    title ||
-                    (mode === "ASSIGNMENT" ? "New Assignment" : "New Note")
-                  }
-                />
+              {/* Body — rich-text / markdown toggle */}
+              <div className="mb-5 rounded-2xl border border-border/20 bg-muted/10 overflow-hidden">
+                {/* Toggle bar */}
+                <div className="flex items-center justify-between border-b border-border/10 px-3 py-1.5">
+                  <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                    {editorMode === "richtext" ? "Rich Text" : "Markdown"}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={editorMode === "richtext" ? "Switch to markdown editor" : "Switch to rich text editor"}
+                    onClick={() =>
+                      setEditorMode((prev) =>
+                        prev === "richtext" ? "markdown" : "richtext",
+                      )
+                    }
+                    className="rounded-lg px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  >
+                    {editorMode === "richtext" ? "Markdown" : "Rich Text"}
+                  </button>
+                </div>
+
+                {/* Rich text editor */}
+                {editorMode === "richtext" && (
+                  <div className="min-h-[160px] px-1 py-1">
+                    <RichTextEditor
+                      placeholder="Write details or instructions…"
+                      value={body}
+                      onChange={setBody}
+                      disabled={submitting}
+                      title={
+                        title ||
+                        (mode === "ASSIGNMENT" ? "New Assignment" : "New Note")
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Markdown editor */}
+                {editorMode === "markdown" && (
+                  <div className="px-3 py-2">
+                    <Textarea
+                      placeholder="Write in markdown…"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      disabled={submitting}
+                      rows={8}
+                      className="min-h-[160px] border-0 bg-transparent px-0 font-mono text-[14px] leading-relaxed placeholder:text-muted-foreground/30 focus-visible:ring-0 resize-none"
+                    />
+                  </div>
+                )}
+
+                {editorMode === "markdown" && (
+                  <p className="border-t border-border/10 px-3 py-1.5 text-[11px] text-muted-foreground/50">
+                    Supports markdown formatting
+                  </p>
+                )}
               </div>
 
               {/* ── Metadata cards ── */}

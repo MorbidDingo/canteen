@@ -235,12 +235,13 @@ export async function GET(request: NextRequest) {
 
   // Fetch attachments for drafts
   const draftIds = userDrafts.map((d) => d.id);
-  const draftAttachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  const draftAttachmentsByPost = new Map<string, Array<{ id: string; originalFileName: string | null; mimeType: string; size: number }>>();
   if (draftIds.length > 0) {
     const draftAttachments = await db
       .select({
         id: contentPostAttachment.id,
         postId: contentPostAttachment.postId,
+        originalFileName: contentPostAttachment.originalFileName,
         mimeType: contentPostAttachment.mimeType,
         size: contentPostAttachment.size,
       })
@@ -248,7 +249,7 @@ export async function GET(request: NextRequest) {
       .where(inArray(contentPostAttachment.postId, draftIds));
     for (const att of draftAttachments) {
       const arr = draftAttachmentsByPost.get(att.postId) || [];
-      arr.push({ id: att.id, mimeType: att.mimeType, size: att.size });
+      arr.push({ id: att.id, originalFileName: att.originalFileName, mimeType: att.mimeType, size: att.size });
       draftAttachmentsByPost.set(att.postId, arr);
     }
   }
@@ -319,6 +320,7 @@ export async function GET(request: NextRequest) {
       postId: contentPostAttachment.postId,
       storageBackend: contentPostAttachment.storageBackend,
       storageKey: contentPostAttachment.storageKey,
+      originalFileName: contentPostAttachment.originalFileName,
       mimeType: contentPostAttachment.mimeType,
       size: contentPostAttachment.size,
     })
@@ -326,10 +328,10 @@ export async function GET(request: NextRequest) {
     .where(inArray(contentPostAttachment.postId, postIds));
 
   // Group attachments by postId
-  const attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  const attachmentsByPost = new Map<string, Array<{ id: string; originalFileName: string | null; mimeType: string; size: number }>>();
   for (const att of postAttachments) {
     const arr = attachmentsByPost.get(att.postId) || [];
-    arr.push({ id: att.id, mimeType: att.mimeType, size: att.size });
+    arr.push({ id: att.id, originalFileName: att.originalFileName, mimeType: att.mimeType, size: att.size });
     attachmentsByPost.set(att.postId, arr);
   }
 
