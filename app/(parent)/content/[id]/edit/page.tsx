@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -463,10 +463,9 @@ export default function EditPostPage() {
       {/* Body */}
       <div className="space-y-1.5">
         <Label className="text-xs font-medium">Body</Label>
-        <Textarea
+        <RichTextEditor
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={6}
+          onChange={setBody}
           disabled={status === "CLOSED" && postType === "ASSIGNMENT"}
         />
         {status === "CLOSED" && postType === "ASSIGNMENT" && (

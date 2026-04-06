@@ -64,6 +64,11 @@ function isPastDue(dueAt: string) {
   return new Date(dueAt).getTime() < Date.now();
 }
 
+/** Strip HTML tags from a string for use in plain-text previews */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 /** Group posts by relative date label */
 function groupByDate(posts: FeedPost[]): { label: string; posts: FeedPost[] }[] {
   const groups: Map<string, FeedPost[]> = new Map();
@@ -277,7 +282,7 @@ export default function AssignmentsFeedPage() {
 
                       {/* Body preview */}
                       {post.body && (
-                        <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{post.body}</p>
+                        <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">{stripHtml(post.body)}</p>
                       )}
 
                       {/* Meta line */}

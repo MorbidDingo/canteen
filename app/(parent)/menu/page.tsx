@@ -7,6 +7,7 @@ import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { useCartStore } from "@/lib/store/cart-store";
 import { AnimatePresence, motion } from "framer-motion";
+import { AiQuickBar } from "@/components/ai/ai-quick-bar";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
 
 interface MenuItem {
@@ -132,11 +133,17 @@ export default function MenuPage() {
           </p>
         </div>
       ) : (
-        <MenuClient
-          items={items}
-          selectedCanteen={selectedCanteen}
-          onCanteenChange={setSelectedCanteen}
-        />
+        <>
+          {/* AI quick-action chips — canteen context */}
+          <div className="px-4 pt-4 pb-2">
+            <AiQuickBar />
+          </div>
+          <MenuClient
+            items={items}
+            selectedCanteen={selectedCanteen}
+            onCanteenChange={setSelectedCanteen}
+          />
+        </>
       )}
 
       {/* Floating cart bar */}

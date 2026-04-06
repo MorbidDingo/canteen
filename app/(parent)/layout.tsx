@@ -17,6 +17,7 @@ import {
   IoCalendar,
   IoDocumentText,
   IoSettings,
+  IoClose,
 } from "react-icons/io5";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
@@ -24,6 +25,7 @@ import { useCartStore } from "@/lib/store/cart-store";
 import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { ParentNotificationBell } from "@/components/parent-notification-bell";
 import { motion, BottomSheet } from "@/components/ui/motion";
+import { ChatAssistant, type ChatContext } from "@/components/ai/chat-assistant";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
 import { useRealtimeData } from "@/lib/events";
 import {
@@ -198,6 +200,7 @@ function ParentLayoutContent({
   const [selectedPaymentEvent, setSelectedPaymentEvent] = useState<PaymentEventItem | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [wallets, setWallets] = useState<WalletSnapshot[]>([]);
   const [walletsLoading, setWalletsLoading] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -1747,6 +1750,28 @@ function ParentLayoutContent({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── AI Assistant FAB + Chat Panel ─────────────────── */}
+      {certePlusActive && (
+        <button
+          type="button"
+          onClick={() => setChatOpen((v) => !v)}
+          aria-label="Open AI Assistant"
+          className="fixed bottom-[5.5rem] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full border border-white/40 bg-white/60 shadow-sm backdrop-blur-xl transition-colors hover:bg-white/80 active:scale-[0.96] dark:border-white/10 dark:bg-slate-900/70 dark:hover:bg-slate-900/90 md:bottom-6 md:right-6"
+        >
+          {chatOpen ? (
+            <IoClose className="h-5 w-5 text-foreground" />
+          ) : (
+            <IoSparkles className="h-5 w-5 text-primary" />
+          )}
+        </button>
+      )}
+
+      <ChatAssistant
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        context={parentMode as ChatContext}
+      />
     </>
   );
 }

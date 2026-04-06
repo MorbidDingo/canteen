@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -403,12 +403,12 @@ export default function NewPostPage() {
           />
 
           {/* ── Body ── */}
-          <Textarea
+          <RichTextEditor
             placeholder="Write details or instructions…"
             value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={6}
-            className="border-0 bg-transparent px-0 text-[15px] leading-relaxed placeholder:text-muted-foreground/30 focus-visible:ring-0 resize-none"
+            onChange={setBody}
+            disabled={submitting}
+            className="border-0 bg-transparent px-0"
           />
 
           {/* ── Separator ── */}
