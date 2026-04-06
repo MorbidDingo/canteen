@@ -253,6 +253,48 @@ export const CATEGORY_CHART_COLORS: Record<MenuCategory, string> = {
 
 // ─── Token Code Generation ──────────────────────────────
 
+/**
+ * Sequential human-readable order codes: AAAA1 → AAAA2 → … → AAAA9 → AAAB1 → …
+ * Format: 4 uppercase letters + 1 digit (1-9).
+ * Letters cycle A-Z (no confusable chars: skip I, L, O).
+ * Easy to remember and communicate verbally.
+ */
+const CODE_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZ"; // 23 chars, no I/L/O
+
+export function generateNextOrderCode(lastCode: string | null): string {
+  if (!lastCode || !/^[A-Z]{4}[1-9]$/.test(lastCode)) {
+    return "AAAA1";
+  }
+
+  const letters = lastCode.slice(0, 4);
+  const digit = parseInt(lastCode[4], 10);
+
+  if (digit < 9) {
+    return letters + (digit + 1);
+  }
+
+  // Increment the letter part (base-23 increment from right to left)
+  const indices = letters.split("").map((ch) => CODE_LETTERS.indexOf(ch));
+  // Handle unknown chars gracefully
+  for (let i = 0; i < indices.length; i++) {
+    if (indices[i] === -1) indices[i] = 0;
+  }
+
+  let carry = true;
+  for (let i = 3; i >= 0 && carry; i--) {
+    indices[i]++;
+    if (indices[i] >= CODE_LETTERS.length) {
+      indices[i] = 0;
+    } else {
+      carry = false;
+    }
+  }
+
+  const newLetters = indices.map((idx) => CODE_LETTERS[idx]).join("");
+  return newLetters + "1";
+}
+
+/** Legacy random 4-char token (kept for backward compatibility) */
 const TOKEN_CHARSET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O, 1/I/L
 
 export function generateTokenCode(): string {

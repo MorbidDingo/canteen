@@ -25,6 +25,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, gte, desc, ne, inArray, asc, ilike, sql } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS, MAX_ACTIVE_PREORDERS_PER_CHILD } from "@/lib/constants";
+import { getNextOrderCode } from "@/lib/order-code";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
@@ -883,8 +884,13 @@ async function handlePlaceOrder(
     return JSON.stringify({ error: unitError });
   }
 
+  // Resolve canteen from menu items (all items should belong to the same canteen)
+  const canteenIds = new Set(menuItems.map((m) => m.canteenId).filter(Boolean));
+  const resolvedCanteenId = canteenIds.size === 1 ? [...canteenIds][0] : undefined;
+
   // Execute order in transaction
   try {
+    const tokenCode = await getNextOrderCode();
     const newOrder = await db.transaction(async (tx) => {
       // Get family wallet
       const wallets = await tx
@@ -905,13 +911,12 @@ async function handlePlaceOrder(
         );
       }
 
-      const tokenCode = generateTokenCode();
-
       const [createdOrder] = await tx
         .insert(order)
         .values({
           userId: ctx.userId,
           childId,
+          canteenId: resolvedCanteenId || undefined,
           totalAmount,
           tokenCode,
           paymentMethod: "WALLET",

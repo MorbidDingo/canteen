@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, gte, sql, asc, inArray, desc } from "drizzle-orm";
 import { generateTokenCode, CERTE_PLUS, APP_SETTINGS_DEFAULTS, PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { getNextOrderCode } from "@/lib/order-code";
 import { broadcast } from "@/lib/sse";
 import { validateUnits, decrementUnits } from "@/lib/units";
 import { notifyParentForChild } from "@/lib/parent-notifications";
@@ -340,7 +341,7 @@ async function placeOrderFromItems(
     };
   }
 
-  const tokenCode = generateTokenCode();
+  const tokenCode = await getNextOrderCode();
   const newBalance = studentWallet.balance - payableTotal;
 
   // Track overdraft usage if balance went negative
