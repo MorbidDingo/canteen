@@ -1,0 +1,111 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1773133406594,
+      "tag": "0000_elite_mongu",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773224023156,
+      "tag": "0001_dazzling_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773390000000,
+      "tag": "0002_yellow_sync_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773506327099,
+      "tag": "0003_skinny_goblin_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773506796915,
+      "tag": "0004_zippy_the_leader",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773638701958,
+      "tag": "0005_plain_hercules",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773800000000,
+      "tag": "0006_sharp_break_slots",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773900000000,
+      "tag": "0007_break_fulfillment_track",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774000000000,
+      "tag": "0008_certe_penalty_per_child",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773833771478,
+      "tag": "0009_faithful_sage",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1773835000000,
+      "tag": "0011_org_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773835400000,
+      "tag": "0012_drop_legacy_global_uniques",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1773907545956,
+      "tag": "0012_chief_marvex",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1774520026000,
+      "tag": "0026_book_reader_system",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1743548400000,
+      "tag": "0032_assignments_notes",
+      "breakpoints": true
+    }
+  ]
+}

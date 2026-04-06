@@ -1,0 +1,584 @@
+"use client";
+
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type FormEvent,
+} from "react";
+import { useSession } from "@/lib/auth-client";
+import { Button } from "@/components/ui/button";
+import {
+  AnimatePresence,
+  motion,
+  spring,
+  BottomSheet,
+} from "@/components/ui/motion";
+import { ChatMessage, type ChatMessageData } from "./chat-message";
+import type { ChatAction } from "./chat-actions";
+import {
+  X,
+  Send,
+  BookOpen,
+  Loader2,
+  ExternalLink,
+  Plus,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
+// ─── Types ────────────────────────────────────────────────
+
+type ApiMessage = { role: "user" | "assistant"; content: string };
+
+type Child = {
+  id: string;
+  name: string;
+};
+
+export type BookRecommendation = {
+  bookId: string;
+  title: string;
+  author: string;
+  category?: string;
+  coverImageUrl?: string | null;
+};
+
+type LibraryChatAction = {
+  type: "book_recommendations";
+  books: BookRecommendation[];
+};
+
+// ─── Suggested Prompts ────────────────────────────────────
+
+const SUGGESTED_PROMPTS = [
+  { label: "Recommend a book for me", icon: "✨" },
+  { label: "What's popular in the library?", icon: "🔥" },
+  { label: "Find me a mystery novel", icon: "🔍" },
+  { label: "What should I read next?", icon: "📚" },
+] as const;
+
+// ─── Book Recommendation Card ─────────────────────────────
+
+function BookRecommendationCards({
+  books,
+  childId,
+}: {
+  books: BookRecommendation[];
+  childId?: string | null;
+}) {
+  const router = useRouter();
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+
+  if (books.length === 0) return null;
+
+  const handleRequest = async (bookId: string) => {
+    if (!childId) {
+      router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+      return;
+    }
+    setRequestingId(bookId);
+    try {
+      const res = await fetch("/api/library/app-issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId, bookId }),
+      });
+      if (res.ok) {
+        toast.success("Issue request queued. Confirm at library kiosk.");
+      } else {
+        router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+      }
+    } catch {
+      router.push(`/library-showcase?bookId=${encodeURIComponent(bookId)}`);
+    } finally {
+      setRequestingId(null);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      className="mt-3 space-y-2"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        Recommended for You
+      </p>
+      {books.slice(0, 3).map((book) => (
+        <div
+          key={book.bookId}
+          className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/80 p-2.5"
+        >
+          {/* Cover thumbnail */}
+          <div className="flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/50 bg-muted">
+            {book.coverImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={book.coverImageUrl}
+                alt={book.title}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <BookOpen className="h-4 w-4 text-muted-foreground/50" />
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-1 text-[12px] font-semibold text-foreground">
+              {book.title}
+            </p>
+            <p className="truncate text-[11px] text-muted-foreground">
+              {book.author}
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="flex shrink-0 gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1 rounded-lg px-2 text-[11px] border-primary/30 bg-primary/5 hover:bg-primary/10"
+              onClick={() => router.push(`/library-showcase?bookId=${encodeURIComponent(book.bookId)}`)}
+            >
+              <ExternalLink className="h-3 w-3" />
+              View
+            </Button>
+            {childId && (
+              <Button
+                size="sm"
+                variant="default"
+                className="gap-1 rounded-lg px-2 text-[11px]"
+                disabled={requestingId === book.bookId}
+                onClick={() => void handleRequest(book.bookId)}
+              >
+                {requestingId === book.bookId ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-3 w-3" />
+                    Request
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      ))}
+    </motion.div>
+  );
+}
+
+// ─── Extend ChatAction for library ───────────────────────
+
+type ExtendedChatAction = ChatAction | LibraryChatAction;
+
+// ─── LibraryChatAssistant ─────────────────────────────────
+
+export function LibraryChatAssistant({
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const { data: session } = useSession();
+
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    onOpenChange?.(v);
+  };
+
+  const [messages, setMessages] = useState<ChatMessageData[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<ApiMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Detect mobile
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Fetch children on first open
+  useEffect(() => {
+    if (!open || children.length > 0) return;
+    fetch("/api/children", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { children: Child[] } | null) => {
+        if (data?.children) {
+          setChildren(data.children);
+          if (data.children.length === 1) {
+            setSelectedChildId(data.children[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [open, children.length]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  // Focus input when panel opens
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 300);
+  }, [open]);
+
+  // ─── Send Message ─────────────────────────────────────
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isLoading) return;
+
+      const userMsg: ChatMessageData = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: text.trim(),
+      };
+
+      const newHistory: ApiMessage[] = [
+        ...conversationHistory,
+        { role: "user" as const, content: text.trim() },
+      ];
+
+      setMessages((prev) => [...prev, userMsg]);
+      setConversationHistory(newHistory);
+      setInput("");
+      setIsLoading(true);
+
+      const assistantId = `assistant-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", content: "", isStreaming: true },
+      ]);
+
+      try {
+        abortRef.current = new AbortController();
+
+        const res = await fetch("/api/library/ai/chat/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: newHistory,
+            childId: selectedChildId,
+          }),
+          signal: abortRef.current.signal,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          const errorText =
+            (err as { message?: string; error?: string } | null)?.message ||
+            (err as { message?: string; error?: string } | null)?.error ||
+            "Something went wrong. Please try again.";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, content: errorText, isStreaming: false } : m,
+            ),
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let accumulated = "";
+        let pendingActions: ExtendedChatAction[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+              const parsed = JSON.parse(jsonStr) as
+                | { type: "text"; text: string }
+                | { type: "actions"; actions: ExtendedChatAction[] }
+                | { type: "done" };
+
+              if (parsed.type === "text") {
+                accumulated += parsed.text;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? { ...m, content: accumulated, isStreaming: true }
+                      : m,
+                  ),
+                );
+              }
+
+              if (parsed.type === "actions") {
+                pendingActions = parsed.actions;
+              }
+
+              if (parsed.type === "done") {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          isStreaming: false,
+                          libraryActions:
+                            pendingActions.length > 0
+                              ? (pendingActions.filter(
+                                  (a) => a.type === "book_recommendations",
+                                ) as LibraryChatAction[])
+                              : undefined,
+                          actions:
+                            pendingActions.length > 0
+                              ? (pendingActions.filter(
+                                  (a) => a.type !== "book_recommendations",
+                                ) as ChatAction[])
+                              : undefined,
+                        }
+                      : m,
+                  ),
+                );
+                setConversationHistory((prev) => [
+                  ...prev,
+                  { role: "assistant", content: accumulated },
+                ]);
+              }
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        }
+
+        // Mark done in case "done" event was missed
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId ? { ...m, isStreaming: false } : m,
+          ),
+        );
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, isStreaming: false } : m,
+            ),
+          );
+        } else {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content: "Sorry, something went wrong. Please try again.",
+                    isStreaming: false,
+                  }
+                : m,
+            ),
+          );
+        }
+      } finally {
+        setIsLoading(false);
+        abortRef.current = null;
+      }
+    },
+    [conversationHistory, isLoading, selectedChildId],
+  );
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void sendMessage(input);
+  };
+
+  if (!session?.user) return null;
+
+  // ─── Chat Content ─────────────────────────────────────
+
+  const chatContent = (
+    <div className="flex flex-1 flex-col min-h-0">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#d4891a]/15">
+            <BookOpen className="h-4 w-4 text-[#d4891a]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold leading-tight">Library Assistant</h3>
+            <p className="text-[11px] text-muted-foreground">Find your next great read</p>
+          </div>
+        </div>
+
+        {/* Child Selector */}
+        {children.length > 1 && (
+          <select
+            value={selectedChildId ?? ""}
+            onChange={(e) => setSelectedChildId(e.target.value || null)}
+            className="h-8 rounded-lg border border-border/60 bg-background px-2 text-[12px] outline-none focus:ring-1 focus:ring-primary/40"
+          >
+            <option value="">All children</option>
+            {children.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {!isMobile && (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted transition-colors"
+            aria-label="Close chat"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-3"
+      >
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 py-8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#d4891a]/10">
+              <BookOpen className="h-7 w-7 text-[#d4891a]" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold">Hello, reader! 📚</p>
+              <p className="mt-1 max-w-[240px] text-[12px] text-muted-foreground">
+                Ask me to find books, get personalised recommendations, or learn about any title in
+                our library.
+              </p>
+            </div>
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              {SUGGESTED_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt.label}
+                  type="button"
+                  onClick={() => void sendMessage(prompt.label)}
+                  className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-muted/80 active:scale-[0.97]"
+                >
+                  <span>{prompt.icon}</span>
+                  <span>{prompt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map((msg) => (
+              <div key={msg.id}>
+                <ChatMessage message={msg} />
+                {/* Render book recommendation cards below assistant messages */}
+                {msg.role === "assistant" &&
+                  !msg.isStreaming &&
+                  (msg as ChatMessageData & { libraryActions?: LibraryChatAction[] }).libraryActions
+                    ?.length ? (
+                  (msg as ChatMessageData & { libraryActions?: LibraryChatAction[] }).libraryActions!.map(
+                    (action, i) => (
+                      <BookRecommendationCards key={i} books={action.books} childId={selectedChildId} />
+                    ),
+                  )
+                ) : null}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Input Area */}
+      <div className="border-t border-border/50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask about books or get recommendations..."
+            disabled={isLoading}
+            className="flex-1 rounded-xl border border-border/60 bg-muted/40 px-3.5 py-2.5 text-[13px] outline-none placeholder:text-muted-foreground/60 focus:ring-1 focus:ring-primary/40 disabled:opacity-60"
+            maxLength={500}
+          />
+          <Button
+            type="submit"
+            size="icon-sm"
+            disabled={!input.trim() || isLoading}
+            className="shrink-0 rounded-xl bg-[#d4891a] hover:bg-[#b87314] text-white"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+
+  // ─── Render (mobile / desktop) ────────────────────────
+
+  return (
+    <>
+      {/* Desktop: Dropdown Panel */}
+      {!isMobile && (
+        <AnimatePresence>
+          {open && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-40"
+                onClick={() => setOpen(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                transition={spring.snappy}
+                className="fixed right-4 top-16 z-50 flex max-h-[min(560px,calc(100dvh-5rem))] w-[380px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/95 shadow-xl backdrop-blur-2xl"
+              >
+                {chatContent}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Mobile: Bottom Sheet */}
+      {isMobile && (
+        <BottomSheet open={open} onClose={() => setOpen(false)} snapPoints={[92]} bare>
+          {chatContent}
+        </BottomSheet>
+      )}
+    </>
+  );
+}

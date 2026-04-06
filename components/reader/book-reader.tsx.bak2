@@ -1,0 +1,902 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "@/components/ui/motion";
+import { spring } from "@/components/ui/motion";
+import { cn } from "@/lib/utils";
+import type { ReadingMode } from "@/lib/constants";
+import { READING_MODES, READING_MODE_LABELS } from "@/lib/constants";
+import {
+  BookOpen,
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Highlighter,
+  Loader2,
+  Moon,
+  Settings,
+  Sun,
+  Volume2,
+  VolumeX,
+  X,
+  Minus,
+  Plus,
+  List,
+  ArrowLeft,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+// ─── Types ───────────────────────────────────────────────
+
+interface Chapter {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  content: string;
+  pageStart: number;
+  pageEnd: number;
+  audioUrl: string | null;
+}
+
+interface BookInfo {
+  id: string;
+  title: string;
+  author: string;
+  totalPages: number;
+  totalChapters: number;
+  isAudioEnabled: boolean;
+  coverImageUrl: string | null;
+  contentType?: string;
+}
+
+interface BookmarkItem {
+  id: string;
+  chapterNumber: number;
+  page: number;
+  label: string | null;
+  createdAt: string;
+}
+
+interface HighlightItem {
+  id: string;
+  chapterNumber: number;
+  page: number;
+  startOffset: number;
+  endOffset: number;
+  highlightedText: string;
+  color: string;
+  note: string | null;
+  createdAt: string;
+}
+
+// ─── Reading Mode Styles ─────────────────────────────────
+
+const READING_MODE_STYLES: Record<ReadingMode, { bg: string; text: string; filter: string }> = {
+  LIGHT: { bg: "bg-white", text: "text-gray-900", filter: "" },
+  DARK: { bg: "bg-gray-950", text: "text-gray-100", filter: "" },
+  BLUE_LIGHT: { bg: "bg-amber-50", text: "text-amber-950", filter: "sepia(20%) saturate(80%)" },
+  GREY: { bg: "bg-neutral-200", text: "text-neutral-800", filter: "saturate(0%) brightness(95%)" },
+};
+
+// ─── Page Flip Variants ──────────────────────────────────
+
+const pageFlipVariants = {
+  enter: (direction: number) => ({
+    rotateY: direction > 0 ? 90 : -90,
+    opacity: 0,
+    transformOrigin: direction > 0 ? "left center" : "right center",
+  }),
+  center: {
+    rotateY: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    rotateY: direction > 0 ? -90 : 90,
+    opacity: 0,
+    transformOrigin: direction > 0 ? "right center" : "left center",
+  }),
+};
+
+const bookOpenVariants = {
+  closed: {
+    scaleX: 0,
+    opacity: 0,
+    transformOrigin: "left center",
+  },
+  open: {
+    scaleX: 1,
+    opacity: 1,
+    transformOrigin: "left center",
+    transition: { type: "spring" as const, stiffness: 200, damping: 25, mass: 1 },
+  },
+};
+
+// ─── Component ───────────────────────────────────────────
+
+export function BookReader({ bookId }: { bookId: string }) {
+  const router = useRouter();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // State
+  const [loading, setLoading] = useState(true);
+  const [bookInfo, setBookInfo] = useState<BookInfo | null>(null);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [highlights, setHighlights] = useState<HighlightItem[]>([]);
+
+  const [currentChapter, setCurrentChapter] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [readingMode, setReadingMode] = useState<ReadingMode>("LIGHT");
+  const [fontSize, setFontSize] = useState(16);
+  const [direction, setDirection] = useState(0);
+  const [isBookOpen, setIsBookOpen] = useState(false);
+
+  // Panels
+  const [showSettings, setShowSettings] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showChapters, setShowChapters] = useState(false);
+
+  // Audio (browser TTS)
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Saved position for "go back" after navigating to bookmark/highlight
+  const [savedPosition, setSavedPosition] = useState<{ chapter: number; page: number } | null>(null);
+
+  const activeChapter = useMemo(
+    () => chapters.find((c) => c.chapterNumber === currentChapter),
+    [chapters, currentChapter],
+  );
+
+  const currentChapterHighlights = useMemo(
+    () => highlights.filter((h) => h.chapterNumber === currentChapter),
+    [highlights, currentChapter],
+  );
+
+  const isCurrentPageBookmarked = useMemo(
+    () => bookmarks.some((b) => b.chapterNumber === currentChapter && b.page === currentPage),
+    [bookmarks, currentChapter, currentPage],
+  );
+
+  // ─── Data Fetching ─────────────────────────────────────
+
+  const fetchBookData = useCallback(async () => {
+    try {
+      const [contentRes, bookmarksRes, highlightsRes, progressRes] = await Promise.all([
+        fetch(`/api/library/reader/${bookId}/content`),
+        fetch(`/api/library/reader/${bookId}/bookmarks`),
+        fetch(`/api/library/reader/${bookId}/highlights`),
+        fetch(`/api/library/reader/${bookId}/progress`),
+      ]);
+
+      if (!contentRes.ok) {
+        toast.error("Failed to load book content");
+        router.push("/library-reader");
+        return;
+      }
+
+      const contentData = await contentRes.json();
+      setBookInfo(contentData.book);
+      setChapters(contentData.chapters || []);
+
+      if (bookmarksRes.ok) {
+        const bmData = await bookmarksRes.json();
+        setBookmarks(bmData.bookmarks || []);
+      }
+
+      if (highlightsRes.ok) {
+        const hlData = await highlightsRes.json();
+        setHighlights(hlData.highlights || []);
+      }
+
+      if (progressRes.ok) {
+        const progData = await progressRes.json();
+        const p = progData.progress;
+        if (p) {
+          setCurrentChapter(p.currentChapter);
+          setCurrentPage(p.currentPage);
+          setReadingMode(p.readingMode as ReadingMode);
+          setFontSize(p.fontSize);
+        }
+      }
+
+      // Book opening animation
+      setTimeout(() => setIsBookOpen(true), 100);
+    } catch {
+      toast.error("Failed to load book");
+    } finally {
+      setLoading(false);
+    }
+  }, [bookId, router]);
+
+  useEffect(() => {
+    fetchBookData();
+  }, [fetchBookData]);
+
+  // ─── Progress Auto-Save ────────────────────────────────
+
+  const saveProgress = useCallback(
+    (chapter: number, page: number, mode: ReadingMode, size: number) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        fetch(`/api/library/reader/${bookId}/progress`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentChapter: chapter,
+            currentPage: page,
+            readingMode: mode,
+            fontSize: size,
+          }),
+        }).catch(() => {});
+      }, 1000);
+    },
+    [bookId],
+  );
+
+  // ─── Navigation ────────────────────────────────────────
+
+  const goToPage = useCallback(
+    (dir: number) => {
+      if (!activeChapter) return;
+      const newPage = currentPage + dir;
+
+      if (newPage > activeChapter.pageEnd) {
+        // Next chapter
+        const nextCh = chapters.find((c) => c.chapterNumber === currentChapter + 1);
+        if (nextCh) {
+          setDirection(1);
+          setCurrentChapter(nextCh.chapterNumber);
+          setCurrentPage(nextCh.pageStart);
+          saveProgress(nextCh.chapterNumber, nextCh.pageStart, readingMode, fontSize);
+        }
+        return;
+      }
+
+      if (newPage < activeChapter.pageStart) {
+        // Previous chapter
+        const prevCh = chapters.find((c) => c.chapterNumber === currentChapter - 1);
+        if (prevCh) {
+          setDirection(-1);
+          setCurrentChapter(prevCh.chapterNumber);
+          setCurrentPage(prevCh.pageEnd);
+          saveProgress(prevCh.chapterNumber, prevCh.pageEnd, readingMode, fontSize);
+        }
+        return;
+      }
+
+      setDirection(dir);
+      setCurrentPage(newPage);
+      saveProgress(currentChapter, newPage, readingMode, fontSize);
+    },
+    [activeChapter, chapters, currentChapter, currentPage, readingMode, fontSize, saveProgress],
+  );
+
+  const goToChapter = useCallback(
+    (chapterNum: number) => {
+      const ch = chapters.find((c) => c.chapterNumber === chapterNum);
+      if (ch) {
+        setDirection(chapterNum > currentChapter ? 1 : -1);
+        setCurrentChapter(ch.chapterNumber);
+        setCurrentPage(ch.pageStart);
+        setShowChapters(false);
+        saveProgress(ch.chapterNumber, ch.pageStart, readingMode, fontSize);
+      }
+    },
+    [chapters, currentChapter, readingMode, fontSize, saveProgress],
+  );
+
+  const navigateToAnnotation = useCallback(
+    (chapterNum: number, page: number) => {
+      // Save current position before jumping
+      setSavedPosition({ chapter: currentChapter, page: currentPage });
+      setDirection(chapterNum > currentChapter ? 1 : chapterNum < currentChapter ? -1 : (page > currentPage ? 1 : -1));
+      setCurrentChapter(chapterNum);
+      setCurrentPage(page);
+      setShowBookmarks(false);
+    },
+    [currentChapter, currentPage],
+  );
+
+  const returnToSavedPosition = useCallback(() => {
+    if (!savedPosition) return;
+    setDirection(savedPosition.chapter > currentChapter ? 1 : savedPosition.chapter < currentChapter ? -1 : (savedPosition.page > currentPage ? 1 : -1));
+    setCurrentChapter(savedPosition.chapter);
+    setCurrentPage(savedPosition.page);
+    saveProgress(savedPosition.chapter, savedPosition.page, readingMode, fontSize);
+    setSavedPosition(null);
+  }, [savedPosition, currentChapter, currentPage, readingMode, fontSize, saveProgress]);
+
+  // ─── Bookmark Toggle ──────────────────────────────────
+
+  const toggleBookmark = useCallback(async () => {
+    const existing = bookmarks.find(
+      (b) => b.chapterNumber === currentChapter && b.page === currentPage,
+    );
+
+    if (existing) {
+      // Remove
+      await fetch(
+        `/api/library/reader/${bookId}/bookmarks?bookmarkId=${encodeURIComponent(existing.id)}`,
+        { method: "DELETE" },
+      );
+      setBookmarks((prev) => prev.filter((b) => b.id !== existing.id));
+      toast.success("Bookmark removed");
+    } else {
+      // Add
+      const res = await fetch(`/api/library/reader/${bookId}/bookmarks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapterNumber: currentChapter,
+          page: currentPage,
+          label: `Ch ${currentChapter}, Page ${currentPage}`,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBookmarks((prev) => [...prev, data.bookmark]);
+        toast.success("Page bookmarked");
+      }
+    }
+  }, [bookId, bookmarks, currentChapter, currentPage]);
+
+  // ─── Highlight Selection ───────────────────────────────
+
+  const handleTextSelection = useCallback(async () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+
+    const text = selection.toString().trim();
+    if (!text || text.length < 3) return;
+
+    const range = selection.getRangeAt(0);
+    const startOffset = range.startOffset;
+    const endOffset = range.endOffset;
+
+    const res = await fetch(`/api/library/reader/${bookId}/highlights`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chapterNumber: currentChapter,
+        page: currentPage,
+        startOffset,
+        endOffset,
+        highlightedText: text,
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      setHighlights((prev) => [...prev, data.highlight]);
+      selection.removeAllRanges();
+      toast.success("Text highlighted");
+    }
+  }, [bookId, currentChapter, currentPage]);
+
+  // ─── TTS (Text-to-Speech) ─────────────────────────────
+
+  const toggleSpeech = useCallback(() => {
+    if (isSpeaking) {
+      speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    if (!activeChapter) return;
+
+    const utterance = new SpeechSynthesisUtterance(activeChapter.content);
+    utterance.rate = 0.9;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  }, [isSpeaking, activeChapter]);
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      speechSynthesis.cancel();
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
+
+  // ─── Keyboard Navigation ──────────────────────────────
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        goToPage(1);
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        goToPage(-1);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [goToPage]);
+
+  // ─── Reading Mode ─────────────────────────────────────
+
+  const modeStyle = READING_MODE_STYLES[readingMode];
+
+  const cycleReadingMode = useCallback(() => {
+    const modes = Object.keys(READING_MODES) as ReadingMode[];
+    const idx = modes.indexOf(readingMode);
+    const next = modes[(idx + 1) % modes.length];
+    setReadingMode(next);
+    saveProgress(currentChapter, currentPage, next, fontSize);
+    toast.success(`${READING_MODE_LABELS[next]} mode`);
+  }, [readingMode, currentChapter, currentPage, fontSize, saveProgress]);
+
+  const adjustFontSize = useCallback(
+    (delta: number) => {
+      const newSize = Math.min(28, Math.max(12, fontSize + delta));
+      setFontSize(newSize);
+      saveProgress(currentChapter, currentPage, readingMode, newSize);
+    },
+    [fontSize, currentChapter, currentPage, readingMode, saveProgress],
+  );
+
+  // ─── Render ────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!bookInfo || chapters.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 px-4">
+        <BookOpen className="h-10 w-10 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">Book content not available</p>
+        <Button variant="outline" size="sm" onClick={() => router.push("/library-reader")}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to shelf
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      variants={bookOpenVariants}
+      initial="closed"
+      animate={isBookOpen ? "open" : "closed"}
+      className={cn("min-h-screen flex flex-col", modeStyle.bg)}
+      style={{ filter: modeStyle.filter || undefined }}
+    >
+      {/* Top Bar */}
+      <div
+        className={cn(
+          "sticky top-0 z-30 flex items-center justify-between px-3 py-2 border-b backdrop-blur-md",
+          readingMode === "DARK" ? "border-white/10 bg-gray-950/80" : "border-black/5 bg-white/80",
+        )}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => {
+            speechSynthesis.cancel();
+            router.push("/library-reader");
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+
+        <div className="flex-1 text-center px-2 min-w-0">
+          <p className={cn("text-xs font-medium truncate", modeStyle.text)}>{bookInfo.title}</p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            Ch {currentChapter} • Page {currentPage}
+            {bookInfo.totalPages > 0 && ` of ${bookInfo.totalPages}`}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setShowChapters(!showChapters)}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Settings Panel */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={spring.snappy}
+            className={cn(
+              "overflow-hidden border-b z-20",
+              readingMode === "DARK" ? "border-white/10 bg-gray-900" : "border-black/5 bg-gray-50",
+            )}
+          >
+            <div className="p-3 space-y-3">
+              {/* Reading Mode */}
+              <div>
+                <p className={cn("text-[10px] font-medium uppercase tracking-wider mb-2", modeStyle.text)}>
+                  Reading Mode
+                </p>
+                <div className="flex gap-2">
+                  {(Object.keys(READING_MODES) as ReadingMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        setReadingMode(mode);
+                        saveProgress(currentChapter, currentPage, mode, fontSize);
+                      }}
+                      className={cn(
+                        "flex-1 py-1.5 px-2 rounded-lg text-[10px] font-medium transition-all border",
+                        readingMode === mode
+                          ? "border-indigo-500 bg-indigo-500/10 text-indigo-500"
+                          : readingMode === "DARK"
+                            ? "border-white/10 text-white/60"
+                            : "border-black/10 text-black/60",
+                      )}
+                    >
+                      {READING_MODE_LABELS[mode]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Font Size */}
+              <div className="flex items-center justify-between">
+                <p className={cn("text-[10px] font-medium uppercase tracking-wider", modeStyle.text)}>
+                  Font Size: {fontSize}px
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => adjustFontSize(-2)}
+                    disabled={fontSize <= 12}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => adjustFontSize(2)}
+                    disabled={fontSize >= 28}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Chapter List Panel */}
+      <AnimatePresence>
+        {showChapters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={spring.snappy}
+            className={cn(
+              "overflow-hidden border-b z-20 max-h-64 overflow-y-auto",
+              readingMode === "DARK" ? "border-white/10 bg-gray-900" : "border-black/5 bg-gray-50",
+            )}
+          >
+            <div className="p-3 space-y-1">
+              {chapters.map((ch) => (
+                <button
+                  key={ch.id}
+                  onClick={() => goToChapter(ch.chapterNumber)}
+                  className={cn(
+                    "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors",
+                    ch.chapterNumber === currentChapter
+                      ? "bg-indigo-500/10 text-indigo-500 font-medium"
+                      : readingMode === "DARK"
+                        ? "text-white/70 hover:bg-white/5"
+                        : "text-black/70 hover:bg-black/5",
+                  )}
+                >
+                  <span className="text-[10px] text-muted-foreground mr-2">Ch {ch.chapterNumber}</span>
+                  {ch.title}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Content Area */}
+      <div className="flex-1 relative" style={{ perspective: "1200px" }}>
+        <AnimatePresence mode="wait" custom={direction}>
+          <motion.div
+            key={`${currentChapter}-${currentPage}`}
+            custom={direction}
+            variants={pageFlipVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            className="w-full"
+          >
+            <div
+              ref={contentRef}
+              className={cn("px-5 py-6 max-w-2xl mx-auto min-h-[60vh]", modeStyle.text)}
+              style={{ fontSize: `${fontSize}px`, lineHeight: 1.8 }}
+              onMouseUp={handleTextSelection}
+              onTouchEnd={handleTextSelection}
+            >
+              {/* Chapter title for first page */}
+              {activeChapter && currentPage === activeChapter.pageStart && (
+                <h2
+                  className={cn(
+                    "text-2xl font-bold mb-6 text-center",
+                    readingMode === "DARK" ? "text-white" : "text-gray-900",
+                  )}
+                >
+                  {activeChapter.title}
+                </h2>
+              )}
+
+              {/* Content */}
+              <div className="whitespace-pre-wrap">
+                {activeChapter?.content || ""}
+              </div>
+
+              {/* Highlights overlay info */}
+              {currentChapterHighlights.length > 0 && (
+                <div className="mt-8 pt-4 border-t border-current/10">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Highlights ({currentChapterHighlights.length})
+                  </p>
+                  {currentChapterHighlights.map((h) => (
+                    <div
+                      key={h.id}
+                      className="mb-2 px-3 py-2 rounded-lg border-l-2"
+                      style={{ borderLeftColor: h.color, backgroundColor: `${h.color}15` }}
+                    >
+                      <p className="text-xs italic">&ldquo;{h.highlightedText}&rdquo;</p>
+                      {h.note && (
+                        <p className="text-[10px] text-muted-foreground mt-1">{h.note}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Bottom Controls */}
+      <div
+        className={cn(
+          "sticky bottom-0 z-30 border-t px-3 py-2 backdrop-blur-md",
+          readingMode === "DARK" ? "border-white/10 bg-gray-950/80" : "border-black/5 bg-white/80",
+        )}
+      >
+        {/* Progress bar */}
+        <div className="h-1 bg-muted rounded-full mb-2 overflow-hidden">
+          <motion.div
+            className="h-full bg-indigo-500 rounded-full"
+            animate={{
+              width: bookInfo.totalPages > 0
+                ? `${(currentPage / bookInfo.totalPages) * 100}%`
+                : "0%",
+            }}
+            transition={spring.gentle}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          {/* Left controls */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => goToPage(-1)}
+              disabled={currentChapter === 1 && currentPage <= (chapters[0]?.pageStart ?? 1)}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Center controls */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-8 w-8 p-0", isCurrentPageBookmarked && "text-amber-500")}
+              onClick={toggleBookmark}
+            >
+              <Bookmark className={cn("h-4 w-4", isCurrentPageBookmarked && "fill-current")} />
+            </Button>
+
+            {showBookmarks ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setShowBookmarks(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setShowBookmarks(true)}
+              >
+                <Highlighter className="h-4 w-4" />
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={cycleReadingMode}
+            >
+              {readingMode === "DARK" ? (
+                <Moon className="h-4 w-4" />
+              ) : (
+                <Sun className="h-4 w-4" />
+              )}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn("h-8 w-8 p-0", isSpeaking && "text-indigo-500")}
+              onClick={toggleSpeech}
+            >
+              {isSpeaking ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          {/* Right controls */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => goToPage(1)}
+              disabled={
+                currentChapter === chapters[chapters.length - 1]?.chapterNumber &&
+                currentPage >= (chapters[chapters.length - 1]?.pageEnd ?? 1)
+              }
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bookmarks Drawer */}
+      <AnimatePresence>
+        {showBookmarks && (
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={spring.snappy}
+            className={cn(
+              "fixed bottom-16 left-0 right-0 z-40 rounded-t-2xl border-t max-h-64 overflow-y-auto shadow-xl",
+              readingMode === "DARK" ? "bg-gray-900 border-white/10" : "bg-white border-black/5",
+            )}
+          >
+            <div className="p-4">
+              <h3 className={cn("text-sm font-bold mb-3", modeStyle.text)}>
+                Bookmarks & Highlights
+              </h3>
+
+              {/* Bookmarks */}
+              {bookmarks.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Bookmarks ({bookmarks.length})
+                  </p>
+                  <div className="space-y-1">
+                    {bookmarks.map((bm) => (
+                      <button
+                        key={bm.id}
+                        onClick={() => navigateToAnnotation(bm.chapterNumber, bm.page)}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors",
+                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
+                        )}
+                      >
+                        <Bookmark className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                        <span className={modeStyle.text}>
+                          {bm.label || `Ch ${bm.chapterNumber}, Page ${bm.page}`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Highlights */}
+              {highlights.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                    Highlights ({highlights.length})
+                  </p>
+                  <div className="space-y-1">
+                    {highlights.map((hl) => (
+                      <button
+                        key={hl.id}
+                        onClick={() => navigateToAnnotation(hl.chapterNumber, hl.page)}
+                        className={cn(
+                          "w-full text-left px-3 py-2 rounded-lg text-xs transition-colors border-l-2",
+                          readingMode === "DARK" ? "hover:bg-white/5" : "hover:bg-black/5",
+                        )}
+                        style={{ borderLeftColor: hl.color, backgroundColor: `${hl.color}08` }}
+                      >
+                        <p className="italic line-clamp-2">&ldquo;{hl.highlightedText}&rdquo;</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Ch {hl.chapterNumber}, Page {hl.page}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bookmarks.length === 0 && highlights.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  No bookmarks or highlights yet.
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* "Return to reading" floating button */}
+      <AnimatePresence>
+        {savedPosition && (
+          <motion.button
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            transition={spring.snappy}
+            onClick={returnToSavedPosition}
+            className={cn(
+              "fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-full shadow-lg text-xs font-medium",
+              readingMode === "DARK"
+                ? "bg-indigo-600 text-white"
+                : "bg-indigo-500 text-white",
+            )}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Return to Ch {savedPosition.chapter}, Pg {savedPosition.page}
+          </motion.button>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}

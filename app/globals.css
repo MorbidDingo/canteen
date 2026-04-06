@@ -1,0 +1,473 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-sunken: var(--surface-sunken);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+/* ─── Light Mode: Warm off-white + coral/terracotta primary ─── */
+:root {
+  --radius: 0.75rem;
+  --background: oklch(0.985 0.005 85);
+  --foreground: oklch(0.12 0.02 45);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.12 0.02 45);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.12 0.02 45);
+  --primary: oklch(0.65 0.18 28);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0.018 80);
+  --secondary-foreground: oklch(0.28 0.04 30);
+  --muted: oklch(0.95 0.012 80);
+  --muted-foreground: oklch(0.55 0.01 60);
+  --accent: oklch(0.95 0.04 28);
+  --accent-foreground: oklch(0.28 0.04 30);
+  --destructive: oklch(0.56 0.245 25);
+  --border: oklch(0.93 0.008 80);
+  --input: oklch(0.93 0.008 80);
+  --ring: oklch(0.65 0.18 28);
+  --surface-elevated: oklch(1 0 0);
+  --surface-sunken: oklch(0.975 0.008 82);
+  --chart-1: oklch(0.65 0.18 28);
+  --chart-2: oklch(0.58 0.20 25);
+  --chart-3: oklch(0.78 0.14 45);
+  --chart-4: oklch(0.84 0.10 60);
+  --chart-5: oklch(0.58 0.24 27);
+  --sidebar: oklch(0.978 0.007 82);
+  --sidebar-foreground: oklch(0.12 0.02 45);
+  --sidebar-primary: oklch(0.65 0.18 28);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.95 0.04 28);
+  --sidebar-accent-foreground: oklch(0.28 0.04 30);
+  --sidebar-border: oklch(0.93 0.008 80);
+  --sidebar-ring: oklch(0.65 0.18 28);
+}
+
+/* ─── Dark Mode: Deep warm-black + warm white + coral ─── */
+.dark {
+  --background: oklch(0.068 0.018 30);
+  --foreground: oklch(0.95 0.010 80);
+  --card: oklch(0.112 0.022 32);
+  --card-foreground: oklch(0.95 0.010 80);
+  --popover: oklch(0.112 0.022 32);
+  --popover-foreground: oklch(0.95 0.010 80);
+  --primary: oklch(0.75 0.16 30);
+  --primary-foreground: oklch(0.068 0.018 30);
+  --secondary: oklch(0.155 0.020 35);
+  --secondary-foreground: oklch(0.92 0.008 80);
+  --muted: oklch(0.155 0.020 35);
+  --muted-foreground: oklch(0.60 0.025 60);
+  --accent: oklch(0.185 0.028 28);
+  --accent-foreground: oklch(0.92 0.008 80);
+  --destructive: oklch(0.64 0.235 22);
+  --border: oklch(0.205 0.022 35);
+  --input: oklch(0.205 0.022 35);
+  --ring: oklch(0.75 0.16 30);
+  --surface-elevated: oklch(0.145 0.020 32);
+  --surface-sunken: oklch(0.052 0.014 28);
+  --chart-1: oklch(0.75 0.16 30);
+  --chart-2: oklch(0.65 0.18 28);
+  --chart-3: oklch(0.80 0.12 48);
+  --chart-4: oklch(0.86 0.08 62);
+  --chart-5: oklch(0.62 0.22 26);
+  --sidebar: oklch(0.088 0.018 30);
+  --sidebar-foreground: oklch(0.95 0.010 80);
+  --sidebar-primary: oklch(0.75 0.16 30);
+  --sidebar-primary-foreground: oklch(0.068 0.018 30);
+  --sidebar-accent: oklch(0.185 0.028 28);
+  --sidebar-accent-foreground: oklch(0.92 0.008 80);
+  --sidebar-border: oklch(0.205 0.022 35);
+  --sidebar-ring: oklch(0.75 0.16 30);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body {
+    min-height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "ss02", "cv01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .dark body {
+    background-image: none;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .app-shell-compact {
+    @apply mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-6;
+  }
+
+  .app-header-card {
+    @apply rounded-2xl border border-border/60 bg-card/75 p-4 shadow-sm backdrop-blur-sm sm:p-5;
+  }
+
+  .app-title {
+    @apply text-2xl font-bold tracking-tight sm:text-3xl;
+  }
+
+  .app-subtitle {
+    @apply mt-1 text-sm text-muted-foreground;
+  }
+
+  .app-section-card {
+    @apply rounded-2xl border border-border/60 bg-card/75 shadow-sm;
+  }
+
+  .app-mobile-safe-bottom {
+    padding-bottom: calc(6.75rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* ─── Custom Animations ──────────────────────────────────── */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-220%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s ease-out both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out both;
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 0.4s ease-out;
+}
+
+.animate-shine-sweep {
+  animation: shine-sweep 2.4s linear infinite;
+}
+
+/* Staggered animation delays for lists */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+.stagger-6 { animation-delay: 300ms; }
+
+/* ─── Mobile-first Enhancements ──────────────────────────── */
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Better touch targets */
+@media (max-width: 640px) {
+  button, a, [role="button"] {
+    min-height: 44px;
+  }
+  /* Fully rounded buttons on mobile */
+  button:not([class*="rounded-none"]):not([class*="rounded-t"]):not([class*="rounded-b"]):not([class*="rounded-l"]):not([class*="rounded-r"]),
+  [role="button"]:not([class*="rounded-none"]) {
+    /* border-radius: 9999px; */
+  }
+}
+
+/* Safe area padding for notched phones */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  main {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* ─── iOS-like Floating Bottom Nav ──────────────────────────── */
+
+.ios-bottom-nav {
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  transition: opacity 0.3s ease;
+}
+
+/* Scroll-based dimming: no longer applied to the nav directly */
+
+/* Card hover/active states — premium elevated aesthetic */
+.card-interactive {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+.card-interactive:hover {
+  border-color: oklch(0.556 0 0);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.card-interactive:active {
+  border-color: oklch(0.346 0 0);
+  transform: scale(0.98);
+}
+:is(.dark) .card-interactive:hover {
+  border-color: oklch(0.3 0.015 50);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3), 0 0 0 1px oklch(0.25 0.01 50);
+}
+
+/* Accent glow — for premium highlighted elements */
+.accent-glow {
+  box-shadow: 0 0 20px oklch(0.65 0.18 28 / 0.15), 0 0 40px oklch(0.65 0.18 28 / 0.05);
+}
+:is(.dark) .accent-glow {
+  box-shadow: 0 0 20px oklch(0.75 0.16 30 / 0.2), 0 0 60px oklch(0.75 0.16 30 / 0.08);
+}
+
+/* Shimmer loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--muted) 25%, var(--accent) 50%, var(--muted) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Status badge pulse for PLACED orders */
+.badge-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes banner-glitter {
+  0% {
+    transform: translateX(-180%) rotate(12deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.95;
+  }
+  55% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(260%) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+.animate-banner-glitter {
+  animation: banner-glitter 2.8s ease-in-out infinite;
+}
+
+button:hover {
+  cursor: pointer !important;
+}
+
+/* ─── Premium Wallet Card Shimmer ──────────────────────── */
+
+@keyframes wallet-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.wallet-card-premium {
+  background: linear-gradient(145deg, #050505 0%, #191919 28%, #2b2210 52%, #181818 76%, #050505 100%);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 26px 55px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 232, 184, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.wallet-card-premium::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(255, 255, 255, 0.06) 40%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.06) 60%,
+    rgba(255, 255, 255, 0) 80%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: wallet-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.wallet-card-premium::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at var(--shimmer-x, 50%) var(--shimmer-y, 50%),
+    rgba(255, 220, 144, 0.12) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.text-engraved-silver {
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.88),
+    0 0 18px rgba(226, 232, 240, 0.1);
+}
+
+.text-engraved-silver-soft {
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.15),
+    0 1px 2px rgba(0, 0, 0, 0.72);
+}
+
+.text-engraved-gold {
+  text-shadow:
+    0 -1px 0 rgba(255, 245, 220, 0.24),
+    0 1px 2px rgba(0, 0, 0, 0.92),
+    0 0 20px rgba(246, 214, 120, 0.18);
+}
+
+.text-shimmer-silver {
+  background: linear-gradient(110deg, #8f969f 0%, #f2f5f8 30%, #a9b0b9 55%, #f4f7fa 75%, #8f969f 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3s ease-in-out infinite;
+}
+
+.text-shimmer-silver-soft {
+  background: linear-gradient(110deg, #7b828b 0%, #d9dee4 35%, #a1a8b1 70%, #7b828b 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3.5s ease-in-out infinite;
+}
+
+.text-shimmer-gold {
+  background: linear-gradient(110deg, #8f6f1d 0%, #f6d678 30%, #c79d3b 55%, #ffe7a9 75%, #8f6f1d 100%);
+  background-size: 200% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: wallet-shimmer 3s ease-in-out infinite;
+}

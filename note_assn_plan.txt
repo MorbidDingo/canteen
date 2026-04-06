@@ -1,0 +1,275 @@
+Plan: Assignments & Notes System
+TL;DR — Build a classroom content system. Management grants posting permission to selected users via a dedicated permissions table. Permitted users create Assignments (with due dates) or Notes (reference material). Both support file attachments and targeted audiences (whole org, class, section, or individual). Students/parents submit work on assignments privately. Notes live in a Library-adjacent experience; both surface in a new "Assignments" section in the parent/general bottom nav.
+
+Phase 1 — Database Schema & Migration
+Steps
+
+Add 6 new tables to schema.ts:
+content_permission — tracks who is permitted to post, scoped to ASSIGNMENT | NOTE | BOTH, granted by MANAGEMENT
+content_post — unified row for both types: type, title, body (markdown), dueAt (nullable), status: DRAFT | PUBLISHED | CLOSED
+content_post_attachment — files on a post; storageBackend: S3 | CLOUDINARY, storageKey, mimeType, size
+content_post_audience — rows per target: audienceType: ALL_ORG | CLASS | SECTION | USER | GROUP, optional className, section, userId, groupId
+content_submission — one row per submitter per post; status: SUBMITTED | RESUBMITTED; holds optional textContent
+content_submission_attachment — files in a submission; same storage fields as post attachments
+
+Add 4 new tables for tags & groups:
+content_tag — org-scoped tag (e.g. "Math", "Science", "HR Updates"); fields: id, organizationId, name, color (nullable hex), createdBy, createdAt
+content_post_tag — junction: postId + tagId; unique on (postId, tagId)
+content_group — named user group within an org (e.g. "Teaching Staff", "Grade 5 Teachers"); fields: id, organizationId, name, description (nullable), createdBy, createdAt, updatedAt
+content_group_member — membership: groupId + userId; unique on (groupId, userId); createdAt
+
+Modify content_post_audience to support GROUP targeting:
+  - Add GROUP to audienceType enum: ALL_ORG | CLASS | SECTION | USER | GROUP
+  - Add groupId FK (nullable) referencing content_group
+  - Update CHECK constraint: GROUP requires groupId IS NOT NULL, all others NULL
+  - Update unique constraint to include groupId
+
+Add Drizzle relations for all new tables
+Generate migration drizzle/00XX_assignments_notes.sql
+Relevant files: schema.ts (end of file, after readableBook tables)
+
+Phase 2 — Management: Permission Grants + Tags & Groups (depends on Phase 1)
+Steps
+
+GET/POST /api/management/content/permissions — list org members and grant permission; requires allowedOrgRoles: ["OWNER", "MANAGEMENT"]
+PATCH/DELETE /api/management/content/permissions/[id] — revoke or change scope
+app/(management)/management/content/permissions/page.tsx — table of permitted users, search by name, assign scope, revoke button; reuse existing management patterns (similar to accounts/page.tsx)
+
+Tags CRUD:
+GET/POST /api/management/content/tags — list and create org-scoped tags (name, optional color)
+PATCH/DELETE /api/management/content/tags/[id] — rename, recolor, or delete tag (cascade removes post-tag links)
+
+Groups CRUD:
+GET/POST /api/management/content/groups — list and create named groups
+PATCH/DELETE /api/management/content/groups/[id] — rename, update description, or delete group (cascade removes audience rows targeting it)
+GET/POST/DELETE /api/management/content/groups/[id]/members — list, add, remove members (search org members, bulk add)
+app/(management)/management/content/groups/page.tsx — groups management UI: create group, manage members, delete group
+
+Note: Permitted users (scope BOTH or matching) can also create tags and groups via the author APIs (Phase 3), not just management. Management always has full CRUD.
+Phase 3 — Content Author APIs (depends on Phase 1, parallel with Phase 4)
+Steps
+
+POST /api/content/posts — create post; gate by content_permission row for caller; validate type, title, body, dueAt, initial audience, optional tagIds
+GET /api/content/posts — list caller's own posts with submission counts; filterable by tag
+PATCH /api/content/posts/[id] — edit; only authorUserId; cannot edit CLOSED assignment body (only metadata); can update tagIds
+DELETE /api/content/posts/[id] — soft-delete or permanent; cascade removes attachments/audience rows
+POST /api/content/posts/[id]/attachments — upload file; dispatch to S3 (docs, ≤50 MB) or Cloudinary (images, ≤20 MB) based on MIME type; reuse uploadFileToS3 from s3.ts and cloudinary.uploader.upload_stream from cloudinary.ts
+DELETE /api/content/posts/[id]/attachments/[attId] — remove attachment; delete from S3/Cloudinary + DB row
+PATCH /api/content/posts/[id]/audience — replace audience rows for a post (supports GROUP targeting via groupId)
+GET /api/content/posts/[id]/submissions — returns all submissions only if request.userId === post.authorUserId; each row shows submitter, timestamp, attachments
+Tag management for authors:
+GET/POST /api/content/tags — permitted users can list and create tags for their org
+Group management for authors:
+GET/POST /api/content/groups — permitted users can list and create groups
+GET/POST/DELETE /api/content/groups/[id]/members — permitted users can manage group membership
+Phase 4 — Reader APIs (depends on Phase 1, parallel with Phase 3)
+Steps
+
+GET /api/content/feed — audience resolution logic:
+Resolve caller's children (via child table) → collect (className, section) pairs
+Resolve caller's group memberships (via content_group_member)
+Query posts where audience match: ALL_ORG, CLASS (className match), SECTION (className+section match), USER (direct userId), or GROUP (caller is member of targeted group)
+Return with hasSubmitted: boolean per post; include post tags
+Filterable by tag
+GET /api/content/posts/[id] — single post detail + attachments; verifies audience membership; does NOT return other users' submissions
+POST /api/content/posts/[id]/submit — create content_submission; reject if dueAt passed; reject if post type is NOTE
+PATCH /api/content/posts/[id]/submit — re-submit (updates status to RESUBMITTED, replaces attachments)
+GET /api/content/posts/[id]/my-submission — returns submission + attachments only for submittedByUserId === caller
+GET /api/content/file/[...key] — auth-gated file serving: verifies caller has audience access to the parent post → issues 60-min presigned S3 URL or returns Cloudinary URL
+Phase 5 — Author UI (depends on Phase 3)
+Steps
+
+app/(content)/content/page.tsx — "My Posts" list; accessible to any user with an active content_permission row; reuses Card + Badge + Table components
+app/(content)/content/new/page.tsx — create form: type selector, title, rich markdown body (textarea), dueAt date picker, tag selector (multi-select from org tags, create inline), audience builder (all-org toggle → class chips → section chips → group chips → user search), file attachment dropzone
+app/(content)/content/[id]/edit/page.tsx — same form pre-populated; shows current attachments with delete buttons; audience editor; tag editor; publish/close toggle
+app/(content)/content/[id]/submissions/page.tsx — table of all submissions: submitter name, date, text preview, download attachment links (poster-only view)
+Phase 6 — Reader UI (depends on Phase 4)
+Steps
+
+app/(parent)/assignments/page.tsx — feed page with two tabs: Assignments and Notes; each card shows title, poster name, type badge, due date badge, submission status chip, tag chips; filterable by tag
+app/(parent)/assignments/[id]/page.tsx — post detail: body (rendered markdown), attachment download list, submission form (file drop + optional text, only for ASSIGNMENT type and if not past due), shows own submitted work after submission
+Update layout.tsx — add "Assignments" tab to bottom nav using ClipboardList icon from Lucide; detect active state on /assignments paths
+Relevant Files
+schema.ts — add 6 tables
+s3.ts — reuse uploadFileToS3, getFileFromS3; add getPresignedUrl helper
+cloudinary.ts — reuse configureCloudinary + upload stream pattern
+auth-server.ts — reuse requireAccess pattern throughout
+page.tsx — reference pattern for member listing in permissions page
+route.ts — reference for S3 upload pattern in an API route
+route.ts — reference for Cloudinary upload pattern
+layout.tsx — add Assignments nav tab
+Verification
+MANAGEMENT navigates to management/content/permissions, grants BOTH scope to a GENERAL user → row appears in table
+Permitted user sees "My Posts" menu entry; non-permitted user does not
+Create ASSIGNMENT: title "Math HW 1", target class "Grade 5 / Section A", dueAt = future, upload a PDF → POST returns 200, attachment stored in S3
+Parent of a Grade 5-A child sees the assignment in feed → opens detail → submits a .docx → POST /submit returns 200
+Same parent calls /my-submission → gets their file back; a different parent calls /my-submission → 404
+Poster calls /submissions → sees the submission; a random parent calls /submissions → 403
+Parent of a Grade 6 child cannot see the assignment in feed
+Create NOTE targeted to whole org → appears in Notes tab for all users in the org
+After dueAt passes, submit attempt returns 409 "Assignment closed"
+/api/content/file/[key] called without valid session → 401; with valid session but no audience access → 403
+
+Phase 7 — AI Integration with Content System (depends on Phases 3, 4, 6; Certe+ gated)
+
+Overview
+Extend the existing Claude-powered AI assistant (lib/ai/) to understand and interact with assignments & notes. Add a pgvector-backed RAG pipeline so the AI can answer questions about uploaded content (PDF, Word, Excel, TXT) scoped to the user's audience access. The AI can also create assignments and notes on behalf of permitted users. Everything AI is gated behind Certe+ subscription, consistent with the canteen AI assistant.
+
+Sub-phase 7A — pgvector Infrastructure & Document Ingestion Pipeline
+Steps
+
+Enable pgvector extension:
+  Migration: CREATE EXTENSION IF NOT EXISTS vector;
+  Add to drizzle config if needed
+
+New tables in schema.ts:
+  content_document_chunk — id, postId FK (content_post), attachmentId FK (content_post_attachment), chunkIndex (int), content (text), embedding (vector(1536)), metadata (jsonb: page number, section, original filename), organizationId FK, createdAt
+  Index: HNSW index on embedding column using vector_cosine_ops for fast ANN search
+  Index: (organizationId, postId) for scoped filtering
+
+Document processing pipeline — lib/ai/content-embeddings.ts:
+  Supported MIME types: text/plain, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document (.docx), application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (.xlsx), application/msword (.doc), application/vnd.ms-excel (.xls)
+  Processing flow:
+    1. On attachment upload (POST /api/content/posts/[id]/attachments), if MIME type is supported, enqueue processing
+    2. Fetch file from S3/Cloudinary
+    3. Extract text: pdf-parse for PDF, mammoth for .docx, xlsx for .xlsx, raw read for .txt
+    4. Chunk text with overlap: 512 tokens per chunk, 64 token overlap (use tiktoken for accurate token counting)
+    5. Generate embeddings via Anthropic's voyager or OpenAI text-embedding-3-small (whichever is configured; default OpenAI for cost)
+    6. Insert chunks + embeddings into content_document_chunk
+  Background processing: use a simple async queue (process after response); no external job queue needed for MVP
+  Re-processing: on attachment delete, CASCADE removes chunks; on re-upload, old chunks auto-removed
+
+New packages:
+  pgvector (drizzle pgvector support)
+  pdf-parse — PDF text extraction
+  mammoth — .docx text extraction
+  xlsx — Excel text extraction
+  openai — for text-embedding-3-small (embeddings only; chat stays Anthropic)
+  tiktoken — accurate token counting for chunking
+
+Migration drizzle/00XX_content_vector_search.sql:
+  CREATE EXTENSION IF NOT EXISTS vector;
+  CREATE TABLE content_document_chunk with vector(1536) column
+  CREATE INDEX using hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64)
+  Standard indexes on (organization_id, post_id), (attachment_id)
+
+Sub-phase 7B — Audience-Scoped Vector Search
+Steps
+
+Search function — lib/ai/content-search.ts:
+  queryContentChunks(orgId, userId, query, options?):
+    1. Generate embedding for the query string
+    2. Resolve user's accessible postIds:
+       - If user is an author: include their own posts
+       - For reader access: run same audience resolution as feed API (children's class/section, group memberships, direct user targeting, ALL_ORG)
+       - Never return chunks from posts the user cannot access
+    3. Execute vector similarity search:
+       SELECT c.*, 1 - (c.embedding <=> $queryEmbedding) AS similarity
+       FROM content_document_chunk c
+       WHERE c.organization_id = $orgId
+         AND c.post_id = ANY($accessiblePostIds)
+       ORDER BY c.embedding <=> $queryEmbedding
+       LIMIT $topK
+    4. Filter by similarity threshold (> 0.7 default)
+    5. Return chunks with post title, type, author name for citation
+  Options: topK (default 5), similarityThreshold (default 0.7), type filter (ASSIGNMENT | NOTE | both)
+
+Reuse audience resolution from lib/content-audience.ts — extract shared helper getAccessiblePostIds(orgId, userId) that both the feed API and vector search can call
+
+Sub-phase 7C — AI Tool Extensions for Content
+Steps
+
+New tools added to lib/ai/tools.ts TOOL_DEFINITIONS array:
+
+  search_content:
+    description: "Search assignments, notes, and their attached documents. Returns relevant content chunks from documents the user has access to. Use when user asks about assignment material, notes, uploaded documents, or subject-specific questions."
+    input_schema: { query: string, type?: "ASSIGNMENT" | "NOTE", topK?: number }
+    handler: calls queryContentChunks, returns formatted results with citations (post title, author, chunk text)
+
+  get_assignments_feed:
+    description: "Get the user's assignment and note feed. Returns recent assignments and notes targeted to the user with due dates and submission status."
+    input_schema: { type?: "ASSIGNMENT" | "NOTE", limit?: number }
+    handler: calls feed API logic internally, returns structured list
+
+  get_assignment_detail:
+    description: "Get full details of a specific assignment or note including body, attachments, due date, and the user's submission status."
+    input_schema: { postId: string }
+    handler: fetches post detail + my-submission, returns combined view
+
+  create_assignment:
+    description: "Create a new assignment on behalf of the user. Only works if the user has content posting permission. Cannot attach files — user must add those manually. Sets status to DRAFT so user can review before publishing."
+    input_schema: { title: string, body: string, type: "ASSIGNMENT" | "NOTE", dueAt?: string, audienceType: "ALL_ORG" | "CLASS" | "SECTION", className?: string, section?: string, tagIds?: string[] }
+    handler:
+      1. Verify user has content_permission (scope matches type or BOTH)
+      2. Create post via same logic as POST /api/content/posts
+      3. Always creates as DRAFT — user must manually review and publish
+      4. Returns created post summary with link to edit page
+    Security: gate behind content_permission check; always DRAFT; no file upload through AI
+
+  submit_assignment:
+    description: "Submit text-only work for an assignment. Cannot submit files through AI — user must use the submission form for file uploads."
+    input_schema: { postId: string, textContent: string }
+    handler: calls submit logic; text only, no files via AI
+
+Update lib/ai/system-prompt.ts:
+  Add content-aware context to system prompt:
+    - Whether user has content posting permission (and scope)
+    - Count of pending assignments (due soon, not yet submitted)
+    - Available tags for the org
+  Update persona: "You can help users find information in their assignments and notes, search through uploaded documents, check due dates, create draft assignments, and submit text responses."
+
+Sub-phase 7D — Certe+ Gating & Rate Limits
+Steps
+
+All content AI tools inherit existing Certe+ gate from /api/ai/chat/route.ts (already checks certeSubscription)
+Vector search has additional rate limit: 20 searches/hour/user (separate from the 30 msg/hour chat limit)
+Embedding generation: rate limit document processing to 50 documents/hour/org to control costs
+Cost tracking: log embedding token usage to a simple ai_usage_log table (userId, orgId, type: CHAT | EMBEDDING | SEARCH, tokens, createdAt) for billing visibility
+
+Sub-phase 7E — Content Chat UI Enhancements
+Steps
+
+Update components/ai/chat-assistant.tsx:
+  When parentMode === "content", show content-specific suggested prompts:
+    - "What assignments are due this week?"
+    - "Search my notes for [topic]"
+    - "Create a new assignment"
+    - "Summarize the latest uploaded material"
+  Add citation rendering: when AI returns search_content results, show source cards with post title, type badge, and "Open" link to /assignments/[id]
+
+New action type in components/ai/chat-actions.tsx:
+  type: "content_search_results" — renders a list of cited content chunks with expandable previews
+  type: "assignment_created" — renders a card with the draft assignment and "Edit & Publish" link
+
+No separate content chat component — reuse the existing chat-assistant.tsx with mode-aware behavior (same pattern as canteen vs library mode switching already in layout.tsx)
+
+Verification
+  Certe+ user uploads a PDF to an assignment → chunks appear in content_document_chunk within seconds
+  Same user asks AI "What does the PDF say about X?" → AI uses search_content tool → returns relevant chunks with citation
+  User in a different audience group asks about the same PDF → search returns empty (audience-scoped)
+  Certe+ user with posting permission says "Create an assignment about fractions due next Friday" → AI creates DRAFT assignment → user sees it in My Posts
+  Non-Certe+ user tries AI chat → blocked by subscription check
+  User without content_permission asks AI to create assignment → AI responds "You don't have permission to create content"
+  Excel file uploaded → text extracted from all sheets → chunks searchable
+  Rate limit: 21st vector search in an hour → 429 response
+
+Decisions
+Embedding model: OpenAI text-embedding-3-small (1536 dimensions) — cheaper than Anthropic for bulk embeddings; chat stays on Claude
+Vector index: HNSW with cosine similarity — best balance of speed and recall for <100K chunks per org
+Chunk strategy: 512 tokens with 64 overlap — good for mixed content (assignments tend to be short, notes can be long)
+AI-created content: always DRAFT, never auto-published — safety guardrail
+File upload via AI: explicitly blocked — users must use the upload UI; AI can only create text content
+Audience scoping in search: mandatory, not optional — the vector search MUST filter by accessible posts; this is a security boundary, not a feature flag
+
+Decisions
+Posting permission: dedicated content_permission table (MANAGEMENT-granted)
+Audience: child.className + child.section for parents/students; content_group for GENERAL accounts and cross-cutting teams (no new class-management table)
+Subject/Topic tagging: content_tag + content_post_tag junction; org-scoped; created by management or permitted users; used for filtering, not access control
+User grouping: content_group + content_group_member; management or permitted users create groups; GROUP is a first-class audienceType alongside ALL_ORG/CLASS/SECTION/USER
+Storage: S3 for documents/video, Cloudinary for images
+Due dates: dueAt timestamp; submissions blocked after it passes
+UI placement: separate "Assignments" section in parent/general bottom nav
+Further Considerations
+Submission notifications — Should the poster receive a notification (in-app or push) when a new submission arrives? Recommend yes, using the existing - parentNotification / messaging infrastructure. Yes do this!
+Read receipts for Notes — Should the system track which users have viewed a note (like a content_read table)? Useful for management visibility but adds write load. - YES
+Permitted posters navigation — The author UI lives under app/(content)/ as a new route group. GENERAL users who are permitted will need this group accessible from their existing nav (currently parent layout or a new general layout). Clarify whether permitted GENERAL users already have their own nav layout or if the author UI should be embedded inside the parent layout. - Embedded inside the parent layout.

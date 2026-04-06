@@ -1,0 +1,46 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "timeoutMs": 12000,
+  "actors": [
+    {
+      "name": "kiosk-device",
+      "cookieHeader": "better-auth.session_token=REPLACE_KIOSK_COOKIE",
+      "allowed": [
+        { "id": "kiosk-page", "path": "/kiosk" },
+        { "id": "org-context", "path": "/api/org/context" },
+        { "id": "kiosk-order", "path": "/api/kiosk/order", "method": "POST", "expectedStatusIn": [200, 400], "body": { "rfidCardId": "TEST", "items": [] } }
+      ],
+      "denied": [
+        { "id": "attendance-page", "path": "/attendance" },
+        { "id": "attendance-api", "path": "/api/attendance" },
+        { "id": "management-page", "path": "/management" },
+        { "id": "management-stats", "path": "/api/management/statistics" },
+        { "id": "admin-page", "path": "/admin/orders" }
+      ]
+    },
+    {
+      "name": "gate-device",
+      "cookieHeader": "better-auth.session_token=REPLACE_GATE_COOKIE",
+      "allowed": [
+        { "id": "gate-page", "path": "/gate" },
+        { "id": "gate-tap", "path": "/api/gate/tap", "method": "POST", "expectedStatusIn": [200, 400, 404], "body": { "rfidCardId": "TEST" } }
+      ],
+      "denied": [
+        { "id": "attendance-api", "path": "/api/attendance" },
+        { "id": "attendance-report-api", "path": "/api/attendance/reports" },
+        { "id": "lib-operator-page", "path": "/lib-operator/dashboard" }
+      ]
+    },
+    {
+      "name": "owner",
+      "cookieHeader": "better-auth.session_token=REPLACE_OWNER_COOKIE",
+      "allowed": [
+        { "id": "owner-page", "path": "/owner" },
+        { "id": "owner-orgs-api", "path": "/api/owner/organizations" }
+      ],
+      "denied": [
+        { "id": "platform-page", "path": "/platform" }
+      ]
+    }
+  ]
+}

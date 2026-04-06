@@ -1,0 +1,134 @@
+﻿"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { Bell } from "lucide-react";
+import Link from "next/link";
+import { useSSE } from "@/lib/events";
+import { cn } from "@/lib/utils";
+
+type ParentNotification = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  metadata: string | null;
+  readAt: string | Date | null;
+  createdAt: string | Date;
+  childId: string;
+  childName: string;
+  childGrNumber: string | null;
+};
+
+type IncomingPayload = {
+  id: string;
+  parentId: string;
+  childId: string;
+  type: string;
+  title: string;
+  message: string;
+  metadata: string | null;
+  readAt: string | null;
+  createdAt: string;
+  childName?: string;
+  childGrNumber?: string | null;
+};
+
+
+export function ParentNotificationBell({
+  parentId,
+  className,
+  href,
+  onClick,
+  externalUnreadCount,
+}: {
+  parentId?: string;
+  className?: string;
+  href?: string;
+  onClick?: () => void;
+  /** When provided, uses this count instead of internally tracked count */
+  externalUnreadCount?: number;
+}) {
+  const [notifications, setNotifications] = useState<ParentNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const internalUnreadCount = useMemo(
+    () => notifications.filter((n) => !n.readAt).length,
+    [notifications],
+  );
+
+  const unreadCount = externalUnreadCount ?? internalUnreadCount;
+
+  useEffect(() => {
+    if (!parentId) return;
+    fetch("/api/parent/notifications?limit=30", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { notifications: ParentNotification[] } | null) => {
+        if (data?.notifications) setNotifications(data.notifications);
+      })
+      .finally(() => setLoading(false));
+  }, [parentId]);
+
+  useSSE("parent-notification", (payload) => {
+    if (!parentId) return;
+    const incoming = payload as IncomingPayload | undefined;
+    if (!incoming || incoming.parentId !== parentId) return;
+
+    setNotifications((prev) =>
+      [
+        {
+          id: incoming.id,
+          type: incoming.type,
+          title: incoming.title,
+          message: incoming.message,
+          metadata: incoming.metadata,
+          readAt: incoming.readAt,
+          createdAt: incoming.createdAt,
+          childId: incoming.childId,
+          childName: incoming.childName || "",
+          childGrNumber: incoming.childGrNumber ?? null,
+        },
+        ...prev.filter((n) => n.id !== incoming.id),
+      ].slice(0, 30),
+    );
+
+    if (typeof window !== "undefined" && Notification.permission === "granted") {
+      new Notification(incoming.title, { body: incoming.message });
+    }
+  });
+
+  const badge = !loading && unreadCount > 0 && (
+    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary animate-in zoom-in-75 duration-300" />
+  );
+
+  const sharedClassName = cn(
+    "group relative inline-flex h-9 w-9 items-center justify-center rounded-xl transition-colors hover:bg-accent",
+    className,
+  );
+
+  // If onClick is provided, render as a button (drawer mode)
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={sharedClassName}
+        aria-label="Notifications"
+      >
+        <Bell className="h-5 w-5 text-foreground transition-transform duration-200 group-hover:scale-110" />
+        {badge}
+      </button>
+    );
+  }
+
+  // Otherwise render as a link (default fallback)
+  return (
+    <Link
+      href={href ?? "/notifications"}
+      className={sharedClassName}
+      aria-label="Notifications"
+    >
+      <Bell className="h-5 w-5 text-foreground transition-transform duration-200 group-hover:scale-110" />
+      {badge}
+    </Link>
+  );
+}

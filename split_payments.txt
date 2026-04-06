@@ -1,0 +1,333 @@
+PLAN: PAYMENT SETTLEMENT & ACCOUNT MANAGEMENT SYSTEM
+=====================================================
+
+TL;DR
+-----
+Add a settlement account system where admins and management register bank accounts / UPI VPAs.
+All canteen payments go to the platform's single Razorpay account with a visible 2% platform fee
+surcharge. Daily automated payouts via RazorpayX send 98% to the admin's designated account.
+Management has full authority: can view all accounts, block transactions, and override which
+account receives canteen payments.
+
+
+=======================================================
+PHASE 1: DATABASE SCHEMA (new tables + migration)
+=======================================================
+
+1.1  New table: settlement_account
+------------------------------------
+- id                      text PK (UUID)
+- organizationId          FK → organization
+- userId                  FK → user  (the admin or management user who owns this account)
+- accountType             enum: CANTEEN_ADMIN | MANAGEMENT
+- label                   text  (user-friendly name, e.g. "Main SBI Account")
+- method                  enum: BANK_ACCOUNT | UPI
+- bankAccountNumber       text, AES-256-GCM encrypted, nullable  (BANK_ACCOUNT only)
+- bankIfsc                text, nullable                          (BANK_ACCOUNT only)
+- bankAccountHolderName   text, nullable                          (BANK_ACCOUNT only)
+- upiVpa                  text, nullable                          (UPI only)
+- razorpayContactId       text, nullable  (auto-created via RazorpayX Contact API)
+- razorpayFundAccountId   text, nullable  (auto-created via RazorpayX Fund Account API)
+- status                  enum: ACTIVE | BLOCKED | PENDING_VERIFICATION
+- blockedByUserId         FK → user, nullable
+- blockedAt               timestamp, nullable
+- blockReason             text, nullable
+- createdAt               timestamp
+- updatedAt               timestamp
+- Unique constraint on (organizationId, userId, method + account details) to prevent duplicates
+
+1.2  New table: canteen_payment_routing
+-----------------------------------------
+- id                  text PK (UUID)
+- canteenId           FK → canteen, UNIQUE  (one routing config per canteen)
+- settlementAccountId FK → settlement_account
+- overriddenByUserId  FK → user, nullable  (set when management overrides default)
+- overriddenAt        timestamp, nullable
+- createdAt           timestamp
+- updatedAt           timestamp
+- Default routing resolves to the admin's own account via their KIOSK device assignment.
+
+1.3  New table: settlement_ledger
+-----------------------------------
+Tracks settlement owed and paid for every eligible canteen order.
+- id                  text PK (UUID)
+- organizationId      FK → organization
+- settlementAccountId FK → settlement_account
+- orderId             FK → order, nullable
+- grossAmount         doublePrecision   (full order total including fee)
+- platformFee         doublePrecision   (2% of subtotal)
+- netAmount           doublePrecision   (grossAmount - platformFee)
+- entryType           enum: DEBIT | REVERSAL  (REVERSAL for cancelled-PAID orders refunded)
+- status              enum: PENDING | PROCESSING | SETTLED | FAILED
+- razorpayPayoutId    text, nullable
+- settledAt           timestamp, nullable
+- failureReason       text, nullable
+- createdAt           timestamp
+
+1.4  New table: settlement_batch
+----------------------------------
+Groups ledger entries per account into a single daily RazorpayX payout.
+- id                  text PK (UUID)
+- organizationId      FK → organization
+- settlementAccountId FK → settlement_account
+- totalGross          doublePrecision
+- totalFee            doublePrecision
+- totalNet            doublePrecision
+- orderCount          integer
+- status              enum: PENDING | PROCESSING | SETTLED | FAILED | PARTIALLY_FAILED
+- razorpayPayoutId    text, nullable
+- processedAt         timestamp, nullable
+- failureReason       text, nullable
+- createdAt           timestamp
+
+1.5  Modify existing table: order
+------------------------------------
+Add column:
+- platformFee   doublePrecision, default 0  (the 2% fee stored on the order row)
+
+
+=======================================================
+PHASE 2: PLATFORM FEE (2% visible surcharge)
+=======================================================
+
+2.1  app/api/payments/create-order/route.ts
+  - Calculate: platformFee = round(subtotal * 0.02, 2 decimal places)
+  - Store platformFee on the order row
+  - Razorpay order amount = (subtotal + platformFee) converted to paise
+  - Return fee breakdown { subtotal, platformFee, total } in API response
+
+2.2  app/api/kiosk/order/route.ts
+  - Same 2% fee for kiosk ONLINE / WALLET orders (CASH orders excluded)
+
+2.3  app/api/pre-orders/route.ts
+  - Same 2% fee applied on pre-order payment
+
+2.4  app/api/payments/wallet-fallback/route.ts
+  - Debit (subtotal + platformFee) from wallet balance
+
+2.5  Frontend — Cart / Checkout UI
+  - Show: Subtotal / Platform Fee (2%) / Total as distinct line items
+  - File: wherever the cart summary component lives (app/(parent)/cart/ or similar)
+
+2.6  Frontend — Order history / confirmation
+  - Show platformFee in order detail views
+
+
+=======================================================
+PHASE 3: SETTLEMENT ACCOUNT MANAGEMENT APIs
+=======================================================
+
+3.1  NEW: app/api/admin/settlement-accounts/route.ts
+  - GET  — list own accounts (role: ADMIN)
+  - POST — add bank or UPI account; validate IFSC regex; create RazorpayX Contact + Fund Account
+  - Roles: ADMIN
+
+3.2  NEW: app/api/admin/settlement-accounts/[id]/route.ts
+  - PUT    — update label or account details (re-create fund account if banking details change)
+  - DELETE — remove account (only allowed if no PENDING/PROCESSING ledger entries)
+  - Roles: ADMIN (own accounts only)
+
+3.3  NEW: app/api/management/settlement-accounts/route.ts
+  - GET  — list ALL settlement accounts org-wide (admin + management accounts)
+  - POST — add account for any user or for management itself
+  - Roles: MANAGEMENT, OWNER
+
+3.4  NEW: app/api/management/settlement-accounts/[id]/block/route.ts
+  - POST   — block account (status → BLOCKED, record blockedByUserId + blockReason)
+  - DELETE — unblock account (status → ACTIVE, clear block fields)
+  - Roles: MANAGEMENT, OWNER
+
+3.5  NEW: app/api/management/canteen-routing/route.ts
+  - GET — list all canteens with their current settlement account routing
+  - PUT — override which active settlement account a canteen's payments route to
+  - Roles: MANAGEMENT, OWNER
+
+
+=======================================================
+PHASE 4: SETTLEMENT LEDGER & PAYOUT ENGINE
+=======================================================
+
+4.1  Modify: app/api/payments/verify/route.ts
+  After marking order PAID:
+  - Resolve routing: order.canteenId → canteen_payment_routing → settlement_account
+  - If no routing configured: create ledger entry marked PENDING against a null/platform account
+    (funds stay in platform Razorpay; flagged in management dashboard as "unrouted")
+  - Create settlement_ledger entry (type: DEBIT, status: PENDING)
+
+4.2  Modify: app/api/payments/wallet-fallback/route.ts
+  - Same ledger creation logic after successful wallet debit
+
+4.3  Modify: app/api/admin/orders/[id]/status/route.ts (or equivalent cancellation path)
+  - When a PAID order is CANCELLED and refunded: create settlement_ledger entry (type: REVERSAL)
+  - Reversal deducted from next settlement batch for that account
+
+4.4  NEW: lib/razorpay-payout.ts
+  RazorpayX utility functions:
+  - createContact(name, email, phone)  → razorpayContactId
+  - createFundAccount(contactId, bankDetails | upiVpa)  → razorpayFundAccountId
+  - createPayout(fundAccountId, amountPaise, reference)  → razorpayPayoutId
+  - getPayoutStatus(payoutId)  → status string
+  Uses env vars: RAZORPAY_PAYOUT_KEY_ID, RAZORPAY_PAYOUT_KEY_SECRET (RazorpayX credentials)
+
+4.5  NEW: app/api/settlements/process/route.ts
+  Daily CRON / manually triggered endpoint (protected by CRON_SECRET header):
+  - Query all PENDING ledger entries grouped by settlementAccountId
+  - For each account:
+    * Sum netAmounts (DEBITs minus REVERSALs)
+    * Skip if account is BLOCKED or net amount ≤ 0
+    * Create settlement_batch row
+    * Call lib/razorpay-payout.ts → createPayout()
+    * Update ledger entries to PROCESSING
+  - Returns summary of batches initiated
+
+4.6  NEW: app/api/webhooks/razorpay-payout/route.ts
+  Receives RazorpayX payout webhook callbacks:
+  - Verify webhook signature (RAZORPAY_PAYOUT_WEBHOOK_SECRET)
+  - On payout.processed → update batch + ledger entries to SETTLED
+  - On payout.failed    → update batch + ledger entries to FAILED, store failureReason
+  - On payout.reversed  → mark FAILED, trigger re-queue logic
+
+
+=======================================================
+PHASE 5: FRONTEND — ADMIN SETTLEMENT PAGES
+=======================================================
+
+5.1  NEW: app/(admin)/admin/settings/settlement/page.tsx
+  - List own settlement accounts (bank + UPI)
+  - Add / edit / delete account form with IFSC field + bank/UPI toggle
+  - Show account status badge: Active | Blocked | Pending Verification
+  - If BLOCKED: show block reason set by management
+  - Link to underlying canteens this account currently receives payments for
+
+5.2  Settlement history (embedded in same page or tab)
+  - Table of recent settlement_batch rows for this admin
+  - Columns: Date, Orders, Gross, Fee, Net, Status, Payout ID
+  - Drill-down to individual order-level ledger entries per batch
+
+
+=======================================================
+PHASE 6: FRONTEND — MANAGEMENT SETTLEMENT PAGES
+=======================================================
+
+6.1  NEW: app/(management)/management/settlement-accounts/page.tsx
+  - Table of all org settlement accounts
+  - Columns: Admin name, Account label, Method, Bank/UPI details (masked), Status
+  - Filters: by admin user, account type, status
+  - Row actions: Block (opens reason dialog) / Unblock
+  - "Add account for admin" button (management can add on behalf of any admin)
+
+6.2  NEW: app/(management)/management/payment-routing/page.tsx
+  - Table: Canteen | Current Account | Account Owner | Override badge
+  - Dropdown per row to reassign canteen payments to any ACTIVE account in the org
+  - Override badge shows when management has manually overridden the default routing
+  - "Reset to default" action to revert management override
+
+6.3  NEW: app/(management)/management/settlements/page.tsx
+  Settlement overview dashboard:
+  - Summary cards: Total Collected | Total Platform Fees | Total Settled | Pending
+  - Toggle: Daily / Weekly / Monthly view
+  - Per-admin breakdown table: Admin | Canteens | Gross | Fee | Net | Last Settled
+  - Batch history table with drill-down to ledger entries
+  - "Unrouted funds" warning section for canteens with no settlement account configured
+
+
+=======================================================
+EXISTING FILES TO MODIFY
+=======================================================
+
+lib/db/schema.ts
+  → Add 4 new tables; add platformFee column to order table
+
+app/api/payments/create-order/route.ts
+  → 2% fee calculation; updated Razorpay order amount
+
+app/api/payments/verify/route.ts
+  → Create settlement_ledger entry on PAID
+
+app/api/payments/wallet-fallback/route.ts
+  → Fee deduction + ledger entry
+
+app/api/kiosk/order/route.ts
+  → Platform fee for ONLINE/WALLET kiosk orders
+
+app/api/pre-orders/route.ts
+  → Platform fee for pre-orders
+
+lib/razorpay.ts
+  → Reference only: reuse encryptKeySecretForStorage() pattern for bank account encryption
+
+lib/auth-server.ts
+  → requireAccess() used in all new routes
+
+lib/device-context.ts
+  → getUserAccessibleDeviceIds() used to resolve admin→canteen default routing
+
+Cart / checkout UI component
+  → Add fee line item to order summary
+
+
+=======================================================
+NEW ENVIRONMENT VARIABLES NEEDED
+=======================================================
+
+RAZORPAY_PAYOUT_KEY_ID        RazorpayX API key ID
+RAZORPAY_PAYOUT_KEY_SECRET    RazorpayX API key secret
+RAZORPAY_PAYOUT_WEBHOOK_SECRET  Webhook signature secret for payout callbacks
+CRON_SECRET                   Secret header value to authenticate settlement CRON calls
+
+
+=======================================================
+VERIFICATION CHECKLIST
+=======================================================
+
+[ ] Migration applies: npx drizzle-kit generate && npx drizzle-kit push
+[ ] platformFee stored on order = 2% of subtotal; Razorpay amount = (subtotal + fee) * 100 paise
+[ ] settlement_ledger entry created on every ONLINE/WALLET payment verified
+[ ] CASH orders do NOT create ledger entries
+[ ] Admin can add bank account → RazorpayX Contact + Fund Account created
+[ ] Management can view all org accounts
+[ ] Management blocks account → subsequent routing lookup skips that account
+[ ] Management overrides canteen routing → ledger uses new account
+[ ] Cancelled PAID order creates REVERSAL ledger entry
+[ ] Settlement CRON batches PENDING entries, calls RazorpayX payout
+[ ] Payout webhook updates batch/ledger to SETTLED or FAILED
+[ ] npm run build passes with no type errors
+
+
+=======================================================
+KEY DECISIONS
+=======================================================
+
+- 2% platform fee is VISIBLE to parents as "Platform Fee" line item at checkout
+- All inbound payments flow through the single platform Razorpay account
+- Outbound settlements use RazorpayX Payout API (daily automated batches)
+- Bank account numbers encrypted at rest with AES-256-GCM (same pattern as Razorpay key secrets)
+- Admin→canteen default routing resolved via existing device assignment system
+- Management can add accounts on behalf of admins but admins can also self-register
+- Management has full block/unblock authority and can override payment routing per canteen
+- CASH orders are excluded from the settlement ledger (money is physically at the canteen)
+- Existing organizationPaymentConfig table is UNTOUCHED (handles inbound keys, not outbound settlement)
+- Blocked account fallback: funds stay in platform Razorpay, flagged as "unrouted" in dashboard
+- Refund reversal: cancelled PAID orders create a REVERSAL ledger entry deducted from next batch
+
+
+=======================================================
+OPEN QUESTIONS / FURTHER CONSIDERATIONS
+=======================================================
+
+1. IFSC validation: regex ^[A-Z]{4}0[A-Z0-9]{6}$ for now; full RBI list API validation later.
+
+2. CASH / UPI-direct orders at kiosk: excluded from settlement ledger since cash is already
+   physically at the canteen. Only ONLINE and WALLET payment methods go through ledger.
+
+3. Refund flow: when a PAID order is cancelled, wallet is refunded. A REVERSAL ledger entry
+   is created against the same settlement account. Net of DEBIT + REVERSAL is settled in next batch.
+
+4. Unrouted canteens: if a canteen has no settlement_account configured, orders still succeed
+   (to avoid blocking parents from buying food). Funds accumulate in platform Razorpay and are
+   flagged prominently in the management settlement dashboard with a warning banner.
+
+5. RazorpayX account activation: RazorpayX (for payouts) is a separate product from the
+   standard Razorpay payment gateway and requires a separate KYC/activation with Razorpay.
+   The app will gracefully degrade if payout credentials are not yet configured — ledger entries
+   are created but batching is a no-op until env vars are present.

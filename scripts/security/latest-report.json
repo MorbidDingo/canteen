@@ -1,0 +1,247 @@
+{
+  "generatedAt": "2026-03-19T11:22:26.033Z",
+  "configPath": "C:\\Users\\eesha\\OneDrive\\Documents\\code\\canteen\\scripts\\security\\matrix.sample.json",
+  "totals": {
+    "checks": 16,
+    "passed": 11,
+    "failed": 5,
+    "securityBreaches": 0,
+    "availabilityIssues": 5
+  },
+  "securityBreaches": [],
+  "availabilityIssues": [
+    {
+      "actor": "kiosk-device",
+      "checkId": "kiosk-page",
+      "phase": "allowed",
+      "path": "/kiosk",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "org-context",
+      "phase": "allowed",
+      "path": "/api/org/context",
+      "method": "GET",
+      "status": 401,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 401"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "gate-page",
+      "phase": "allowed",
+      "path": "/gate",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "owner",
+      "checkId": "owner-page",
+      "phase": "allowed",
+      "path": "/owner",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "owner",
+      "checkId": "owner-orgs-api",
+      "phase": "allowed",
+      "path": "/api/owner/organizations",
+      "method": "GET",
+      "status": 401,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 401"
+    }
+  ],
+  "results": [
+    {
+      "actor": "kiosk-device",
+      "checkId": "kiosk-page",
+      "phase": "allowed",
+      "path": "/kiosk",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "org-context",
+      "phase": "allowed",
+      "path": "/api/org/context",
+      "method": "GET",
+      "status": 401,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 401"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "kiosk-order",
+      "phase": "allowed",
+      "path": "/api/kiosk/order",
+      "method": "POST",
+      "status": 400,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Allowed endpoint returned expected status 400"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "attendance-page",
+      "phase": "denied",
+      "path": "/attendance",
+      "method": "GET",
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "attendance-api",
+      "phase": "denied",
+      "path": "/api/attendance",
+      "method": "GET",
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "management-page",
+      "phase": "denied",
+      "path": "/management",
+      "method": "GET",
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "management-stats",
+      "phase": "denied",
+      "path": "/api/management/statistics",
+      "method": "GET",
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
+    },
+    {
+      "actor": "kiosk-device",
+      "checkId": "admin-page",
+      "phase": "denied",
+      "path": "/admin/orders",
+      "method": "GET",
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "gate-page",
+      "phase": "allowed",
+      "path": "/gate",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "gate-tap",
+      "phase": "allowed",
+      "path": "/api/gate/tap",
+      "method": "POST",
+      "status": 400,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Allowed endpoint returned expected status 400"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "attendance-api",
+      "phase": "denied",
+      "path": "/api/attendance",
+      "method": "GET",
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "attendance-report-api",
+      "phase": "denied",
+      "path": "/api/attendance/reports",
+      "method": "GET",
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
+    },
+    {
+      "actor": "gate-device",
+      "checkId": "lib-operator-page",
+      "phase": "denied",
+      "path": "/lib-operator/dashboard",
+      "method": "GET",
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
+    },
+    {
+      "actor": "owner",
+      "checkId": "owner-page",
+      "phase": "allowed",
+      "path": "/owner",
+      "method": "GET",
+      "status": 307,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 307"
+    },
+    {
+      "actor": "owner",
+      "checkId": "owner-orgs-api",
+      "phase": "allowed",
+      "path": "/api/owner/organizations",
+      "method": "GET",
+      "status": 401,
+      "pass": false,
+      "classification": "availability_issue",
+      "detail": "Expected one of [200, 201, 202], got 401"
+    },
+    {
+      "actor": "owner",
+      "checkId": "platform-page",
+      "phase": "denied",
+      "path": "/platform",
+      "method": "GET",
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
+    }
+  ]
+}
