@@ -101,11 +101,19 @@ export function Navbar() {
     "/pre-orders",
     "/library-reader",
     "/library-history",
+    "/library-showcase",
     "/settings",
     "/children",
     "/wallet",
     "/controls",
     "/notifications",
+    "/assignments",
+    "/calendar",
+    "/timetable",
+    "/certe-pass",
+    "/content",
+    "/events",
+    "/messaging-settings",
   ].some((p) => pathname.startsWith(p));
 
   const parentMode = getParentMode(pathname);
@@ -441,118 +449,6 @@ export function Navbar() {
           </nav>
         )}
       </header>
-
-      {/* Mobile floating bottom nav for parents */}
-      {session && isParent && (
-        <nav className="fixed bottom-2 left-0 right-0 z-50 md:hidden flex justify-center px-4">
-          <div className="relative overflow-hidden rounded-[28px] border border-white/45 bg-white/45 px-2 py-2 shadow-[0_18px_40px_rgba(15,23,42,0.18)] ring-1 ring-black/5 backdrop-blur-2xl supports-backdrop-filter:bg-white/20 dark:border-white/15 dark:bg-slate-950/35 dark:ring-white/10 w-full max-w-xs">
-            <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-white/80" />
-            <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-black/5 dark:bg-white/10" />
-            <div className="pointer-events-none absolute -left-6 bottom-1 h-14 w-24 rounded-full bg-white/30 blur-2xl dark:bg-white/10" />
-            <div className="pointer-events-none absolute right-4 top-1 h-10 w-20 rounded-full bg-sky-200/35 blur-2xl dark:bg-sky-300/10" />
-            <div className="relative flex items-center justify-around gap-1">
-              {parentMode === "canteen" ? (
-                <>
-                  {/* Canteen: Menu */}
-                  <Link
-                    href="/menu"
-                    className={cn(
-                      "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-3 py-2 transition-all duration-200",
-                      pathname === "/menu" && !isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <UtensilsCrossed className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">Menu</span>
-                  </Link>
-                  {/* Canteen: Orders */}
-                  <Link
-                    href="/orders"
-                    className={cn(
-                      "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-3 py-2 transition-all duration-200",
-                      (pathname.startsWith("/orders") || pathname.startsWith("/pre-orders")) && !isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <ClipboardList className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">Orders</span>
-                  </Link>
-                  {/* Canteen: Cart */}
-                  <Link
-                    href="/cart"
-                    className={cn(
-                      "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-3 py-2 transition-all duration-200",
-                      pathname === "/cart" && !isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <ShoppingCart className={cn("h-5 w-5", cartBounce && "animate-bounce")} />
-                    <span className="text-[10px] font-medium">Cart</span>
-                    {cartCount > 0 && (
-                      <span className={cn(
-                        "absolute top-0.5 right-[8%] h-4 min-w-4 px-1 text-[9px] font-bold bg-primary text-primary-foreground rounded-full flex items-center justify-center transition-transform",
-                        cartBounce && "scale-125",
-                      )}>
-                        {cartCount}
-                      </span>
-                    )}
-                  </Link>
-                  {/* Canteen: Settings */}
-                  <Link
-                    href="/settings"
-                    className={cn(
-                      "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-3 py-2 transition-all duration-200",
-                      isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <Settings className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">Settings</span>
-                  </Link>
-                </>
-              ) : (
-                <>
-                  {/* Library: Reader */}
-                  <Link
-                    href="/library-reader"
-                    className={cn(
-                      "relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
-                      !isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <BookOpen className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">Library</span>
-                    {overdueCount > 0 && (
-                      <span className="absolute top-0.5 right-[8%] h-4 min-w-4 px-1 text-[9px] font-bold bg-red-500 text-white rounded-full flex items-center justify-center">
-                        {overdueCount}
-                      </span>
-                    )}
-                  </Link>
-                  {/* Library: Settings */}
-                  <Link
-                    href="/settings"
-                    className={cn(
-                      "flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-[22px] px-4 py-2 transition-all duration-200",
-                      isSettingsPage
-                        ? "bg-white/70 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_8px_20px_rgba(148,163,184,0.28)] dark:bg-white/15 dark:text-white"
-                        : "text-slate-600 dark:text-slate-300",
-                    )}
-                  >
-                    <Settings className="h-5 w-5" />
-                    <span className="text-[10px] font-medium">Settings</span>
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </nav>
-      )}
     </>
   );
 }
