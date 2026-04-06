@@ -1,265 +1,353 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
-  contentPost,
-  contentPostAttachment,
-  contentPostAudience,
-  contentPostTag,
-  contentTag,
-  contentGroupMember,
-  child,
-  user,
+  contentPost,
+  contentPostAudience,
+  contentPostTag,
+  contentPostAttachment,
+  contentSubmission,
+  contentTag,
+  contentGroupMember,
+  organizationMembership,
+  child,
+  user,
 } from "@/lib/db/schema";
-import { eq, and, or, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, or } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
 import { getContentPermission } from "@/lib/content-permission";
-import { checkAudienceAccess } from "@/lib/content-audience";
-import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
-// GET — get a single post (author view OR reader view with audience verification)
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  let access;
-  try {
-    access = await requireAccess({
-      scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "OPERATOR", "LIB_OPERATOR", "ATTENDANCE", "PARENT", "GENERAL"],
-    });
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    throw error;
-  }
+/** Roles that can see all org content regardless of audience targeting */
+const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
 
-  const organizationId = access.activeOrganizationId!;
-  const userId = access.actorUserId;
-  const { id } = await params;
+// GET — content feed for the current user (audience-resolved)
+export async function GET(request: NextRequest) {
+  let access;
+  try {
+    access = await requireAccess({
+      scope: "organization",
+      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "OPERATOR", "LIB_OPERATOR", "ATTENDANCE", "PARENT", "GENERAL"],
+    });
+  } catch (error) {
+    if (error instanceof AccessDeniedError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    throw error;
+  }
 
-  // Fetch post (org-scoped, no author filter)
-  const [post] = await db
-    .select()
-    .from(contentPost)
-    .where(
-      and(
-        eq(contentPost.id, id),
-        eq(contentPost.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const organizationId = access.activeOrganizationId!;
+  const userId = access.actorUserId;
 
-  if (!post) {
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  }
+  // Check if user has content creation permission
+  const contentPerm = await getContentPermission(organizationId, userId);
+  const canCreate = contentPerm !== null;
+  const permissionScope: string | null = contentPerm?.scope ?? null;
 
-  const isAuthor = post.authorUserId === userId;
+  const { searchParams } = new URL(request.url);
+  const tagFilter = searchParams.get("tagId");
+  const typeFilter = searchParams.get("type");
+  const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
+  const offset = (page - 1) * limit;
 
-  // If not the author, verify audience access and only show PUBLISHED posts
-  if (!isAuthor) {
-    if (post.status !== "PUBLISHED") {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
+  // 0. Check if user has a management role (sees all content)
+  const userMemberships = await db
+    .select({ role: organizationMembership.role })
+    .from(organizationMembership)
+    .where(
+      and(
+        eq(organizationMembership.organizationId, organizationId),
+        eq(organizationMembership.userId, userId),
+        eq(organizationMembership.status, "ACTIVE"),
+      ),
+    );
+  const isManagementRole = userMemberships.some((m) => MANAGEMENT_ROLES.has(m.role));
 
-    const hasAccess = await checkAudienceAccess(organizationId, userId, id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
-    }
-  }
+  // 1. Resolve caller's children → (className, section) pairs
+  const children = await db
+    .select({ className: child.className, section: child.section })
+    .from(child)
+    .where(
+      and(
+        eq(child.parentId, userId),
+        eq(child.organizationId, organizationId),
+      ),
+    );
 
-  const [attachments, tags] = await Promise.all([
-    db
-      .select()
-      .from(contentPostAttachment)
-      .where(eq(contentPostAttachment.postId, id)),
-    db
-      .select({ id: contentTag.id, name: contentTag.name, color: contentTag.color })
-      .from(contentPostTag)
-      .innerJoin(contentTag, eq(contentPostTag.tagId, contentTag.id))
-      .where(eq(contentPostTag.postId, id)),
-  ]);
+  // 2. Resolve caller's group memberships
+  const groupMemberships = await db
+    .select({ groupId: contentGroupMember.groupId })
+    .from(contentGroupMember)
+    .where(eq(contentGroupMember.userId, userId));
 
-  // Author gets audiences; readers don't
-  if (isAuthor) {
-    const audiences = await db
-      .select()
-      .from(contentPostAudience)
-      .where(eq(contentPostAudience.postId, id));
+  const groupIds = groupMemberships.map((g) => g.groupId);
 
-    return NextResponse.json({ post, attachments, audiences, tags });
-  }
+  // 3. Build audience conditions
+  // A post is visible if ANY of its audience rows match the caller
+  const audienceConditions: ReturnType<typeof and>[] = [];
 
-  // Fetch author name for reader view
-  const [author] = await db
-    .select({ name: user.name })
-    .from(user)
-    .where(eq(user.id, post.authorUserId))
-    .limit(1);
+  // ALL_ORG — always matches
+  audienceConditions.push(
+    eq(contentPostAudience.audienceType, "ALL_ORG"),
+  );
 
-  return NextResponse.json({
-    post: { ...post, authorName: author?.name ?? null },
-    attachments,
-    tags,
-  });
-}
+  // USER — direct targeting
+  audienceConditions.push(
+    and(
+      eq(contentPostAudience.audienceType, "USER"),
+      eq(contentPostAudience.userId, userId),
+    )!,
+  );
 
-// PATCH — edit post
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  let access;
-  try {
-    access = await requireAccess({
-      scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "OPERATOR", "LIB_OPERATOR", "ATTENDANCE", "PARENT", "GENERAL"],
-    });
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    throw error;
-  }
+  // CLASS / SECTION — based on children's class/section
+  for (const c of children) {
+    if (c.className) {
+      audienceConditions.push(
+        and(
+          eq(contentPostAudience.audienceType, "CLASS"),
+          eq(contentPostAudience.className, c.className),
+        )!,
+      );
 
-  const organizationId = access.activeOrganizationId!;
-  const { id } = await params;
+      if (c.section) {
+        audienceConditions.push(
+          and(
+            eq(contentPostAudience.audienceType, "SECTION"),
+            eq(contentPostAudience.className, c.className),
+            eq(contentPostAudience.section, c.section),
+          )!,
+        );
+      }
+    }
+  }
 
-  const [post] = await db
-    .select()
-    .from(contentPost)
-    .where(
-      and(
-        eq(contentPost.id, id),
-        eq(contentPost.organizationId, organizationId),
-        eq(contentPost.authorUserId, access.actorUserId),
-      ),
-    )
-    .limit(1);
+  // GROUP — based on group memberships
+  if (groupIds.length > 0) {
+    audienceConditions.push(
+      and(
+        eq(contentPostAudience.audienceType, "GROUP"),
+        inArray(contentPostAudience.groupId, groupIds),
+      )!,
+    );
+  }
 
-  if (!post) {
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  }
+  // Management roles see all audience types
+  if (isManagementRole) {
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "CLASS"),
+    );
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "SECTION"),
+    );
+    audienceConditions.push(
+      eq(contentPostAudience.audienceType, "GROUP"),
+    );
+  }
 
-  const body = await request.json();
-  const { title, body: postBody, dueAt, status, tagIds } = body as {
-    title?: string;
-    body?: string;
-    dueAt?: string | null;
-    status?: string;
-    tagIds?: string[];
-  };
+  // 4. Query matching post IDs via audience table
+  // We need distinct post IDs that are PUBLISHED and match audience
+  const matchingPostIdsQuery = db
+    .selectDistinct({ postId: contentPostAudience.postId })
+    .from(contentPostAudience)
+    .innerJoin(contentPost, eq(contentPostAudience.postId, contentPost.id))
+    .where(
+      and(
+        eq(contentPost.organizationId, organizationId),
+        eq(contentPost.status, "PUBLISHED"),
+        or(...audienceConditions),
+        // Apply tag filter at the post level if specified
+        tagFilter
+          ? sql`${contentPost.id} IN (
+              SELECT ${contentPostTag.postId} FROM ${contentPostTag}
+              WHERE ${contentPostTag.tagId} = ${tagFilter}
+            )`
+          : undefined,
+        typeFilter && ["ASSIGNMENT", "NOTE"].includes(typeFilter)
+          ? eq(contentPost.type, typeFilter as "ASSIGNMENT" | "NOTE")
+          : undefined,
+      ),
+    );
 
-  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  // Get total count for pagination
+  const countResult = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(matchingPostIdsQuery.as("matched"));
 
-  if (title !== undefined) {
-    if (!title.trim()) {
-      return NextResponse.json({ error: "title cannot be empty" }, { status: 400 });
-    }
-    updates.title = title.trim();
-  }
+  const total = Number(countResult[0]?.total ?? 0);
 
-  if (postBody !== undefined) {
-    // Cannot edit body of a CLOSED assignment
-    if (post.status === "CLOSED" && post.type === "ASSIGNMENT") {
-      return NextResponse.json(
-        { error: "Cannot edit body of a closed assignment" },
-        { status: 400 },
-      );
-    }
-    updates.body = postBody.trim();
-  }
+  // Get paginated post IDs ordered by creation date
+  const matchedPostIds = await db
+    .select({ postId: sql<string>`"post_id"` })
+    .from(
+      db
+        .selectDistinct({ post_id: contentPostAudience.postId })
+        .from(contentPostAudience)
+        .innerJoin(contentPost, eq(contentPostAudience.postId, contentPost.id))
+        .where(
+          and(
+            eq(contentPost.organizationId, organizationId),
+            eq(contentPost.status, "PUBLISHED"),
+            or(...audienceConditions),
+            tagFilter
+              ? sql`${contentPost.id} IN (
+                  SELECT ${contentPostTag.postId} FROM ${contentPostTag}
+                  WHERE ${contentPostTag.tagId} = ${tagFilter}
+                )`
+              : undefined,
+            typeFilter && ["ASSIGNMENT", "NOTE"].includes(typeFilter)
+              ? eq(contentPost.type, typeFilter as "ASSIGNMENT" | "NOTE")
+              : undefined,
+          ),
+        )
+        .as("matched"),
+    )
+    .orderBy(sql`"post_id" DESC`)
+    .limit(limit)
+    .offset(offset);
 
-  if (dueAt !== undefined) {
-    updates.dueAt = dueAt ? new Date(dueAt) : null;
-  }
+  // 4b. Fetch user's own DRAFT posts (separate from the audience-resolved feed)
+  const draftConditions = [
+    eq(contentPost.organizationId, organizationId),
+    eq(contentPost.authorUserId, userId),
+    eq(contentPost.status, "DRAFT"),
+  ];
+  if (typeFilter && ["ASSIGNMENT", "NOTE"].includes(typeFilter)) {
+    draftConditions.push(eq(contentPost.type, typeFilter as "ASSIGNMENT" | "NOTE"));
+  }
 
-  if (status !== undefined) {
-    if (!["DRAFT", "PUBLISHED", "CLOSED"].includes(status)) {
-      return NextResponse.json({ error: "Invalid status" }, { status: 400 });
-    }
-    updates.status = status;
-  }
+  const userDrafts = await db
+    .select({
+      id: contentPost.id,
+      type: contentPost.type,
+      title: contentPost.title,
+      body: contentPost.body,
+      dueAt: contentPost.dueAt,
+      status: contentPost.status,
+      createdAt: contentPost.createdAt,
+      updatedAt: contentPost.updatedAt,
+      authorUserId: contentPost.authorUserId,
+      authorName: user.name,
+    })
+    .from(contentPost)
+    .innerJoin(user, eq(contentPost.authorUserId, user.id))
+    .where(and(...draftConditions))
+    .orderBy(sql`${contentPost.updatedAt} DESC`)
+    .limit(20);
 
-  const result = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(contentPost)
-      .set(updates)
-      .where(eq(contentPost.id, id))
-      .returning();
+  // Fetch attachments for drafts
+  const draftIds = userDrafts.map((d) => d.id);
+  const draftAttachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  if (draftIds.length > 0) {
+    const draftAttachments = await db
+      .select({
+        id: contentPostAttachment.id,
+        postId: contentPostAttachment.postId,
+        mimeType: contentPostAttachment.mimeType,
+        size: contentPostAttachment.size,
+      })
+      .from(contentPostAttachment)
+      .where(inArray(contentPostAttachment.postId, draftIds));
+    for (const att of draftAttachments) {
+      const arr = draftAttachmentsByPost.get(att.postId) || [];
+      arr.push({ id: att.id, mimeType: att.mimeType, size: att.size });
+      draftAttachmentsByPost.set(att.postId, arr);
+    }
+  }
 
-    // Replace tags if provided
-    if (tagIds !== undefined) {
-      await tx.delete(contentPostTag).where(eq(contentPostTag.postId, id));
-      if (tagIds.length > 0) {
-        await tx.insert(contentPostTag).values(
-          tagIds.map((tagId) => ({ postId: id, tagId })),
-        );
-      }
-    }
+  const drafts = userDrafts.map((d) => ({
+    ...d,
+    tags: [] as Array<{ id: string; name: string; color: string | null }>,
+    hasSubmitted: false,
+    attachments: draftAttachmentsByPost.get(d.id) || [],
+  }));
 
-    return updated;
-  });
+  if (matchedPostIds.length === 0) {
+    return NextResponse.json({ posts: [], drafts, total, page, limit, canCreate, permissionScope });
+  }
 
-  logAudit({
-    organizationId,
-    userId: access.actorUserId,
-    userRole: access.membershipRole ?? access.session.user.role,
-    action: AUDIT_ACTIONS.CONTENT_POST_UPDATED,
-    details: { postId: id },
-    request,
-  });
+  const postIds = matchedPostIds.map((r) => r.postId);
 
-  return NextResponse.json({ post: result });
-}
+  // 5. Fetch full post data
+  const posts = await db
+    .select({
+      id: contentPost.id,
+      type: contentPost.type,
+      title: contentPost.title,
+      body: contentPost.body,
+      dueAt: contentPost.dueAt,
+      status: contentPost.status,
+      createdAt: contentPost.createdAt,
+      updatedAt: contentPost.updatedAt,
+      authorUserId: contentPost.authorUserId,
+      authorName: user.name,
+    })
+    .from(contentPost)
+    .innerJoin(user, eq(contentPost.authorUserId, user.id))
+    .where(inArray(contentPost.id, postIds))
+    .orderBy(sql`${contentPost.createdAt} DESC`);
 
-// DELETE — delete post (cascade removes attachments, audience, submissions)
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  let access;
-  try {
-    access = await requireAccess({
-      scope: "organization",
-      allowedOrgRoles: ["OWNER", "MANAGEMENT", "ADMIN", "OPERATOR", "LIB_OPERATOR", "ATTENDANCE", "PARENT", "GENERAL"],
-    });
-  } catch (error) {
-    if (error instanceof AccessDeniedError) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    throw error;
-  }
+  // 6. Fetch tags for matched posts
+  const postTags = await db
+    .select({
+      postId: contentPostTag.postId,
+      tagId: contentTag.id,
+      tagName: contentTag.name,
+      tagColor: contentTag.color,
+    })
+    .from(contentPostTag)
+    .innerJoin(contentTag, eq(contentPostTag.tagId, contentTag.id))
+    .where(inArray(contentPostTag.postId, postIds));
 
-  const organizationId = access.activeOrganizationId!;
-  const { id } = await params;
+  // 7. Check user's submissions (hasSubmitted boolean)
+  const submissions = await db
+    .select({
+      postId: contentSubmission.postId,
+    })
+    .from(contentSubmission)
+    .where(
+      and(
+        inArray(contentSubmission.postId, postIds),
+        eq(contentSubmission.submittedByUserId, userId),
+      ),
+    );
 
-  const [post] = await db
-    .select({ id: contentPost.id })
-    .from(contentPost)
-    .where(
-      and(
-        eq(contentPost.id, id),
-        eq(contentPost.organizationId, organizationId),
-        eq(contentPost.authorUserId, access.actorUserId),
-      ),
-    )
-    .limit(1);
+  const submittedPostIds = new Set(submissions.map((s) => s.postId));
 
-  if (!post) {
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
-  }
+  // 8. Fetch attachments for matched posts
+  const postAttachments = await db
+    .select({
+      id: contentPostAttachment.id,
+      postId: contentPostAttachment.postId,
+      storageBackend: contentPostAttachment.storageBackend,
+      storageKey: contentPostAttachment.storageKey,
+      mimeType: contentPostAttachment.mimeType,
+      size: contentPostAttachment.size,
+    })
+    .from(contentPostAttachment)
+    .where(inArray(contentPostAttachment.postId, postIds));
 
-  await db.delete(contentPost).where(eq(contentPost.id, id));
+  // Group attachments by postId
+  const attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  for (const att of postAttachments) {
+    const arr = attachmentsByPost.get(att.postId) || [];
+    arr.push({ id: att.id, mimeType: att.mimeType, size: att.size });
+    attachmentsByPost.set(att.postId, arr);
+  }
 
-  logAudit({
-    organizationId,
-    userId: access.actorUserId,
-    userRole: access.membershipRole ?? access.session.user.role,
-    action: AUDIT_ACTIONS.CONTENT_POST_DELETED,
-    details: { postId: id },
-    request,
-  });
+  // Group tags by postId
+  const tagsByPost = new Map<string, Array<{ id: string; name: string; color: string | null }>>();
+  for (const t of postTags) {
+    const arr = tagsByPost.get(t.postId) || [];
+    arr.push({ id: t.tagId, name: t.tagName, color: t.tagColor });
+    tagsByPost.set(t.postId, arr);
+  }
 
-  return NextResponse.json({ success: true });
+  // 9. Assemble response
+  const feed = posts.map((p) => ({
+    ...p,
+    tags: tagsByPost.get(p.id) || [],
+    hasSubmitted: submittedPostIds.has(p.id),
+    attachments: attachmentsByPost.get(p.id) || [],
+  }));
+
+  return NextResponse.json({ posts: feed, drafts, total, page, limit, canCreate, permissionScope });
 }
