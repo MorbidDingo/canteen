@@ -24,9 +24,10 @@ import {
 import {
   Loader2,
   Check,
-  ChevronRight,
   Sparkles,
-  ArrowLeft,
+  Wallet,
+  CreditCard,
+  IndianRupee,
 } from "lucide-react";
 
 declare global {
@@ -109,6 +110,8 @@ export default function CertePassPage() {
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
   const [selectedPlan, setSelectedPlan] = useState<string>("MONTHLY");
   const [subscribing, setSubscribing] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<"WALLET" | "RAZORPAY">("WALLET");
   const isGeneralAccount = session?.user?.role === "GENERAL";
   const certePlusResolved = certePlus !== null;
   const isActive = certePlus?.active === true;
@@ -125,6 +128,18 @@ export default function CertePassPage() {
       document.head.appendChild(script);
     }
   }, []);
+
+  // Fetch wallet balance for parent accounts
+  useEffect(() => {
+    if (isGeneralAccount) return;
+    fetch("/api/wallet", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: Array<{ balance: number }>) => {
+        const total = data.reduce((sum, w) => sum + w.balance, 0);
+        setWalletBalance(total);
+      })
+      .catch(() => null);
+  }, [isGeneralAccount]);
 
   const openRazorpay = useCallback(
     ({
@@ -164,7 +179,7 @@ export default function CertePassPage() {
   const handleSubscribe = async () => {
     setSubscribing(true);
     try {
-      if (isGeneralAccount) {
+      if (isGeneralAccount || paymentMethod === "RAZORPAY") {
         const startRes = await fetch("/api/certe-plus", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -204,6 +219,7 @@ export default function CertePassPage() {
         return;
       }
 
+      // Wallet payment for parent accounts
       const res = await fetch("/api/certe-plus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -213,6 +229,13 @@ export default function CertePassPage() {
       if (!res.ok) { toast.error(data.error || "Subscription failed"); return; }
       toast.success("Welcome to Certe Pass! Your subscription is now active.");
       await refreshCertePlusStatus({ silent: true });
+      // Refresh wallet balance
+      if (!isGeneralAccount) {
+        fetch("/api/wallet", { cache: "no-store" })
+          .then((r) => r.json())
+          .then((d: Array<{ balance: number }>) => setWalletBalance(d.reduce((s, w) => s + w.balance, 0)))
+          .catch(() => null);
+      }
     } catch (error) {
       if (error instanceof Error && error.message === "Payment cancelled") {
         toast.info("Payment cancelled");
@@ -232,39 +255,44 @@ export default function CertePassPage() {
     (b) => !b.parentOnly || !isGeneralAccount,
   );
 
+  const canAffordWallet = walletBalance !== null && walletBalance >= currentPlanInfo.price;
+
   return (
     <div className="mx-auto max-w-lg px-5 pb-32">
       {/* Hero */}
       <div className="relative mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white dark:from-slate-800 dark:via-slate-900 dark:to-black">
-        <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-400/15 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-8 -left-8 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute right-1/3 top-1/2 h-24 w-24 rounded-full bg-violet-400/10 blur-2xl" />
 
         <div className="relative">
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm ring-1 ring-white/10">
               <Sparkles className="h-5 w-5 text-amber-300" />
             </div>
             <div>
-              <h1 className="text-[22px] font-bold tracking-tight">Certe Pass</h1>
+              <h1 className="text-[24px] font-bold tracking-tight">Certe Pass</h1>
               <p className="text-[12px] text-white/50 font-medium">Premium Features & AI</p>
             </div>
           </div>
 
           {isActive ? (
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-500/15 px-3.5 py-2.5">
-              <Check className="h-4 w-4 text-emerald-400" />
+            <div className="flex items-center gap-3 rounded-2xl bg-emerald-500/15 px-4 py-3 ring-1 ring-emerald-400/20">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/20">
+                <Check className="h-4 w-4 text-emerald-400" />
+              </div>
               <div>
-                <p className="text-[13px] font-semibold text-emerald-300">Your pass is active</p>
+                <p className="text-[14px] font-semibold text-emerald-300">Your pass is active</p>
                 {certePlus?.subscription && (
-                  <p className="text-[11px] text-emerald-300/60">
+                  <p className="text-[12px] text-emerald-300/60">
                     Expires {new Date(certePlus.subscription.endDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-[14px] leading-relaxed text-white/60">
-              Unlock AI assistance, spending controls, and premium features for your family.
+            <p className="text-[14px] leading-relaxed text-white/65 text-pretty">
+              Unlock AI assistance, spending controls, and premium features for your whole family.
             </p>
           )}
         </div>
@@ -275,32 +303,42 @@ export default function CertePassPage() {
         <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           What&apos;s included
         </p>
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-2.5">
           {visibleBenefits.map((benefit, i) => {
             const Icon = benefit.icon;
             return (
               <div
                 key={i}
-                className="flex items-start gap-3.5 rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                className="group flex items-start gap-4 rounded-2xl bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition-colors"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/50">
-                  <Icon className="h-[18px] w-[18px] text-foreground/70" />
+                <div className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                  benefit.badge === "AI"
+                    ? "bg-amber-100/80 dark:bg-amber-900/30"
+                    : "bg-muted/60",
+                )}>
+                  <Icon className={cn(
+                    "h-[19px] w-[19px]",
+                    benefit.badge === "AI"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-foreground/65",
+                  )} />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[14px] font-semibold">{benefit.title}</p>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-[14px] font-semibold leading-tight">{benefit.title}</p>
                     {benefit.badge && (
-                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                      <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                         {benefit.badge}
                       </span>
                     )}
                     {benefit.comingSoon && (
-                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-                        SOON
+                      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Soon
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground text-pretty">
                     {benefit.description}
                   </p>
                 </div>
@@ -310,10 +348,10 @@ export default function CertePassPage() {
         </div>
       </div>
 
-      {/* Plan selector — only show if not active */}
+      {/* Plan selector + Payment — only show if not active */}
       {!isActive && (
         <>
-          <div className="mb-6">
+          <div className="mb-5">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
               Choose your plan
             </p>
@@ -326,17 +364,17 @@ export default function CertePassPage() {
                     type="button"
                     onClick={() => setSelectedPlan(plan.key)}
                     className={cn(
-                      "relative flex flex-col items-center gap-1 rounded-2xl border-2 p-4 transition-all active:scale-[0.98]",
+                      "relative flex flex-col items-center gap-0.5 rounded-2xl border-2 p-4 transition-all active:scale-[0.98]",
                       isSelected
-                        ? "border-slate-900 bg-slate-900/[0.03] dark:border-white dark:bg-white/[0.05]"
+                        ? "border-primary bg-primary/5 dark:bg-primary/10"
                         : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
                     )}
                   >
-                    <span className="text-[13px] font-bold">₹{plan.price}</span>
+                    <span className={cn("text-[18px] font-bold", isSelected ? "text-primary" : "")}>₹{plan.price}</span>
                     <span className="text-[11px] text-muted-foreground">{plan.label}</span>
                     {isSelected && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 dark:bg-white">
-                        <Check className="h-3 w-3 text-white dark:text-slate-900" />
+                      <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-3 w-3 text-primary-foreground" />
                       </span>
                     )}
                   </button>
@@ -345,18 +383,90 @@ export default function CertePassPage() {
             </div>
           </div>
 
+          {/* Payment method (parent accounts only) */}
+          {!isGeneralAccount && (
+            <div className="mb-5">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                Pay with
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("WALLET")}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.98]",
+                    paymentMethod === "WALLET"
+                      ? "border-primary bg-primary/5 dark:bg-primary/10"
+                      : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+                  )}
+                >
+                  <div className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-xl",
+                    paymentMethod === "WALLET" ? "bg-primary/15" : "bg-muted/60",
+                  )}>
+                    <Wallet className={cn("h-4 w-4", paymentMethod === "WALLET" ? "text-primary" : "text-muted-foreground")} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold">Wallet</p>
+                    {walletBalance !== null ? (
+                      <p className={cn(
+                        "text-[11px] font-medium flex items-center gap-0.5",
+                        canAffordWallet ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+                      )}>
+                        <IndianRupee className="h-2.5 w-2.5" />
+                        {walletBalance.toFixed(0)} balance
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">Instant</p>
+                    )}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod("RAZORPAY")}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-2xl border-2 p-3.5 text-left transition-all active:scale-[0.98]",
+                    paymentMethod === "RAZORPAY"
+                      ? "border-primary bg-primary/5 dark:bg-primary/10"
+                      : "border-transparent bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)]",
+                  )}
+                >
+                  <div className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-xl",
+                    paymentMethod === "RAZORPAY" ? "bg-primary/15" : "bg-muted/60",
+                  )}>
+                    <CreditCard className={cn("h-4 w-4", paymentMethod === "RAZORPAY" ? "text-primary" : "text-muted-foreground")} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold">Card / UPI</p>
+                    <p className="text-[11px] text-muted-foreground">via Razorpay</p>
+                  </div>
+                </button>
+              </div>
+              {paymentMethod === "WALLET" && !canAffordWallet && walletBalance !== null && (
+                <p className="mt-2 text-[12px] text-destructive">
+                  Insufficient balance — need ₹{currentPlanInfo.price - Math.floor(walletBalance)} more. Top up your wallet or pay via card.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Subscribe button */}
           <button
             type="button"
             onClick={handleSubscribe}
-            disabled={subscribing || !certePlusResolved}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-4 text-[15px] font-bold text-white shadow-lg shadow-slate-900/20 transition-all active:scale-[0.98] disabled:opacity-50 dark:bg-white dark:text-slate-900 dark:shadow-white/10"
+            disabled={subscribing || !certePlusResolved || (!isGeneralAccount && paymentMethod === "WALLET" && !canAffordWallet)}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-[15px] font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all active:scale-[0.98] disabled:opacity-50"
           >
             {subscribing ? (
               <Loader2 className="h-4.5 w-4.5 animate-spin" />
             ) : (
               <>
-                <Sparkles className="h-4 w-4" />
+                {paymentMethod === "WALLET" && !isGeneralAccount ? (
+                  <Wallet className="h-4 w-4" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
                 Get Certe Pass · ₹{currentPlanInfo.price}/{currentPlanInfo.label.toLowerCase()}
               </>
             )}
