@@ -695,6 +695,7 @@ export default function NewPostPage() {
                   <div className="px-3 py-2">
                     <Textarea
                       placeholder="Write in markdown…"
+                      aria-label="Post body (markdown)"
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
                       disabled={submitting}

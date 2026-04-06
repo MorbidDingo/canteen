@@ -17,7 +17,7 @@ interface MarkdownContentProps {
  * Markdown content is rendered via react-markdown.
  */
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
-  const hasHtmlTags = /<[a-z][\s\S]*?>/i.test(content);
+  const hasHtmlTags = /<\/?[a-z][a-z0-9]*\b[^>]*>/i.test(content);
 
   // Sanitize HTML content to prevent XSS
   const sanitizedHtml = useMemo(
