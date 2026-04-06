@@ -471,3 +471,53 @@ button:hover {
   background-clip: text;
   animation: wallet-shimmer 3s ease-in-out infinite;
 }
+
+/* ─── Safe HTML Callout Rendering ──────────────────────────── */
+
+.safe-html-content [data-callout] {
+  border-left: 4px solid;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.safe-html-content [data-callout="info"] {
+  border-left-color: oklch(0.6 0.15 250);
+  background: oklch(0.6 0.15 250 / 0.08);
+}
+
+.safe-html-content [data-callout="warning"] {
+  border-left-color: oklch(0.75 0.15 75);
+  background: oklch(0.75 0.15 75 / 0.08);
+}
+
+.safe-html-content [data-callout="tip"] {
+  border-left-color: oklch(0.6 0.15 150);
+  background: oklch(0.6 0.15 150 / 0.08);
+}
+
+.safe-html-content [data-callout="important"] {
+  border-left-color: oklch(0.6 0.2 25);
+  background: oklch(0.6 0.2 25 / 0.08);
+}
+
+/* Task list rendering in safe-html */
+.safe-html-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.safe-html-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Hide scrollbar on editor toolbar */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

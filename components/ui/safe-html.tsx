@@ -21,6 +21,7 @@ export function SafeHtml({ html, className }: SafeHtmlProps) {
     if (ref.current) {
       ref.current.innerHTML = DOMPurify.sanitize(html, {
         USE_PROFILES: { html: true },
+        ADD_ATTR: ["data-callout", "data-type", "data-checked", "target"],
       });
     }
   }, [html]);
@@ -30,7 +31,7 @@ export function SafeHtml({ html, className }: SafeHtmlProps) {
   return (
     <div
       ref={ref}
-      className={cn("prose prose-sm max-w-none dark:prose-invert", className)}
+      className={cn("prose prose-sm max-w-none dark:prose-invert safe-html-content", className)}
       suppressHydrationWarning
     />
   );
