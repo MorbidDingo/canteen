@@ -16,7 +16,7 @@ export async function getNextOrderCode(): Promise<string> {
     .select({ tokenCode: order.tokenCode })
     .from(order)
     .where(isNotNull(order.tokenCode))
-    .orderBy(desc(order.createdAt))
+    .orderBy(desc(order.tokenCode))
     .limit(1);
 
   return generateNextOrderCode(latest?.tokenCode ?? null);

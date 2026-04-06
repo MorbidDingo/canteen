@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import DOMPurify from "dompurify";
 import { cn } from "@/lib/utils";
 
 interface MarkdownContentProps {
@@ -11,14 +13,22 @@ interface MarkdownContentProps {
 
 /**
  * Renders content that may be in markdown or HTML format.
- * Detects HTML tags and falls back to sanitized HTML rendering for rich-text
- * editor content, otherwise renders as markdown.
+ * Detects HTML tags and sanitizes with DOMPurify before rendering.
+ * Markdown content is rendered via react-markdown.
  */
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
   const hasHtmlTags = /<[a-z][\s\S]*?>/i.test(content);
 
+  // Sanitize HTML content to prevent XSS
+  const sanitizedHtml = useMemo(
+    () =>
+      hasHtmlTags
+        ? DOMPurify.sanitize(content, { USE_PROFILES: { html: true } })
+        : "",
+    [content, hasHtmlTags],
+  );
+
   if (hasHtmlTags) {
-    // Content from rich-text editor — render as sanitized HTML via prose styles
     return (
       <div
         className={cn(
@@ -29,7 +39,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
           "prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-[13px]",
           className,
         )}
-        dangerouslySetInnerHTML={{ __html: content }}
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     );
   }
