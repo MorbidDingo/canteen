@@ -445,7 +445,7 @@ export default function CertePassPage() {
               </div>
               {paymentMethod === "WALLET" && !canAffordWallet && walletBalance !== null && (
                 <p className="mt-2 text-[12px] text-destructive">
-                  Insufficient balance — need ₹{currentPlanInfo.price - Math.floor(walletBalance)} more. Top up your wallet or pay via card.
+                  Insufficient balance — need ₹{(currentPlanInfo.price - walletBalance).toFixed(2)} more. Top up your wallet or pay via card.
                 </p>
               )}
             </div>

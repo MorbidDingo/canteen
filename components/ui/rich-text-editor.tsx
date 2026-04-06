@@ -92,7 +92,7 @@ export function RichTextEditor({
         content_style: `
           body {
             font-family: inherit;
-            font-size: 16px;
+            font-size: 16px; /* 16px minimum prevents iOS auto-zoom on focused inputs */
             line-height: 1.75;
             color: inherit;
             background: transparent;
