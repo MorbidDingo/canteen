@@ -21,6 +21,7 @@ import {
   FileQuestion,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
+import { SafeHtml } from "@/components/ui/safe-html";
 import { cn } from "@/lib/utils";
 
 type PostDetail = {
@@ -325,9 +326,7 @@ export default function PostDetailPage() {
 
       {/* Body */}
       <article className="mt-6">
-        <div className="whitespace-pre-wrap text-[16px] leading-[1.7] text-foreground/90">
-          {post.body}
-        </div>
+        <SafeHtml html={post.body} className="text-[16px] leading-[1.7] text-foreground/90" />
       </article>
 
       {/* Attachments */}

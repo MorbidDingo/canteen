@@ -22,19 +22,8 @@ import {
   X,
   Send,
   Sparkles,
-  ChevronDown,
   Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-// ─── Suggested Prompts ──────────────────────────────────
-
-const SUGGESTED_PROMPTS = [
-  { label: "What's healthy today?", icon: "🥗" },
-  { label: "Show my spending this week", icon: "📊" },
-  { label: "Order my usual lunch", icon: "🍱" },
-  { label: "What's popular right now?", icon: "🔥" },
-] as const;
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -45,14 +34,32 @@ type Child = {
   name: string;
 };
 
+type SuggestedPrompt = {
+  label: string;
+  icon: string;
+};
+
+export type ChatContext = "canteen" | "library" | "content";
+
+// ─── Fallback prompts (shown while loading or on error) ──
+
+const FALLBACK_PROMPTS: SuggestedPrompt[] = [
+  { label: "What's healthy today?", icon: "🥗" },
+  { label: "Show my spending this week", icon: "📊" },
+  { label: "Order my usual lunch", icon: "🍱" },
+  { label: "What's popular right now?", icon: "🔥" },
+];
+
 // ─── ChatAssistant ──────────────────────────────────────
 
 export function ChatAssistant({
   open: controlledOpen,
   onOpenChange,
+  context,
 }: {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  context?: ChatContext;
 }) {
   const { data: session } = useSession();
   const certePlusActive = useCertePlusStore((s) => s.status?.active === true);
@@ -72,6 +79,13 @@ export function ChatAssistant({
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  // ─── Dynamic suggested prompts ───────────────────────
+  const [suggestedPrompts, setSuggestedPrompts] = useState<SuggestedPrompt[]>(FALLBACK_PROMPTS);
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  // Track when prompts were last fetched so we don't re-fetch too often
+  const promptsFetchedAt = useRef<number | null>(null);
+  const PROMPTS_STALE_MS = 10 * 60 * 1000; // re-fetch after 10 min of inactivity
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +116,40 @@ export function ChatAssistant({
       })
       .catch(() => {});
   }, [open, children.length]);
+
+  // Fetch AI-generated prompts on first open (or when context changes / prompts go stale)
+  useEffect(() => {
+    if (!open || !certePlusActive) return;
+    const now = Date.now();
+    if (
+      promptsFetchedAt.current !== null &&
+      now - promptsFetchedAt.current < PROMPTS_STALE_MS
+    ) {
+      return; // still fresh
+    }
+    setPromptsLoading(true);
+    fetch("/api/ai/suggested-prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context: context ?? "canteen" }),
+      cache: "no-store",
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { prompts: SuggestedPrompt[] } | null) => {
+        if (data?.prompts && data.prompts.length > 0) {
+          setSuggestedPrompts(data.prompts);
+          promptsFetchedAt.current = Date.now();
+        }
+      })
+      .catch(() => {})
+      .finally(() => setPromptsLoading(false));
+  }, [open, certePlusActive, context]);
+
+  // Re-fetch prompts when selected child changes (context shift)
+  useEffect(() => {
+    if (!open || !certePlusActive || selectedChildId === null) return;
+    promptsFetchedAt.current = null; // mark stale
+  }, [selectedChildId, open, certePlusActive]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -348,17 +396,27 @@ export function ChatAssistant({
 
             {/* Suggested Prompts */}
             <div className="mt-2 flex flex-wrap justify-center gap-2">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt.label}
-                  type="button"
-                  onClick={() => void sendMessage(prompt.label)}
-                  className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-muted/80 active:scale-[0.97]"
-                >
-                  <span>{prompt.icon}</span>
-                  <span>{prompt.label}</span>
-                </button>
-              ))}
+              {promptsLoading ? (
+                // Skeleton placeholders
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-8 w-36 animate-pulse rounded-full bg-muted/60"
+                  />
+                ))
+              ) : (
+                suggestedPrompts.map((prompt) => (
+                  <button
+                    key={prompt.label}
+                    type="button"
+                    onClick={() => void sendMessage(prompt.label)}
+                    className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-muted/80 active:scale-[0.97]"
+                  >
+                    <span>{prompt.icon}</span>
+                    <span>{prompt.label}</span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         ) : (
