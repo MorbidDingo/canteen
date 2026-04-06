@@ -57,7 +57,7 @@ export function TipTapEditor({
   // Sync external value changes (e.g. loading saved content)
   useEffect(() => {
     if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value, false);
+      editor.commands.setContent(value, { emitUpdate: false });
     }
   }, [editor, value]);
 

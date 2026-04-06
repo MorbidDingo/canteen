@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,12 +31,15 @@ export function TemplatePicker({
 }: TemplatePickerProps) {
   const [selected, setSelected] = useState<string | null>(null);
 
-  const templates =
-    type === "ASSIGNMENT"
-      ? ASSIGNMENT_TEMPLATES
-      : type === "NOTE"
-        ? NOTE_TEMPLATES
-        : [...ASSIGNMENT_TEMPLATES, ...NOTE_TEMPLATES];
+  const templates = useMemo(
+    () =>
+      type === "ASSIGNMENT"
+        ? ASSIGNMENT_TEMPLATES
+        : type === "NOTE"
+          ? NOTE_TEMPLATES
+          : [...ASSIGNMENT_TEMPLATES, ...NOTE_TEMPLATES],
+    [type],
+  );
 
   const handleApply = useCallback(() => {
     const template = templates.find((t) => t.id === selected);

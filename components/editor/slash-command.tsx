@@ -7,7 +7,6 @@ import tippy, { type Instance as TippyInstance } from "tippy.js";
 import {
   forwardRef,
   useCallback,
-  useEffect,
   useImperativeHandle,
   useState,
 } from "react";
@@ -21,7 +20,7 @@ import {
   Quote,
   CodeXml,
   Minus,
-  Image,
+  Image as ImageIcon,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,7 +29,8 @@ export interface SlashCommandItem {
   title: string;
   description: string;
   icon: React.ReactNode;
-  command: (props: { editor: Parameters<typeof Extension.create>[0] extends undefined ? never : unknown; range: unknown }) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  command: (props: { editor: any; range: any }) => void;
 }
 
 const iconClass = "h-4 w-4 text-muted-foreground";
@@ -40,94 +40,83 @@ const SLASH_COMMANDS: SlashCommandItem[] = [
     title: "Heading 1",
     description: "Large heading",
     icon: <Heading1 className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setNode("heading", { level: 1 }).run();
     },
   },
   {
     title: "Heading 2",
     description: "Medium heading",
     icon: <Heading2 className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setNode("heading", { level: 2 }).run();
     },
   },
   {
     title: "Heading 3",
     description: "Small heading",
     icon: <Heading3 className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setNode("heading", { level: 3 }).run();
     },
   },
   {
     title: "Bullet List",
     description: "Unordered list",
     icon: <List className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).toggleBulletList().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
   },
   {
     title: "Numbered List",
     description: "Ordered list",
     icon: <ListOrdered className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).toggleOrderedList().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleOrderedList().run();
     },
   },
   {
     title: "Task List",
     description: "Checklist",
     icon: <ListChecks className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).toggleTaskList().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleTaskList().run();
     },
   },
   {
     title: "Blockquote",
     description: "Quote block",
     icon: <Quote className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).toggleBlockquote().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleBlockquote().run();
     },
   },
   {
     title: "Code Block",
     description: "Code snippet",
     icon: <CodeXml className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).toggleCodeBlock().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
     },
   },
   {
     title: "Divider",
     description: "Horizontal rule",
     icon: <Minus className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).setHorizontalRule().run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setHorizontalRule().run();
     },
   },
   {
     title: "Image",
     description: "Insert image",
-    icon: <Image className={iconClass} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).run();
+    icon: <ImageIcon className={iconClass} />,
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
       const url = window.prompt("Enter image URL:");
       if (url) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (editor as any).chain().focus().setImage({ src: url }).run();
+        editor.chain().focus().setImage({ src: url }).run();
       }
     },
   },
@@ -135,9 +124,8 @@ const SLASH_COMMANDS: SlashCommandItem[] = [
     title: "AI Write",
     description: "Let AI assist your writing",
     icon: <Sparkles className={cn(iconClass, "text-primary")} />,
-    command: ({ editor, range }: { editor: Record<string, unknown>; range: unknown }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (editor as any).chain().focus().deleteRange(range).run();
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
       // Dispatch custom event for AI sidebar to pick up
       window.dispatchEvent(new CustomEvent("editor:ai-open", { detail: { action: "custom" } }));
     },
@@ -155,9 +143,8 @@ const CommandList = forwardRef<CommandListRef, SuggestionProps<SlashCommandItem>
     const [selectedIndex, setSelectedIndex] = useState(0);
     const items = props.items;
 
-    useEffect(() => {
-      setSelectedIndex(0);
-    }, [items]);
+    // Clamp selected index to valid range
+    const safeIndex = items.length > 0 ? selectedIndex % items.length : 0;
 
     const selectItem = useCallback(
       (index: number) => {
@@ -180,7 +167,7 @@ const CommandList = forwardRef<CommandListRef, SuggestionProps<SlashCommandItem>
           return true;
         }
         if (event.key === "Enter") {
-          selectItem(selectedIndex);
+          selectItem(safeIndex);
           return true;
         }
         return false;
@@ -201,7 +188,7 @@ const CommandList = forwardRef<CommandListRef, SuggestionProps<SlashCommandItem>
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
               "hover:bg-accent cursor-pointer text-left",
-              index === selectedIndex && "bg-accent text-accent-foreground",
+              index === safeIndex && "bg-accent text-accent-foreground",
             )}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-background">
@@ -231,16 +218,8 @@ export const SlashCommand = Extension.create({
     return {
       suggestion: {
         char: "/",
-        command: ({
-          editor,
-          range,
-          props,
-        }: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          editor: any;
-          range: unknown;
-          props: SlashCommandItem;
-        }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        command: ({ editor, range, props }: { editor: any; range: any; props: SlashCommandItem }) => {
           props.command({ editor, range });
         },
       },

@@ -18,7 +18,7 @@ import {
   CodeXml,
   Minus,
   Link,
-  Image,
+  Image as ImageIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -241,7 +241,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           <Link className={iconSize} />
         </ToolbarButton>
         <ToolbarButton onClick={addImage} tooltip="Image">
-          <Image className={iconSize} />
+          <ImageIcon className={iconSize} />
         </ToolbarButton>
 
         <Separator orientation="vertical" className="mx-0.5 h-6" />

@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { certeSubscription, aiUsageLog } from "@/lib/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import {
-  getSession,
   AccessDeniedError,
   requireAccess,
 } from "@/lib/auth-server";
