@@ -8,6 +8,7 @@ import { validateUnits, decrementUnits } from "@/lib/units";
 import { broadcast } from "@/lib/sse";
 import { notifyParentForChild } from "@/lib/parent-notifications";
 import { PLATFORM_FEE_PERCENT } from "@/lib/constants";
+import { getNextOrderCode } from "@/lib/order-code";
 import { createSettlementLedgerEntryForOrder } from "@/lib/settlement-ledger";
 
 const orderItemSchema = z.object({
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create order and items in a transaction
+    const tokenCode = await getNextOrderCode();
     const newOrder = await db.transaction(async (tx) => {
       // If WALLET payment, verify and debit wallet
       let walletRow = null;
@@ -188,6 +190,7 @@ export async function POST(request: NextRequest) {
           totalAmount,
           platformFee,
           paymentMethod,
+          tokenCode,
           status: "PLACED",
           paymentStatus: paymentMethod === "WALLET" ? "PAID" : "UNPAID",
         })
