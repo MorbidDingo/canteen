@@ -61,7 +61,7 @@ type PendingParentOrder = {
   status: string;
   totalAmount: number;
   createdAt: string;
-  items: { name: string; quantity: number }[];
+  items: { name: string; quantity: number; subtotal: number }[];
 };
 
 async function getPendingParentOrders(
@@ -89,7 +89,7 @@ async function getPendingParentOrders(
     status: o.status,
     totalAmount: o.totalAmount,
     createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : String(o.createdAt),
-    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity, subtotal: i.unitPrice * i.quantity })),
   }));
 }
 

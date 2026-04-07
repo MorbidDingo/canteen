@@ -69,6 +69,7 @@ interface OrderItemData {
 
 interface OrderData {
   id: string;
+  tokenCode: string | null;
   status: string;
   totalAmount: number;
   platformFee: number;
@@ -354,7 +355,7 @@ export default function OrdersPage() {
                         </p>
                         {/* Line 3 — canteen + time */}
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {order.canteen?.name ?? "Unknown"} · {formatTime(order.createdAt)}
+                          {order.canteen?.name ?? "Unknown"} · {formatTime(order.createdAt)} · Token {order.tokenCode ?? `#${order.id.slice(0, 8).toUpperCase()}`}
                         </p>
                       </div>
                     </div>
@@ -374,7 +375,10 @@ export default function OrdersPage() {
       >
         {detailOrder && (
           <div className="px-5 pb-8 pt-2">
-            {/* Order ID + canteen */}
+            {/* Token + order ID + canteen */}
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Token {detailOrder.tokenCode ?? `#${detailOrder.id.slice(0, 8).toUpperCase()}`}
+            </p>
             <p className="font-mono text-[11px] text-muted-foreground">
               Order #{detailOrder.id.slice(0, 8).toUpperCase()}
             </p>

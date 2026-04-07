@@ -63,7 +63,7 @@ type OrderResult = {
   childName?: string;
   reason?: string;
   currentBreakName?: string | null;
-  pendingParentOrders?: { id: string; tokenCode: string | null; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number }[] }[];
+  pendingParentOrders?: { id: string; tokenCode: string | null; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number; subtotal: number }[] }[];
 };
 
 type OrgContextDevice = {
@@ -403,6 +403,20 @@ export default function KioskPage() {
       }
 
       if (data.pendingParentOrders && data.pendingParentOrders.length > 0) {
+        try {
+          for (const pendingOrder of data.pendingParentOrders as NonNullable<OrderResult["pendingParentOrders"]>) {
+            await printCanteenReceipt({
+              tokenCode: pendingOrder.tokenCode ?? `#${pendingOrder.shortId}`,
+              items: pendingOrder.items,
+              total: pendingOrder.totalAmount,
+              childName: data.childName,
+              isOffline: false,
+            });
+          }
+        } catch {
+          toast.warning("Pending order found, but receipt printer is disconnected.");
+        }
+
         setResult({
           success: true,
           childName: data.childName,
