@@ -40,6 +40,7 @@ type FeedPost = {
   dueAt: string | null;
   status: string;
   createdAt: string;
+  authorUserId: string;
   authorName: string;
   tags: { id: string; name: string; color: string | null }[];
   hasSubmitted: boolean;
@@ -140,6 +141,7 @@ export default function AssignmentsFeedPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
+  const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const limit = 20;
 
   const fetchFeed = useCallback(async () => {
@@ -241,8 +243,29 @@ export default function AssignmentsFeedPage() {
     [fetchFeed],
   );
 
+  const handleDeletePost = useCallback(
+    async (postId: string) => {
+      if (!confirm("Delete this post? This cannot be undone.")) return;
+      setBusyPostId(postId);
+      try {
+        const res = await fetch(`/api/content/posts/${postId}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete");
+        toast.success("Post deleted");
+        fetchFeed();
+      } catch {
+        toast.error("Failed to delete post");
+      } finally {
+        setBusyPostId(null);
+      }
+    },
+    [fetchFeed],
+  );
+
   // Sort: user's own posts first, then by date
   const userName = session?.user?.name ?? "";
+  const userId = session?.user?.id ?? "";
   const sortedPosts = useMemo(
     () =>
       [...posts].sort((a, b) => {
@@ -570,13 +593,14 @@ export default function AssignmentsFeedPage() {
               </p>
 
               <div className="flex flex-col gap-3">
-                {group.posts.map((post) => (
-                  <Link
-                    key={post.id}
-                    href={`/assignments/${post.id}`}
-                    className="block"
-                  >
-                    <div className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30">
+                {group.posts.map((post) => {
+                  const isOwnPost = post.authorUserId === userId;
+                  return (
+                    <div
+                      key={post.id}
+                      className="rounded-2xl bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                    >
+                      <Link href={`/assignments/${post.id}`} className="block">
                       {/* Title */}
                       <p className="line-clamp-2 text-[16px] font-semibold leading-snug">
                         {post.title}
@@ -637,9 +661,36 @@ export default function AssignmentsFeedPage() {
                           {post.authorName}
                         </span>
                       </div>
+                      </Link>
+                      {isOwnPost && (
+                        <div className="mt-2 flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/content/${post.id}/edit`)}
+                            disabled={busyPostId === post.id}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors disabled:opacity-40"
+                            aria-label="Edit post"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePost(post.id)}
+                            disabled={busyPostId === post.id}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40"
+                            aria-label="Delete post"
+                          >
+                            {busyPostId === post.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}

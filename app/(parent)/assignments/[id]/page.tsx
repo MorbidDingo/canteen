@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
+import { useSession } from "@/lib/auth-client";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
@@ -19,6 +20,8 @@ import {
   Film,
   ShieldX,
   FileQuestion,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -32,6 +35,7 @@ type PostDetail = {
   dueAt: string | null;
   status: string;
   createdAt: string;
+  authorUserId: string;
   authorName?: string;
 };
 
@@ -64,6 +68,7 @@ type SubmissionAttachment = {
 export default function PostDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { data: session } = useSession();
   const postId = params.id as string;
 
   const [loading, setLoading] = useState(true);
@@ -83,6 +88,7 @@ export default function PostDetailPage() {
   const [submitText, setSubmitText] = useState("");
   const [submitFiles, setSubmitFiles] = useState<File[]>([]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchPost = useCallback(async () => {
@@ -228,6 +234,23 @@ export default function PostDetailPage() {
 
   const backHref =
     post?.type === "NOTE" ? "/assignments?type=NOTE" : "/assignments";
+  const canEditPost = !!post && post.authorUserId === session?.user?.id;
+
+  async function handleDeletePost() {
+    if (!post) return;
+    if (!confirm("Delete this post? This cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/content/posts/${post.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Post deleted");
+      router.push(backHref);
+    } catch {
+      toast.error("Failed to delete post");
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -295,14 +318,41 @@ export default function PostDetailPage() {
 
   return (
     <div className="px-5 pb-28 sm:px-8">
-      {/* Back arrow */}
-      <button
-        type="button"
-        onClick={() => router.push(backHref)}
-        className="mb-6 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </button>
+      {/* Header controls */}
+      <div className="mb-6 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => router.push(backHref)}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        {canEditPost && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => router.push(`/content/${post.id}/edit`)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              aria-label="Edit post"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDeletePost}
+              disabled={deleting}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+              aria-label="Delete post"
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Title */}
       <h1 className="text-[28px] font-bold leading-tight tracking-tight">

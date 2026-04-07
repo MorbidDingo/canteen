@@ -56,11 +56,12 @@ function formatItemSummary(items: { name: string; quantity: number }[]) {
 
 type PendingParentOrder = {
   id: string;
+  tokenCode: string | null;
   shortId: string;
   status: string;
   totalAmount: number;
   createdAt: string;
-  items: { name: string; quantity: number }[];
+  items: { name: string; quantity: number; subtotal: number }[];
 };
 
 async function getPendingParentOrders(
@@ -83,11 +84,12 @@ async function getPendingParentOrders(
   });
   return rows.map((o) => ({
     id: o.id,
+    tokenCode: o.tokenCode ?? null,
     shortId: o.id.slice(-8).toUpperCase(),
     status: o.status,
     totalAmount: o.totalAmount,
     createdAt: o.createdAt instanceof Date ? o.createdAt.toISOString() : String(o.createdAt),
-    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity })),
+    items: o.items.map((i) => ({ name: i.menuItem.name, quantity: i.quantity, subtotal: i.unitPrice * i.quantity })),
   }));
 }
 

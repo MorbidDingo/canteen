@@ -69,6 +69,7 @@ interface OrderItemData {
 
 interface OrderData {
   id: string;
+  tokenCode: string | null;
   status: string;
   totalAmount: number;
   platformFee: number;
@@ -79,6 +80,8 @@ interface OrderData {
   canteen: { id: string; name: string; location: string | null } | null;
   items: OrderItemData[];
 }
+
+const ORDER_SHORT_ID_LENGTH = 8;
 
 // ── Status color helpers ─────────────────────────────────
 const STATUS_DOT_COLORS: Record<string, string> = {
@@ -110,6 +113,10 @@ function getDateLabel(dateStr: string): string {
 
 function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function getOrderDisplayToken(order: Pick<OrderData, "id" | "tokenCode">): string {
+  return order.tokenCode ?? `#${order.id.slice(-ORDER_SHORT_ID_LENGTH).toUpperCase()}`;
 }
 
 export default function OrdersPage() {
@@ -354,7 +361,7 @@ export default function OrdersPage() {
                         </p>
                         {/* Line 3 — canteen + time */}
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {order.canteen?.name ?? "Unknown"} · {formatTime(order.createdAt)}
+                          {order.canteen?.name ?? "Unknown"} · {formatTime(order.createdAt)} · Token {getOrderDisplayToken(order)}
                         </p>
                       </div>
                     </div>
@@ -374,9 +381,12 @@ export default function OrdersPage() {
       >
         {detailOrder && (
           <div className="px-5 pb-8 pt-2">
-            {/* Order ID + canteen */}
+            {/* Token + order ID + canteen */}
             <p className="font-mono text-[11px] text-muted-foreground">
-              Order #{detailOrder.id.slice(0, 8).toUpperCase()}
+              Token {getOrderDisplayToken(detailOrder)}
+            </p>
+            <p className="font-mono text-[11px] text-muted-foreground">
+              Order #{detailOrder.id.slice(-ORDER_SHORT_ID_LENGTH).toUpperCase()}
             </p>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
               {detailOrder.canteen?.name ?? "Unknown"} · {getDateLabel(detailOrder.createdAt)}, {formatTime(detailOrder.createdAt)}

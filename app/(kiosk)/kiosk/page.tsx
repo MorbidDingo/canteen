@@ -63,7 +63,7 @@ type OrderResult = {
   childName?: string;
   reason?: string;
   currentBreakName?: string | null;
-  pendingParentOrders?: { id: string; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number }[] }[];
+  pendingParentOrders?: { id: string; tokenCode: string | null; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number; subtotal: number }[] }[];
 };
 
 type OrgContextDevice = {
@@ -403,6 +403,20 @@ export default function KioskPage() {
       }
 
       if (data.pendingParentOrders && data.pendingParentOrders.length > 0) {
+        try {
+          for (const pendingOrder of data.pendingParentOrders as NonNullable<OrderResult["pendingParentOrders"]>) {
+            await printCanteenReceipt({
+              tokenCode: pendingOrder.tokenCode ?? `#${pendingOrder.shortId}`,
+              items: pendingOrder.items,
+              total: pendingOrder.totalAmount,
+              childName: data.childName,
+              isOffline: false,
+            });
+          }
+        } catch {
+          toast.warning("Pending order found, but receipt printer is disconnected.");
+        }
+
         setResult({
           success: true,
           childName: data.childName,
@@ -788,7 +802,7 @@ export default function KioskPage() {
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-mono font-bold text-[#d4891a] tracking-wider">
-                          #{po.shortId}
+                          {po.tokenCode ?? `#${po.shortId}`}
                         </p>
                         <Badge
                           className={
@@ -810,7 +824,7 @@ export default function KioskPage() {
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">
-                Share your order ID{result.pendingParentOrders.length > 1 ? "s" : ""} (shown above) with the canteen admin to collect your food.
+                Share the code shown above with the canteen admin to collect your food.
               </p>
 
               <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">
