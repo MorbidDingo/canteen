@@ -63,7 +63,7 @@ type OrderResult = {
   childName?: string;
   reason?: string;
   currentBreakName?: string | null;
-  pendingParentOrders?: { id: string; tokenCode: string; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number }[] }[];
+  pendingParentOrders?: { id: string; tokenCode: string | null; shortId: string; status: string; totalAmount: number; createdAt: string; items: { name: string; quantity: number }[] }[];
 };
 
 type OrgContextDevice = {
@@ -788,7 +788,7 @@ export default function KioskPage() {
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-mono font-bold text-[#d4891a] tracking-wider">
-                          {po.tokenCode}
+                          {po.tokenCode ?? `#${po.shortId}`}
                         </p>
                         <Badge
                           className={
@@ -810,7 +810,7 @@ export default function KioskPage() {
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">
-                Share your order token{result.pendingParentOrders.length > 1 ? "s" : ""} (shown above) with the canteen admin to collect your food.
+                Share your order token{result.pendingParentOrders.length > 1 ? "s" : ""} (or order ID if token is unavailable) with the canteen admin to collect your food.
               </p>
 
               <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">

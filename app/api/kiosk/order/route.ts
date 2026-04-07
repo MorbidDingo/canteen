@@ -56,7 +56,7 @@ function formatItemSummary(items: { name: string; quantity: number }[]) {
 
 type PendingParentOrder = {
   id: string;
-  tokenCode: string;
+  tokenCode: string | null;
   shortId: string;
   status: string;
   totalAmount: number;
@@ -84,7 +84,7 @@ async function getPendingParentOrders(
   });
   return rows.map((o) => ({
     id: o.id,
-    tokenCode: o.tokenCode || o.id.slice(-8).toUpperCase(),
+    tokenCode: o.tokenCode ?? null,
     shortId: o.id.slice(-8).toUpperCase(),
     status: o.status,
     totalAmount: o.totalAmount,
