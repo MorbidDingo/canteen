@@ -810,7 +810,7 @@ export default function KioskPage() {
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">
-                Share your order token{result.pendingParentOrders.length > 1 ? "s" : ""} (or order ID if token is unavailable) with the canteen admin to collect your food.
+                Share the code shown above with the canteen admin to collect your food.
               </p>
 
               <Badge variant="outline" className="text-sm py-1 px-3 text-muted-foreground">
