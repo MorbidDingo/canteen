@@ -116,7 +116,7 @@ function formatTime(dateStr: string): string {
 }
 
 function getOrderDisplayToken(order: Pick<OrderData, "id" | "tokenCode">): string {
-  return order.tokenCode ?? `#${order.id.slice(0, ORDER_SHORT_ID_LENGTH).toUpperCase()}`;
+  return order.tokenCode ?? `#${order.id.slice(-ORDER_SHORT_ID_LENGTH).toUpperCase()}`;
 }
 
 export default function OrdersPage() {
@@ -386,7 +386,7 @@ export default function OrdersPage() {
               Token {getOrderDisplayToken(detailOrder)}
             </p>
             <p className="font-mono text-[11px] text-muted-foreground">
-              Order #{detailOrder.id.slice(0, ORDER_SHORT_ID_LENGTH).toUpperCase()}
+              Order #{detailOrder.id.slice(-ORDER_SHORT_ID_LENGTH).toUpperCase()}
             </p>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
               {detailOrder.canteen?.name ?? "Unknown"} · {getDateLabel(detailOrder.createdAt)}, {formatTime(detailOrder.createdAt)}
