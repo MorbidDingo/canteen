@@ -12,12 +12,15 @@ import { generateNextOrderCode } from "@/lib/constants";
  * The actual PK remains the UUID.
  */
 export async function getNextOrderCode(): Promise<string> {
-  const [latest] = await db
+  const recentCodes = await db
     .select({ tokenCode: order.tokenCode })
     .from(order)
     .where(isNotNull(order.tokenCode))
-    .orderBy(desc(order.tokenCode))
-    .limit(1);
+    .orderBy(desc(order.createdAt))
+    .limit(500);
 
-  return generateNextOrderCode(latest?.tokenCode ?? null);
+  const latestSequentialCode =
+    recentCodes.find((row) => !!row.tokenCode && /^[A-Z]{4}[1-9]$/.test(row.tokenCode))?.tokenCode ?? null;
+
+  return generateNextOrderCode(latestSequentialCode);
 }
