@@ -554,22 +554,17 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Types shown only in notifications (payment events only; rest go to calendar)
-  const NOTIF_TYPES_KEEP = new Set([
-    "PAYMENT_EVENT_CREATED",
-    "PAYMENT_EVENT_REMINDER",
-    "PAYMENT_COMPLETED",
-  ]);
-
-  const activityNotifs = useMemo(
-    () => notifItems.filter((n) => NOTIF_TYPES_KEEP.has(n.type)),
+  const unreadNotificationCount = useMemo(
+    () => notifItems.filter((n) => !n.readAt).length,
     [notifItems],
   );
 
-  const notifUnreadCount = useMemo(
-    () => activityNotifs.filter((n) => !n.readAt).length,
-    [activityNotifs],
+  const unreadNoticeCount = useMemo(
+    () => noticeItems.filter((n) => !n.acknowledged).length,
+    [noticeItems],
   );
+
+  const notifUnreadCount = unreadNotificationCount + unreadNoticeCount;
 
   useEffect(() => {
     setMounted(true);
@@ -1002,7 +997,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="rounded-2xl border border-border/60 bg-card/60 p-6 text-center text-sm text-muted-foreground">
           Loading notifications...
         </div>
-      ) : activityNotifs.length === 0 ? (
+      ) : notifItems.length === 0 && noticeItems.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-6 text-center">
           <IoNotifications className="mx-auto h-6 w-6 text-muted-foreground/30" />
           <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1011,7 +1006,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       ) : (
         <div className="space-y-1">
-          {activityNotifs.map((n) => {
+          {notifItems.map((n) => {
             const isPayment = PAYMENT_NOTIF_TYPES.has(n.type);
             const isEvent = isEventNotifType(n.type);
             return (
@@ -1082,6 +1077,51 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               </button>
             );
           })}
+          {noticeItems.map((n) => (
+            <button
+              key={`notice-${n.id}`}
+              type="button"
+              onClick={() => {
+                setNotificationDrawerOpen(false);
+                setActiveNotice(n);
+                void router.push("/calendar");
+              }}
+              className={cn(
+                "w-full text-left rounded-xl px-3 py-2.5 transition-colors",
+                n.acknowledged
+                  ? "hover:bg-card/70"
+                  : "bg-violet-50/60 hover:bg-violet-50 dark:bg-violet-950/10 dark:hover:bg-violet-950/20",
+              )}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100/70 dark:bg-violet-950/30">
+                  <IoCalendar className="h-3.5 w-3.5 text-violet-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm leading-tight", !n.acknowledged && "font-semibold")}>
+                    {n.title}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                    {n.message}
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <p className="text-[10px] text-muted-foreground/70">
+                      {new Date(n.createdAt).toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                    <span className="text-[10px] font-medium text-violet-500">
+                      View in calendar →
+                    </span>
+                  </div>
+                </div>
+                {!n.acknowledged && (
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />
+                )}
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </>
@@ -1484,13 +1524,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               { label: "Calendar", href: "/calendar" },
               { label: "Controls", href: "/controls" },
               { label: "Notifications", href: "/notifications" },
-              {
-                label: "Payments",
-                action: () => {
-                  setProfileSheetOpen(false);
-                  void openPaymentsDrawer();
-                },
-              },
               { label: "Messaging", href: "/messaging-settings" },
             ].map((item) => (
               <button
@@ -1743,7 +1776,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                     {notifUnreadCount} unread
                   </p>
                 </div>
-                {notifUnreadCount > 0 && (
+                {unreadNotificationCount > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -2049,7 +2082,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
 
                 <SheetFooter className="border-t border-border/60 bg-muted/30">
                   <div className="space-y-2 w-full">
-                    {notifUnreadCount > 0 && (
+                    {unreadNotificationCount > 0 && (
                       <Button
                         variant="ghost"
                         className="w-full text-xs text-orange-600"

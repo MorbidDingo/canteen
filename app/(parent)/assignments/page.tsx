@@ -81,6 +81,7 @@ function truncate(str: string, maxLen: number): string {
 
 type StatusFilter = "all" | "published" | "overdue" | "due-soon";
 type AuthorFilter = "all" | "mine" | "others";
+type DateFilterMode = "all" | "day" | "month" | "year";
 
 /** Strip HTML tags from a string for use in plain-text previews */
 function stripHtml(html: string): string {
@@ -140,6 +141,8 @@ export default function AssignmentsFeedPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>("all");
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("all");
+  const [dateFilterValue, setDateFilterValue] = useState("");
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const limit = 20;
@@ -298,13 +301,41 @@ export default function AssignmentsFeedPage() {
       // Author filter
       if (authorFilter === "mine" && post.authorName !== userName) return false;
       if (authorFilter === "others" && post.authorName === userName) return false;
+      // Date filter (created date)
+      if (dateFilterMode !== "all" && dateFilterValue) {
+        const postDate = new Date(post.createdAt);
+        if (dateFilterMode === "day") {
+          const value = new Date(`${dateFilterValue}T00:00:00`);
+          if (
+            postDate.getFullYear() !== value.getFullYear() ||
+            postDate.getMonth() !== value.getMonth() ||
+            postDate.getDate() !== value.getDate()
+          ) {
+            return false;
+          }
+        } else if (dateFilterMode === "month") {
+          const [year, month] = dateFilterValue.split("-").map(Number);
+          if (
+            postDate.getFullYear() !== year ||
+            postDate.getMonth() !== month - 1
+          ) {
+            return false;
+          }
+        } else if (dateFilterMode === "year") {
+          if (postDate.getFullYear() !== Number(dateFilterValue)) return false;
+        }
+      }
       return true;
     });
-  }, [sortedPosts, searchQuery, statusFilter, authorFilter, userName]);
+  }, [sortedPosts, searchQuery, statusFilter, authorFilter, dateFilterMode, dateFilterValue, userName]);
 
   const filteredGrouped = useMemo(() => groupByDate(filteredPosts), [filteredPosts]);
 
-  const hasActiveFilters = statusFilter !== "all" || authorFilter !== "all" || tagFilter !== "all";
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    authorFilter !== "all" ||
+    tagFilter !== "all" ||
+    dateFilterMode !== "all";
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -327,28 +358,24 @@ export default function AssignmentsFeedPage() {
           </button>
         ))}
 
-        {/* Filter ghost button — only if tags exist */}
-        {tags.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setTagSheetOpen(true)}
-            className={cn(
-              "ml-auto h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
-              hasActiveFilters
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Filter{hasActiveFilters ? " ·" : ""}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setTagSheetOpen(true)}
+          className={cn(
+            "ml-auto h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+            hasActiveFilters
+              ? "text-primary"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Filter{hasActiveFilters ? " ·" : ""}
+        </button>
 
         {/* Calendar shortcut */}
         <Link
           href="/calendar"
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40",
-            tags.length === 0 && "ml-auto",
           )}
         >
           <Calendar className="h-4 w-4" />
@@ -375,50 +402,6 @@ export default function AssignmentsFeedPage() {
             <X className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         )}
-      </div>
-
-      {/* Filter pills (status + author) */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mt-2">
-        {([
-          { value: "all", label: "All" },
-          { value: "published", label: "Published" },
-          { value: "overdue", label: "Overdue" },
-          { value: "due-soon", label: "Due Soon" },
-        ] as const).map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setStatusFilter(opt.value)}
-            className={cn(
-              "shrink-0 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-              statusFilter === opt.value
-                ? "bg-foreground text-background"
-                : "bg-muted/30 text-muted-foreground hover:bg-muted/50",
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
-        <span className="mx-1 self-center text-border">|</span>
-        {([
-          { value: "all", label: "Everyone" },
-          { value: "mine", label: "My Posts" },
-          { value: "others", label: "Others" },
-        ] as const).map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setAuthorFilter(opt.value)}
-            className={cn(
-              "shrink-0 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-              authorFilter === opt.value
-                ? "bg-foreground text-background"
-                : "bg-muted/30 text-muted-foreground hover:bg-muted/50",
-            )}
-          >
-            {opt.label}
-          </button>
-        ))}
       </div>
 
       {/* Feed list */}
@@ -463,6 +446,8 @@ export default function AssignmentsFeedPage() {
                 setStatusFilter("all");
                 setAuthorFilter("all");
                 setTagFilter("all");
+                setDateFilterMode("all");
+                setDateFilterValue("");
               }}
               className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
             >
@@ -728,46 +713,178 @@ export default function AssignmentsFeedPage() {
       <BottomSheet
         open={tagSheetOpen}
         onClose={() => setTagSheetOpen(false)}
-        snapPoints={[35]}
+        snapPoints={[55]}
       >
         <div className="space-y-4 p-5">
           <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Filter by tag
+            Filters
           </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setTagFilter("all");
-                setTagSheetOpen(false);
-              }}
-              className={cn(
-                "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
-                tagFilter === "all"
-                  ? "bg-foreground text-background"
-                  : "bg-muted/40 text-muted-foreground",
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: "all", label: "All" },
+                  { value: "published", label: "Published" },
+                  { value: "overdue", label: "Overdue" },
+                  { value: "due-soon", label: "Due Soon" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setStatusFilter(opt.value)}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      statusFilter === opt.value
+                        ? "bg-foreground text-background"
+                        : "bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Author</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: "all", label: "Everyone" },
+                  { value: "mine", label: "My Posts" },
+                  { value: "others", label: "Others" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setAuthorFilter(opt.value)}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      authorFilter === opt.value
+                        ? "bg-foreground text-background"
+                        : "bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tag</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTagFilter("all")}
+                  className={cn(
+                    "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                    tagFilter === "all"
+                      ? "bg-foreground text-background"
+                      : "bg-muted/40 text-muted-foreground",
+                  )}
+                >
+                  All
+                </button>
+                {tags.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTagFilter(t.id)}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      tagFilter === t.id
+                        ? "bg-foreground text-background"
+                        : "bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Date</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: "all", label: "All Time" },
+                  { value: "day", label: "Day" },
+                  { value: "month", label: "Month" },
+                  { value: "year", label: "Year" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setDateFilterMode(opt.value);
+                      setDateFilterValue("");
+                    }}
+                    className={cn(
+                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      dateFilterMode === opt.value
+                        ? "bg-foreground text-background"
+                        : "bg-muted/40 text-muted-foreground",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {dateFilterMode === "day" && (
+                <input
+                  type="date"
+                  value={dateFilterValue}
+                  onChange={(e) => setDateFilterValue(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-border/40 bg-card px-3 text-sm"
+                />
               )}
-            >
-              All
-            </button>
-            {tags.map((t) => (
+              {dateFilterMode === "month" && (
+                <input
+                  type="month"
+                  value={dateFilterValue}
+                  onChange={(e) => setDateFilterValue(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-border/40 bg-card px-3 text-sm"
+                />
+              )}
+              {dateFilterMode === "year" && (
+                <input
+                  type="number"
+                  min={2000}
+                  max={2100}
+                  value={dateFilterValue}
+                  onChange={(e) => setDateFilterValue(e.target.value)}
+                  placeholder="YYYY"
+                  className="h-10 w-full rounded-xl border border-border/40 bg-card px-3 text-sm"
+                />
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
               <button
-                key={t.id}
                 type="button"
                 onClick={() => {
-                  setTagFilter(t.id);
+                  setStatusFilter("all");
+                  setAuthorFilter("all");
+                  setTagFilter("all");
+                  setDateFilterMode("all");
+                  setDateFilterValue("");
                   setTagSheetOpen(false);
                 }}
-                className={cn(
-                  "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
-                  tagFilter === t.id
-                    ? "bg-foreground text-background"
-                    : "bg-muted/40 text-muted-foreground",
-                )}
+                className="h-9 flex-1 rounded-xl bg-muted/40 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
               >
-                {t.name}
+                Reset
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setTagSheetOpen(false);
+                }}
+                className="h-9 flex-1 rounded-xl bg-primary text-[13px] font-medium text-primary-foreground"
+              >
+                Apply
+              </button>
+            </div>
           </div>
         </div>
       </BottomSheet>
