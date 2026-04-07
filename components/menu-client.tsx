@@ -491,7 +491,7 @@ export default function MenuClient({
     });
 
     return result;
-  }, [items, searchQuery, categoryFilter]);
+  }, [items, searchQuery, categoryFilter, favourites]);
 
   return (
     <>

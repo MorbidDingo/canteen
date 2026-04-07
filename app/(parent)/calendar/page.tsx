@@ -149,7 +149,7 @@ export default function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [monthStr, currentMonth.month, currentMonth.year]);
+  }, [monthStr]);
 
   useEffect(() => { void fetchEvents(); }, [fetchEvents]);
 

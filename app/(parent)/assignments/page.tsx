@@ -314,7 +314,12 @@ export default function AssignmentsFeedPage() {
             return false;
           }
         } else if (dateFilterMode === "month") {
-          const [year, month] = dateFilterValue.split("-").map(Number);
+          const [rawYear, rawMonth] = dateFilterValue.split("-");
+          const year = Number(rawYear);
+          const month = Number(rawMonth);
+          if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+            return false;
+          }
           if (
             postDate.getFullYear() !== year ||
             postDate.getMonth() !== month - 1
