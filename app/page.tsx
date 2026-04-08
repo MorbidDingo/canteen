@@ -53,10 +53,14 @@ export default function RootSplashPage() {
   const [minimumDelayDone, setMinimumDelayDone] = useState(false);
 
   useEffect(() => {
+    let intervalCleared = false;
     const revealInterval = setInterval(() => {
       setVisibleChars((prev) => {
         if (prev >= BRAND_TEXT.length) {
-          clearInterval(revealInterval);
+          if (!intervalCleared) {
+            clearInterval(revealInterval);
+            intervalCleared = true;
+          }
           return prev;
         }
         return prev + 1;
@@ -66,11 +70,16 @@ export default function RootSplashPage() {
     const minimumDelayTimeout = setTimeout(() => {
       setMinimumDelayDone(true);
       setVisibleChars(BRAND_TEXT.length);
-      clearInterval(revealInterval);
+      if (!intervalCleared) {
+        clearInterval(revealInterval);
+        intervalCleared = true;
+      }
     }, 1500);
 
     return () => {
-      clearInterval(revealInterval);
+      if (!intervalCleared) {
+        clearInterval(revealInterval);
+      }
       clearTimeout(minimumDelayTimeout);
     };
   }, []);

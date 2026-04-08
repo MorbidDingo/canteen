@@ -155,12 +155,10 @@ export default function AssignmentsFeedPage() {
   }, []);
 
   const handleTabSwitch = useCallback((tab: "ASSIGNMENT" | "NOTE") => {
-    setActiveTab((current) => {
-      if (current === tab) return current;
-      triggerHaptic();
-      return tab;
-    });
-  }, [triggerHaptic]);
+    if (activeTab === tab) return;
+    triggerHaptic();
+    setActiveTab(tab);
+  }, [activeTab, triggerHaptic]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
