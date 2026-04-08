@@ -1515,7 +1515,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
 
           {/* Menu items */}
           <div className="flex-1 overflow-y-auto px-5">
-            {[
+            {([
               ...(certePlusActive
                 ? [{ label: "Pre-Orders", href: "/pre-orders" }]
                 : []),
@@ -1525,17 +1525,17 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               { label: "Controls", href: "/controls" },
               { label: "Notifications", href: "/notifications" },
               { label: "Messaging", href: "/messaging-settings" },
-            ].map((item) => (
+            ] as Array<{ label: string; href: string; action?: () => void }>).map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => {
-                  if ("action" in item && item.action) {
+                  if (item.action) {
                     item.action();
                     return;
                   }
                   setProfileSheetOpen(false);
-                  void router.push(item.href!);
+                  void router.push(item.href);
                 }}
                 className="flex w-full items-center justify-between border-b border-border/30 py-3.5 text-[15px] last:border-0"
               >
