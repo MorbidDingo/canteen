@@ -15,6 +15,7 @@ import {
   type BookCategory,
 } from "@/lib/constants";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 // ─── Markdown Renderer ──────────────────────────────────────────────────────
 
@@ -191,14 +192,23 @@ function TitleCard({
   const isUnavailable = !book.canRequest && !isPending;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onClick(book)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(book); } }}
-      className="group w-[120px] shrink-0 cursor-pointer text-left"
-      title={`${book.title} by ${book.author}`}
-    >
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          triggerHapticFeedback();
+          onClick(book);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            triggerHapticFeedback();
+            onClick(book);
+          }
+        }}
+        className="group w-[120px] shrink-0 cursor-pointer text-left"
+        title={`${book.title} by ${book.author}`}
+      >
       <div className={cn(
         "relative aspect-[2/3] w-full overflow-hidden rounded-xl transition-all duration-300",
         "shadow-[0_1px_3px_rgba(0,0,0,0.04)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]",
@@ -637,7 +647,11 @@ export default function LibraryShowcasePage() {
           {searchInput && (
             <button
               type="button"
-              onClick={() => { setSearchInput(""); setQuery(""); }}
+              onClick={() => {
+                triggerHapticFeedback();
+                setSearchInput("");
+                setQuery("");
+              }}
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
@@ -660,10 +674,13 @@ export default function LibraryShowcasePage() {
           >
             Public
           </Link>
-          <button
-            type="button"
-            onClick={() => setCategory("ALL")}
-            className={cn(
+            <button
+              type="button"
+              onClick={() => {
+                triggerHapticFeedback();
+                setCategory("ALL");
+              }}
+              className={cn(
               "h-9 shrink-0 rounded-full px-4 text-[13px] font-medium transition-colors",
               category === "ALL"
                 ? "bg-primary text-primary-foreground"
@@ -673,11 +690,14 @@ export default function LibraryShowcasePage() {
             All
           </button>
           {Object.entries(BOOK_CATEGORY_LABELS).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setCategory(key)}
-              className={cn(
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  triggerHapticFeedback();
+                  setCategory(key);
+                }}
+                className={cn(
                 "h-9 shrink-0 rounded-full px-4 text-[13px] font-medium transition-colors",
                 category === key
                   ? "bg-primary text-primary-foreground"
@@ -696,7 +716,10 @@ export default function LibraryShowcasePage() {
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setSelectedChildId(c.id)}
+                onClick={() => {
+                  triggerHapticFeedback();
+                  setSelectedChildId(c.id);
+                }}
                 className={cn(
                   "h-8 shrink-0 rounded-full px-3 text-[12px] font-medium transition-colors",
                   (selectedChildId || data.selectedChildId || data.children[0]?.id) === c.id
