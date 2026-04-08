@@ -19,6 +19,7 @@ export interface TipTapEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   editable?: boolean;
+  disabled?: boolean;
   className?: string;
   maxLength?: number;
   autoFocus?: boolean;
@@ -31,6 +32,7 @@ export function TipTapEditor({
   onChange,
   placeholder = "Start writing, or type / for commands…",
   editable = true,
+  disabled = false,
   className,
   maxLength,
   autoFocus = false,
@@ -48,7 +50,7 @@ export function TipTapEditor({
   const editor = useEditor({
     extensions: getEditorExtensions({ placeholder, maxLength }),
     content: value,
-    editable,
+    editable: editable && !disabled,
     autofocus: autoFocus ? "end" : false,
     editorProps: {
       attributes: {
