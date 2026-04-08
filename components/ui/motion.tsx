@@ -247,27 +247,32 @@ export function BottomSheet({
           />
           {/* Sheet */}
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
+            initial={{ y: "100%", height: `${minSnap}dvh` }}
             exit={{ y: "100%" }}
-            transition={{
-              type: "spring",
-              damping: 28,
-              stiffness: 300,
-            }}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
               className={cn(
-                "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl transition-[height] duration-300 ease-in-out",
+                "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",
               "dark:bg-background/90 dark:border-white/[0.08]",
                 className,
               )}
-              style={{ height: `${currentSnap}dvh` }}
+              animate={{ y: 0, height: `${currentSnap}dvh` }}
+              transition={{
+                y: {
+                  type: "spring",
+                  damping: 28,
+                  stiffness: 300,
+                },
+                height: {
+                  duration: 0.25,
+                  ease: "easeInOut",
+                },
+              }}
             >
             {/* Drag handle — 40×4px pill */}
             <div className="flex justify-center mt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0">

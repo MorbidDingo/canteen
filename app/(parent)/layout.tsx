@@ -1475,7 +1475,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setProfilePhotoPreviewOpen(true)}
-                  className="absolute -bottom-1 -right-1 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
+                  className="absolute bottom-0 right-0 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
                   aria-label="Edit profile photo"
                 >
                   <Pencil className="h-4 w-4" />
@@ -1500,7 +1500,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               onChange={handleProfilePhotoInputChange}
             />
             <div className="mt-2 text-xs text-muted-foreground">
-              Tap the pencil icon to edit your profile photo.
+              Select the pencil icon to edit your profile photo.
             </div>
 
             {/* Wallet + Children cards */}
