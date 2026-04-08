@@ -9,6 +9,8 @@ type OrgContextDevice = {
   deviceType: "GATE" | "KIOSK" | "LIBRARY";
 };
 
+const BRAND_TEXT = "Certe";
+
 function getDefaultRouteForRole(role?: string | null) {
   switch (role) {
     case "OWNER":
@@ -47,18 +49,23 @@ function getTerminalRoute(devices: OrgContextDevice[]): string | null {
 export default function RootSplashPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
-  const brandText = "Certe";
   const [visibleChars, setVisibleChars] = useState(1);
   const [minimumDelayDone, setMinimumDelayDone] = useState(false);
 
   useEffect(() => {
     const revealInterval = setInterval(() => {
-      setVisibleChars((prev) => (prev >= brandText.length ? prev : prev + 1));
+      setVisibleChars((prev) => {
+        if (prev >= BRAND_TEXT.length) {
+          clearInterval(revealInterval);
+          return prev;
+        }
+        return prev + 1;
+      });
     }, 180);
 
     const minimumDelayTimeout = setTimeout(() => {
       setMinimumDelayDone(true);
-      setVisibleChars(brandText.length);
+      setVisibleChars(BRAND_TEXT.length);
       clearInterval(revealInterval);
     }, 1500);
 
@@ -66,7 +73,7 @@ export default function RootSplashPage() {
       clearInterval(revealInterval);
       clearTimeout(minimumDelayTimeout);
     };
-  }, [brandText.length]);
+  }, []);
 
   useEffect(() => {
     if (!minimumDelayDone || isPending) return;
@@ -101,7 +108,7 @@ export default function RootSplashPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <span className="font-[var(--font-brand)] text-6xl font-black tracking-[-0.04em] text-primary md:text-7xl">
-        {brandText.slice(0, visibleChars)}
+        {BRAND_TEXT.slice(0, visibleChars)}
       </span>
     </div>
   );
