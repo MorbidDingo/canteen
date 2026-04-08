@@ -187,11 +187,11 @@ export function BottomSheet({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
+  const handleClose = useCallback(() => {
     setCurrentSnap(minSnap);
     hasExpandedFromScrollRef.current = false;
-  }, [minSnap, open]);
+    onClose();
+  }, [minSnap, onClose]);
 
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -206,10 +206,10 @@ export function BottomSheet({
         return;
       }
       if (info.velocity.y > 500 || info.offset.y > 150) {
-        onClose();
+        handleClose();
       }
     },
-    [currentSnap, maxSnap, minSnap, onClose],
+    [currentSnap, handleClose, maxSnap, minSnap],
   );
 
   const expandToMaxOnScrollIntent = useCallback(() => {
@@ -230,7 +230,7 @@ export function BottomSheet({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[60] bg-black/15 backdrop-blur-[2px]"
-            onClick={onClose}
+            onClick={handleClose}
           />
           {/* Sheet */}
           <motion.div
