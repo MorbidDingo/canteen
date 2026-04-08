@@ -154,8 +154,7 @@ export default function AssignmentsFeedPage() {
 
   const triggerHaptic = useCallback(() => {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
-      const vibrated = navigator.vibrate(12);
-      if (!vibrated) return;
+      navigator.vibrate(12);
     }
   }, []);
 

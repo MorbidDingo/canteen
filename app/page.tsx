@@ -63,7 +63,9 @@ export default function RootSplashPage() {
 
     const minimumDelayTimeout = setTimeout(() => {
       setMinimumDelayDone(true);
-      setVisibleChars(BRAND_TEXT.length);
+      setVisibleChars((prev) =>
+        prev === BRAND_TEXT.length ? prev : BRAND_TEXT.length,
+      );
       if (revealIntervalRef.current) {
         clearInterval(revealIntervalRef.current);
         revealIntervalRef.current = null;

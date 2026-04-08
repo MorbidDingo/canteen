@@ -320,7 +320,7 @@ export default function PostDetailPage() {
     <div className="px-5 pb-28 sm:px-8">
       {/* Header controls */}
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
             onClick={() => router.push(backHref)}

@@ -161,7 +161,7 @@ export default function FolderDetailPage() {
     <div className="px-5 pb-28 sm:px-8">
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex flex-1 items-center gap-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <button
             type="button"
             onClick={() => router.push("/assignments")}
