@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 
@@ -51,15 +51,15 @@ export default function RootSplashPage() {
   const router = useRouter();
   const [visibleChars, setVisibleChars] = useState(1);
   const [minimumDelayDone, setMinimumDelayDone] = useState(false);
+  const revealIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    let intervalCleared = false;
-    const revealInterval = setInterval(() => {
+    revealIntervalRef.current = setInterval(() => {
       setVisibleChars((prev) => {
         if (prev >= BRAND_TEXT.length) {
-          if (!intervalCleared) {
-            clearInterval(revealInterval);
-            intervalCleared = true;
+          if (revealIntervalRef.current) {
+            clearInterval(revealIntervalRef.current);
+            revealIntervalRef.current = null;
           }
           return prev;
         }
@@ -70,15 +70,16 @@ export default function RootSplashPage() {
     const minimumDelayTimeout = setTimeout(() => {
       setMinimumDelayDone(true);
       setVisibleChars(BRAND_TEXT.length);
-      if (!intervalCleared) {
-        clearInterval(revealInterval);
-        intervalCleared = true;
+      if (revealIntervalRef.current) {
+        clearInterval(revealIntervalRef.current);
+        revealIntervalRef.current = null;
       }
     }, 1500);
 
     return () => {
-      if (!intervalCleared) {
-        clearInterval(revealInterval);
+      if (revealIntervalRef.current) {
+        clearInterval(revealIntervalRef.current);
+        revealIntervalRef.current = null;
       }
       clearTimeout(minimumDelayTimeout);
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -146,6 +146,11 @@ export default function AssignmentsFeedPage() {
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const limit = 20;
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const triggerHaptic = useCallback(() => {
     if (typeof window !== "undefined" && "vibrate" in navigator) {
@@ -155,10 +160,10 @@ export default function AssignmentsFeedPage() {
   }, []);
 
   const handleTabSwitch = useCallback((tab: "ASSIGNMENT" | "NOTE") => {
-    if (activeTab === tab) return;
+    if (activeTabRef.current === tab) return;
     triggerHaptic();
     setActiveTab(tab);
-  }, [activeTab, triggerHaptic]);
+  }, [triggerHaptic]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
