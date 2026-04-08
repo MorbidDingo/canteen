@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Cormorant_Garamond } from "next/font/google";
+import { Geist_Mono, Outfit } from "next/font/google";
 
-const cormorantGaramond = Cormorant_Garamond({
-  weight: ["600", "700"],
+const outfit = Outfit({
+  weight: ["700", "800", "900"],
   variable: "--font-brand",
   subsets: ["latin"],
   display: "swap",
@@ -169,7 +169,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistMono.variable} ${cormorantGaramond.variable} font-sans antialiased`}
+        className={`${geistMono.variable} ${outfit.variable} mobile-no-select font-sans antialiased`}
         suppressHydrationWarning
       >
         <ThemeProvider>

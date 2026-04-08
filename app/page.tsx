@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { CerteWordmark } from "@/components/certe-logo";
 import { useSession } from "@/lib/auth-client";
 
 type OrgContextDevice = {
   id: string;
   deviceType: "GATE" | "KIOSK" | "LIBRARY";
 };
+
+const BRAND_TEXT = "Certe";
 
 function getDefaultRouteForRole(role?: string | null) {
   switch (role) {
@@ -49,9 +49,40 @@ function getTerminalRoute(devices: OrgContextDevice[]): string | null {
 export default function RootSplashPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
+  const [visibleChars, setVisibleChars] = useState(1);
+  const [minimumDelayDone, setMinimumDelayDone] = useState(false);
+  const revealIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (isPending) return;
+    revealIntervalRef.current = setInterval(() => {
+      setVisibleChars((prev) => {
+        if (prev >= BRAND_TEXT.length) return prev;
+        return prev + 1;
+      });
+    }, 180);
+
+    const minimumDelayTimeout = setTimeout(() => {
+      setMinimumDelayDone(true);
+      setVisibleChars((prev) =>
+        prev === BRAND_TEXT.length ? prev : BRAND_TEXT.length,
+      );
+      if (revealIntervalRef.current) {
+        clearInterval(revealIntervalRef.current);
+        revealIntervalRef.current = null;
+      }
+    }, 1500);
+
+    return () => {
+      if (revealIntervalRef.current) {
+        clearInterval(revealIntervalRef.current);
+        revealIntervalRef.current = null;
+      }
+      clearTimeout(minimumDelayTimeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!minimumDelayDone || isPending) return;
     if (session?.user) {
       const resolveAndRedirect = async () => {
         const role = session.user.role;
@@ -78,12 +109,13 @@ export default function RootSplashPage() {
       return;
     }
     router.replace("/landing");
-  }, [session, isPending, router]);
+  }, [session, isPending, minimumDelayDone, router]);
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center gap-4 px-4">
-      <CerteWordmark className="text-5xl" />
-      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <span className="font-[var(--font-brand)] text-6xl font-black tracking-[-0.04em] text-primary md:text-7xl">
+        {BRAND_TEXT.slice(0, visibleChars)}
+      </span>
     </div>
   );
 }

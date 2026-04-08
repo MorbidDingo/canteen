@@ -319,14 +319,19 @@ export default function PostDetailPage() {
   return (
     <div className="px-5 pb-28 sm:px-8">
       {/* Header controls */}
-      <div className="mb-6 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => router.push(backHref)}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => router.push(backHref)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="truncate text-[28px] font-bold leading-tight tracking-tight">
+            {post.title}
+          </h1>
+        </div>
         {canEditPost && (
           <div className="flex items-center gap-1">
             <button
@@ -354,13 +359,8 @@ export default function PostDetailPage() {
         )}
       </div>
 
-      {/* Title */}
-      <h1 className="text-[28px] font-bold leading-tight tracking-tight">
-        {post.title}
-      </h1>
-
       {/* Meta line */}
-      <p className="mt-2 text-[13px] text-muted-foreground">
+      <p className="text-[13px] text-muted-foreground">
         {post.authorName || "Unknown"}
         {post.dueAt && (
           <>

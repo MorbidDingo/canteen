@@ -130,6 +130,7 @@ export function Navbar() {
 
   // Kiosk has its own layout — no navbar
   if (pathname.startsWith("/kiosk") || pathname.startsWith("/library/")) return null;
+  if (pathname === "/") return null;
 
   const links = isAdmin
     ? adminCanteenLinks

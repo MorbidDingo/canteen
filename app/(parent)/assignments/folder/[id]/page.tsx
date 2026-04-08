@@ -160,20 +160,24 @@ export default function FolderDetailPage() {
   return (
     <div className="px-5 pb-28 sm:px-8">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          type="button"
-          onClick={() => router.push("/assignments")}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex-1" />
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => router.push("/assignments")}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <h1 className="truncate text-[24px] font-bold leading-tight tracking-tight">
+            {folder.name}
+          </h1>
+        </div>
         <button
           type="button"
           onClick={handleDelete}
           disabled={deleting}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
         >
           {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </button>
@@ -185,7 +189,6 @@ export default function FolderDetailPage() {
           <Folder className="h-6 w-6 text-primary" />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-[24px] font-bold leading-tight tracking-tight">{folder.name}</h1>
           {folder.description && (
             <p className="mt-1 text-[14px] text-muted-foreground">{folder.description}</p>
           )}
@@ -285,7 +288,7 @@ export default function FolderDetailPage() {
       <button
         type="button"
         onClick={() => setCreateMenuOpen(true)}
-        className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95"
+        className="fixed bottom-28 left-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-all active:scale-95"
         aria-label="Add to folder"
       >
         <Plus className="h-6 w-6" />

@@ -519,7 +519,7 @@ export default function NewPostPage() {
   /* ================================================================ */
   return (
     /* pb-24 = 6rem — clears the bottom tab bar (~5.5rem) with breathing room */
-    <div className="mx-auto max-w-2xl px-5 pb-24 sm:px-8">
+    <div className="allow-mobile-select mx-auto max-w-2xl px-5 pb-24 sm:px-8">
       {/* ── Header ── */}
       <div className="sticky top-0 z-30 -mx-5 flex items-center gap-3 border-b border-border/10 bg-background/90 backdrop-blur-xl px-5 pb-3 pt-4">
         <button

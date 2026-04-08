@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -146,6 +146,23 @@ export default function AssignmentsFeedPage() {
   const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const limit = 20;
+  const activeTabRef = useRef(activeTab);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  const triggerHaptic = useCallback(() => {
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(12);
+    }
+  }, []);
+
+  const handleTabSwitch = useCallback((tab: "ASSIGNMENT" | "NOTE") => {
+    if (activeTabRef.current === tab) return;
+    triggerHaptic();
+    setActiveTab(tab);
+  }, [triggerHaptic]);
 
   const fetchFeed = useCallback(async () => {
     setLoading(true);
@@ -351,12 +368,12 @@ export default function AssignmentsFeedPage() {
           <button
             key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => handleTabSwitch(tab)}
             className={cn(
-              "h-8 rounded-full px-4 text-[13px] font-medium transition-colors",
+              "min-h-11 min-w-11 rounded-full px-4 text-[14px] font-semibold transition-colors",
               activeTab === tab
-                ? "bg-foreground text-background"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted/60",
+                ? "bg-primary text-primary-foreground"
+                : "bg-primary/10 text-primary hover:bg-primary/20",
             )}
           >
             {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}

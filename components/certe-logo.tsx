@@ -37,10 +37,10 @@ export function CerteWordmark({ className, showPlus, white }: { className?: stri
   return (
     <span
       className={cn(
-        "font-sans font-black tracking-[-0.06em] leading-none select-none",
+        "font-[var(--font-brand)] font-black tracking-[-0.04em] leading-none select-none",
         white
           ? "text-white"
-          : "bg-gradient-to-r from-[#e8a230] via-[#d4891a] to-[#b87314] bg-clip-text text-transparent",
+          : "text-primary",
         className,
       )}
     >
@@ -50,7 +50,7 @@ export function CerteWordmark({ className, showPlus, white }: { className?: stri
           "ml-[1px] text-[0.92em] font-black",
           white
             ? "text-white/80"
-            : "bg-gradient-to-r from-[#f5c862] via-[#e8a230] to-[#d4891a] bg-clip-text text-transparent",
+            : "text-primary/80",
         )}>
           +
         </sup>

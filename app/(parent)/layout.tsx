@@ -35,6 +35,7 @@ import {
   IoCalendar,
   IoDocumentText,
   IoDocumentTextOutline,
+  IoChatbubbleEllipses,
   IoSettings,
   IoClose,
 } from "react-icons/io5";
@@ -2267,7 +2268,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           {chatOpen ? (
             <IoClose className="h-5 w-5 text-foreground" />
           ) : (
-            <IoSparkles className="h-5 w-5 text-primary" />
+            <IoChatbubbleEllipses className="h-5 w-5 text-primary" />
           )}
         </button>
       )}
