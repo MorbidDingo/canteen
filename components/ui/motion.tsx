@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   motion,
   AnimatePresence,
@@ -144,7 +144,29 @@ export function BottomSheet({
   className,
   bare = false,
 }: BottomSheetProps) {
-  const maxSnap = Math.max(...snapPoints);
+  const normalizedSnapPoints = useMemo(() => {
+    const cleaned = Array.from(
+      new Set(
+        snapPoints
+          .map((point) => Number(point))
+          .filter((point) => Number.isFinite(point))
+          .map((point) => Math.min(95, Math.max(35, point))),
+      ),
+    ).sort((a, b) => a - b);
+
+    const base = cleaned.length > 0 ? cleaned : [60];
+    if (base.length === 1) {
+      const min = base[0];
+      const autoMax = Math.min(92, Math.max(min + 20, 80));
+      return [min, autoMax];
+    }
+    return base;
+  }, [snapPoints]);
+  const minSnap = normalizedSnapPoints[0];
+  const maxSnap = normalizedSnapPoints[normalizedSnapPoints.length - 1];
+  const [currentSnap, setCurrentSnap] = useState(minSnap);
+  const touchStartYRef = useRef<number | null>(null);
+  const hasExpandedFromScrollRef = useRef(false);
 
   // Lock body scroll when sheet is open to prevent background scrolling
   useEffect(() => {
@@ -165,14 +187,37 @@ export function BottomSheet({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    setCurrentSnap(minSnap);
+    hasExpandedFromScrollRef.current = false;
+  }, [minSnap, open]);
+
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      if (info.offset.y < -70 && currentSnap < maxSnap) {
+        setCurrentSnap(maxSnap);
+        hasExpandedFromScrollRef.current = true;
+        return;
+      }
+      if (info.offset.y > 100 && currentSnap > minSnap) {
+        setCurrentSnap(minSnap);
+        hasExpandedFromScrollRef.current = false;
+        return;
+      }
       if (info.velocity.y > 500 || info.offset.y > 150) {
         onClose();
       }
     },
-    [onClose],
+    [currentSnap, maxSnap, minSnap, onClose],
   );
+
+  const expandToMaxOnScrollIntent = useCallback(() => {
+    if (hasExpandedFromScrollRef.current || currentSnap >= maxSnap) return false;
+    setCurrentSnap(maxSnap);
+    hasExpandedFromScrollRef.current = true;
+    return true;
+  }, [currentSnap, maxSnap]);
 
   return (
     <AnimatePresence>
@@ -201,16 +246,16 @@ export function BottomSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
-            className={cn(
-              "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl",
+              className={cn(
+                "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",
               "dark:bg-background/90 dark:border-white/[0.08]",
-              className,
-            )}
-            style={{ height: `${maxSnap}dvh` }}
-          >
+                className,
+              )}
+              style={{ height: `${currentSnap}dvh` }}
+            >
             {/* Drag handle — 40×4px pill */}
             <div className="flex justify-center mt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0">
               <div className="h-1 w-10 rounded-full bg-muted/40" />
@@ -218,12 +263,34 @@ export function BottomSheet({
             {bare ? (
               <div className="flex flex-1 flex-col min-h-0 overflow-hidden">{children}</div>
             ) : (
-              <div
-                className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))]"
-                style={{ maxHeight: `calc(${maxSnap}dvh - 2.5rem)` }}
-              >
-                {children}
-              </div>
+                <div
+                  className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.75rem))]"
+                  style={{ maxHeight: `calc(${currentSnap}dvh - 2.5rem)` }}
+                  onWheelCapture={(event) => {
+                    if (event.deltaY <= 0) return;
+                    if (expandToMaxOnScrollIntent()) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
+                  }}
+                  onTouchStart={(event) => {
+                    touchStartYRef.current = event.touches[0]?.clientY ?? null;
+                  }}
+                  onTouchMove={(event) => {
+                    if (touchStartYRef.current === null) return;
+                    const currentY = event.touches[0]?.clientY ?? touchStartYRef.current;
+                    const delta = touchStartYRef.current - currentY;
+                    if (delta > 12 && expandToMaxOnScrollIntent()) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
+                  }}
+                  onTouchEnd={() => {
+                    touchStartYRef.current = null;
+                  }}
+                >
+                  {children}
+                </div>
             )}
           </motion.div>
         </>
