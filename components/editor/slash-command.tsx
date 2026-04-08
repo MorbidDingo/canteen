@@ -201,7 +201,7 @@ function SlashCommandMenuContent({
         onClose();
       } else if (e.key === "Backspace" && query === "") {
         onClose();
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && /^[a-zA-Z0-9 ]$/.test(e.key)) {
         setQuery((prev) => prev + e.key);
         setSelectedIndex(0);
       } else if (e.key === "Backspace") {

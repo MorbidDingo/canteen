@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
             .values({
               userId,
               organizationId: orgId,
-              type: "CHAT", // Using CHAT type since EDITOR may not exist in enum
+              type: "CHAT", // Editor AI usage tracked as CHAT type with source: "editor" metadata
               tokens: totalTokens,
               metadata: { action, source: "editor" },
             })
