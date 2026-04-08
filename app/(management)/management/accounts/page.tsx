@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,7 @@ type ManagedAccount = {
   id: string;
   name: string;
   email: string;
+  image: string | null;
   phone: string | null;
   role: string;
   createdAt: string;
@@ -689,9 +691,12 @@ export default function ManagementAccountsPage() {
               {accounts.map((entry) => (
                 <Card key={entry.id} className="border-amber-100">
                   <CardContent className="flex items-center gap-3 py-3">
-                    <div className="h-10 w-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                      {kind === "general" ? <UserRound className="h-5 w-5" /> : <Shield className="h-5 w-5" />}
-                    </div>
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarImage src={entry.image ?? undefined} alt={entry.name} />
+                      <AvatarFallback className="bg-amber-100 text-amber-700">
+                        {kind === "general" ? <UserRound className="h-5 w-5" /> : <Shield className="h-5 w-5" />}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold">{entry.name}</p>

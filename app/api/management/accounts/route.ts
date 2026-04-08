@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
         id: user.id,
         name: user.name,
         email: user.email,
+        image: user.image,
         phone: user.phone,
         role: organizationMembership.role,
         createdAt: user.createdAt,

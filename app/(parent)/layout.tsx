@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   IndianRupee,
   CheckCircle2,
@@ -20,6 +20,7 @@ import {
   MapPin,
   Check,
   ChevronDown,
+  Camera,
 } from "lucide-react";
 import {
   IoRestaurant,
@@ -76,6 +77,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { PROFILE_PHOTO_MAX_BYTES } from "@/lib/profile-photo";
 
 type ParentMode = "canteen" | "library" | "content";
 type WalletSnapshot = {
@@ -138,6 +140,13 @@ type ReceiptItem = {
   receiptNumber: string;
   paidAt: string;
 };
+
+const MAIN_TAB_ORDER: Array<"food" | "library" | "pass" | "notes"> = [
+  "food",
+  "library",
+  "pass",
+  "notes",
+];
 
 function getParentMode(
   pathname: string,
@@ -204,6 +213,13 @@ function getActiveBottomTab(
     return "notes";
   }
   return "settings";
+}
+
+function getPreviousTab(
+  current: "food" | "library" | "notes" | "pass",
+): "food" | "library" | "notes" | "pass" {
+  const idx = MAIN_TAB_ORDER.indexOf(current);
+  return MAIN_TAB_ORDER[(idx - 1 + MAIN_TAB_ORDER.length) % MAIN_TAB_ORDER.length];
 }
 
 function getPageTitle(
@@ -291,6 +307,8 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     { id: string; name: string; location: string | null }[]
   >([]);
   const [venuesLoaded, setVenuesLoaded] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
 
   const prevCartCount = useRef(cartCount);
 
@@ -317,6 +335,50 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
     [wallets],
   );
+  const mainTabRootRoute = useMemo(() => {
+    switch (bottomTab) {
+      case "food":
+        return "/menu";
+      case "library":
+        return "/library-showcase";
+      case "pass":
+        return certePlusActive ? "/pre-orders" : "/certe-pass";
+      case "notes":
+        return "/assignments";
+      default:
+        return null;
+    }
+  }, [bottomTab, certePlusActive]);
+  const previousTabRoute = useMemo(() => {
+    if (bottomTab === "settings") return null;
+    const previousTab = getPreviousTab(bottomTab);
+    if (previousTab === "food") return "/menu";
+    if (previousTab === "library") return "/library-showcase";
+    if (previousTab === "pass") return certePlusActive ? "/pre-orders" : "/certe-pass";
+    return "/assignments";
+  }, [bottomTab, certePlusActive]);
+  const rootTabPaths = useMemo(
+    () =>
+      new Set<string>([
+        "/menu",
+        "/library-showcase",
+        "/assignments",
+        "/pre-orders",
+        "/certe-pass",
+      ]),
+    [],
+  );
+  const headerBackTarget = useMemo(() => {
+    if (rootTabPaths.has(pathname)) {
+      return previousTabRoute;
+    }
+    return mainTabRootRoute;
+  }, [mainTabRootRoute, pathname, previousTabRoute, rootTabPaths]);
+
+  const goHeaderBack = useCallback(() => {
+    if (!headerBackTarget || headerBackTarget === pathname) return;
+    void router.replace(headerBackTarget);
+  }, [headerBackTarget, pathname, router]);
   const walletOwnerName = useMemo(
     () => wallets[0]?.parentName?.trim() || session?.user?.name || "Parent",
     [session?.user?.name, wallets],
@@ -570,6 +632,23 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setProfileImage(session?.user?.image ?? null);
+  }, [session?.user?.image]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!isMobile) return;
+      const currentPath = window.location.pathname;
+      if (!rootTabPaths.has(currentPath)) return;
+      if (!headerBackTarget || headerBackTarget === currentPath) return;
+      void router.push(headerBackTarget);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [headerBackTarget, isMobile, rootTabPaths, router]);
 
   useEffect(() => {
     if (cartCount > prevCartCount.current) {
@@ -1173,7 +1252,18 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           )}
         >
           {/* Left: Context-sensitive title / greeting */}
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            {headerBackTarget && (
+              <button
+                type="button"
+                onClick={goHeaderBack}
+                className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card/80 transition-colors hover:bg-muted/50"
+                aria-label="Go back"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            )}
+            <div className="min-w-0">
             <span className="text-[28px] font-semibold tracking-tight">
               {pageTitle}
             </span>
@@ -1194,6 +1284,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
               </button>
             )}
+            </div>
           </div>
 
           {/* Right: Cart + Bell + Avatar */}
@@ -1205,7 +1296,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                   blurFocusedElement();
                   setCartDrawerOpen(true);
                 }}
-                className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted/50"
+                className="relative inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted/50"
                 aria-label="Cart"
               >
                 <IoCart
@@ -1223,7 +1314,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               parentId={session?.user?.id}
               externalUnreadCount={notifUnreadCount}
               onClick={() => void openNotificationDrawer()}
-              className="h-10 w-10 rounded-full"
+              className="h-11 min-h-11 w-11 min-w-11 rounded-full"
             />
             <button
               type="button"
@@ -1398,9 +1489,12 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           aria-label="Profile"
         >
           <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/50 to-transparent dark:from-white/5" />
-          <div className="relative flex h-full w-full items-center justify-center text-[13px] font-bold text-slate-700 dark:text-slate-200">
-            {mounted ? getInitials(session?.user?.name) : "?"}
-          </div>
+          <Avatar className="relative h-full w-full">
+            <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
+            <AvatarFallback className="text-[13px] font-bold text-slate-700 dark:text-slate-200">
+              {mounted ? getInitials(session?.user?.name) : "?"}
+            </AvatarFallback>
+          </Avatar>
         </button>
       </nav>
 
@@ -1416,6 +1510,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="px-5 pt-2 pb-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-12 w-12">
+                <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
                 <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
                   {mounted ? getInitials(session?.user?.name) : "?"}
                 </AvatarFallback>
@@ -1428,6 +1523,58 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                   {session?.user?.email}
                 </p>
               </div>
+            </div>
+            <div className="mt-3">
+              <label
+                htmlFor="parent-profile-photo"
+                className={cn(
+                  "inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-border/60 bg-card/80 px-4 text-sm font-medium transition-colors",
+                  profileUploading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/50",
+                )}
+              >
+                <Camera className="h-4 w-4" />
+                {profileUploading ? "Uploading..." : "Update photo"}
+              </label>
+              <input
+                id="parent-profile-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                disabled={profileUploading}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.currentTarget.value = "";
+                  if (!file) return;
+                  if (file.size > PROFILE_PHOTO_MAX_BYTES) {
+                    toast.error("Photo must be under 5MB");
+                    return;
+                  }
+                  setProfileUploading(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    const res = await fetch("/api/profile/photo", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    let data: { imageUrl?: string; error?: string } = {};
+                    try {
+                      data = (await res.json()) as { imageUrl?: string; error?: string };
+                    } catch {
+                      throw new Error("Unexpected response while uploading photo");
+                    }
+                    if (!res.ok || !data.imageUrl) {
+                      throw new Error(data.error || "Failed to upload photo");
+                    }
+                    setProfileImage(data.imageUrl);
+                    toast.success("Profile photo updated");
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Failed to upload photo");
+                  } finally {
+                    setProfileUploading(false);
+                  }
+                }}
+              />
             </div>
 
             {/* Wallet + Children cards */}
@@ -1826,7 +1973,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                     <button
                       type="button"
                       onClick={() => setSelectedPaymentEvent(null)}
-                      className="mr-1 -ml-1 rounded-lg p-1.5 hover:bg-muted transition-colors"
+                      className="mr-1 -ml-1 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full hover:bg-muted transition-colors"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
@@ -2132,7 +2279,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                         <button
                           type="button"
                           onClick={() => setSelectedPaymentEvent(null)}
-                          className="-ml-1 mr-1 rounded-lg p-1.5 hover:bg-muted transition-colors"
+                          className="-ml-1 mr-1 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full hover:bg-muted transition-colors"
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </button>

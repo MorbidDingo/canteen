@@ -464,7 +464,7 @@ export default function CalendarPage() {
             </div>
 
             {selectedEvent.description && (
-              <p className="rounded-xl border border-border/50 bg-card/60 p-3 text-sm text-muted-foreground">
+              <p className="rounded-xl border border-border/50 bg-card/60 p-3 text-sm text-muted-foreground whitespace-pre-wrap break-words">
                 {selectedEvent.description}
               </p>
             )}
