@@ -34,6 +34,7 @@ import { useCertePlusStore } from "@/lib/store/certe-plus-store";
 import { MenuRecommendations } from "./recommendations/menu-recs";
 import { AiQuickBar } from "@/components/ai/ai-quick-bar";
 import { BottomSheet } from "@/components/ui/motion";
+import { triggerHapticFeedback } from "@/lib/haptics";
 
 const categoryIcons: Record<MenuCategory, React.ElementType> = {
   SNACKS: Cookie,
@@ -524,7 +525,10 @@ export default function MenuClient({
         <div className="mt-2.5 flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-none">
           <button
             type="button"
-            onClick={() => setCategoryFilter("ALL")}
+            onClick={() => {
+              triggerHapticFeedback();
+              setCategoryFilter("ALL");
+            }}
             className={cn(
               "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all",
               categoryFilter === "ALL"
@@ -537,7 +541,10 @@ export default function MenuClient({
           {favourites.size > 0 && (
             <button
               type="button"
-              onClick={() => setCategoryFilter("FAVOURITES")}
+              onClick={() => {
+                triggerHapticFeedback();
+                setCategoryFilter("FAVOURITES");
+              }}
               className={cn(
                 "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all flex items-center gap-1.5",
                 categoryFilter === "FAVOURITES"
@@ -563,7 +570,10 @@ export default function MenuClient({
               <button
                 key={value}
                 type="button"
-                onClick={() => setCategoryFilter(value)}
+                onClick={() => {
+                  triggerHapticFeedback();
+                  setCategoryFilter(value);
+                }}
                 className={cn(
                   "shrink-0 rounded-full px-4 h-9 text-[13px] font-medium transition-all",
                   categoryFilter === value
@@ -602,7 +612,10 @@ export default function MenuClient({
               <MenuRecommendations
                 onItemClick={(id) => {
                   const match = items.find((i) => i.id === id);
-                  if (match) setDetailItem(match);
+                  if (match) {
+                    triggerHapticFeedback();
+                    setDetailItem(match);
+                  }
                 }}
               />
             </div>
@@ -636,6 +649,7 @@ export default function MenuClient({
           </p>
           <button
             onClick={() => {
+              triggerHapticFeedback();
               setSearchQuery("");
               setCategoryFilter("ALL");
             }}
@@ -654,10 +668,14 @@ export default function MenuClient({
                 key={item.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setDetailItem(item)}
+                onClick={() => {
+                  triggerHapticFeedback();
+                  setDetailItem(item);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
+                    triggerHapticFeedback();
                     setDetailItem(item);
                   }
                 }}

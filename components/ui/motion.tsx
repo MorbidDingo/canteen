@@ -260,7 +260,7 @@ export function BottomSheet({
             dragElastic={{ top: 0, bottom: 0.25 }}
             onDragEnd={handleDragEnd}
               className={cn(
-                "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl",
+                "fixed inset-x-0 bottom-0 z-[60] flex flex-col overflow-y rounded-t-3xl transition-[height] duration-300 ease-in-out",
               "bg-background/95 backdrop-blur-2xl backdrop-saturate-[1.8]",
               "border-t border-border/60",
               "shadow-[0_-8px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-8px_50px_rgba(0,0,0,0.5)]",

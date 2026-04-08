@@ -20,7 +20,7 @@ import {
   MapPin,
   Check,
   ChevronDown,
-  Camera,
+  Pencil,
 } from "lucide-react";
 import {
   IoRestaurant,
@@ -141,13 +141,6 @@ type ReceiptItem = {
   paidAt: string;
 };
 
-const MAIN_TAB_ORDER: Array<"food" | "library" | "pass" | "notes"> = [
-  "food",
-  "library",
-  "pass",
-  "notes",
-];
-
 function getParentMode(
   pathname: string,
   requestedMode: string | null,
@@ -213,13 +206,6 @@ function getActiveBottomTab(
     return "notes";
   }
   return "settings";
-}
-
-function getPreviousTab(
-  current: "food" | "library" | "notes" | "pass",
-): "food" | "library" | "notes" | "pass" {
-  const idx = MAIN_TAB_ORDER.indexOf(current);
-  return MAIN_TAB_ORDER[(idx - 1 + MAIN_TAB_ORDER.length) % MAIN_TAB_ORDER.length];
 }
 
 function getPageTitle(
@@ -309,8 +295,10 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   const [venuesLoaded, setVenuesLoaded] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profilePhotoPreviewOpen, setProfilePhotoPreviewOpen] = useState(false);
 
   const prevCartCount = useRef(cartCount);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const requestedMode = searchParams.get("mode");
   const parentMode = getParentMode(pathname, requestedMode);
@@ -335,50 +323,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     () => wallets.reduce((sum, wallet) => sum + wallet.balance, 0),
     [wallets],
   );
-  const mainTabRootRoute = useMemo(() => {
-    switch (bottomTab) {
-      case "food":
-        return "/menu";
-      case "library":
-        return "/library-showcase";
-      case "pass":
-        return certePlusActive ? "/pre-orders" : "/certe-pass";
-      case "notes":
-        return "/assignments";
-      default:
-        return null;
-    }
-  }, [bottomTab, certePlusActive]);
-  const previousTabRoute = useMemo(() => {
-    if (bottomTab === "settings") return null;
-    const previousTab = getPreviousTab(bottomTab);
-    if (previousTab === "food") return "/menu";
-    if (previousTab === "library") return "/library-showcase";
-    if (previousTab === "pass") return certePlusActive ? "/pre-orders" : "/certe-pass";
-    return "/assignments";
-  }, [bottomTab, certePlusActive]);
-  const rootTabPaths = useMemo(
-    () =>
-      new Set<string>([
-        "/menu",
-        "/library-showcase",
-        "/assignments",
-        "/pre-orders",
-        "/certe-pass",
-      ]),
-    [],
-  );
-  const headerBackTarget = useMemo(() => {
-    if (rootTabPaths.has(pathname)) {
-      return previousTabRoute;
-    }
-    return mainTabRootRoute;
-  }, [mainTabRootRoute, pathname, previousTabRoute, rootTabPaths]);
-
-  const goHeaderBack = useCallback(() => {
-    if (!headerBackTarget || headerBackTarget === pathname) return;
-    void router.replace(headerBackTarget);
-  }, [headerBackTarget, pathname, router]);
   const walletOwnerName = useMemo(
     () => wallets[0]?.parentName?.trim() || session?.user?.name || "Parent",
     [session?.user?.name, wallets],
@@ -410,6 +354,41 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     const activeElement = document.activeElement;
     if (activeElement instanceof HTMLElement) {
       activeElement.blur();
+    }
+  }, []);
+
+  const handleProfilePhotoInputChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    if (file.size > PROFILE_PHOTO_MAX_BYTES) {
+      toast.error("Photo must be under 5MB");
+      return;
+    }
+    setProfileUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/profile/photo", {
+        method: "POST",
+        body: formData,
+      });
+      let data: { imageUrl?: string; error?: string } = {};
+      try {
+        data = (await res.json()) as { imageUrl?: string; error?: string };
+      } catch {
+        throw new Error("Unexpected response while uploading photo");
+      }
+      if (!res.ok || !data.imageUrl) {
+        throw new Error(data.error || "Failed to upload photo");
+      }
+      setProfileImage(data.imageUrl);
+      setProfilePhotoPreviewOpen(false);
+      toast.success("Profile photo updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload photo");
+    } finally {
+      setProfileUploading(false);
     }
   }, []);
 
@@ -636,19 +615,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setProfileImage(session?.user?.image ?? null);
   }, [session?.user?.image]);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      if (!isMobile) return;
-      const currentPath = window.location.pathname;
-      if (!rootTabPaths.has(currentPath)) return;
-      if (!headerBackTarget || headerBackTarget === currentPath) return;
-      void router.push(headerBackTarget);
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [headerBackTarget, isMobile, rootTabPaths, router]);
 
   useEffect(() => {
     if (cartCount > prevCartCount.current) {
@@ -1253,16 +1219,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         >
           {/* Left: Context-sensitive title / greeting */}
           <div className="flex min-w-0 items-center gap-2">
-            {headerBackTarget && (
-              <button
-                type="button"
-                onClick={goHeaderBack}
-                className="inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card/80 transition-colors hover:bg-muted/50"
-                aria-label="Go back"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-            )}
             <div className="min-w-0">
             <span className="text-[28px] font-semibold tracking-tight">
               {pageTitle}
@@ -1509,12 +1465,22 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Profile info */}
           <div className="px-5 pt-2 pb-4">
             <div className="flex items-center gap-3">
-              <Avatar className="h-12 w-12">
-                <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
-                <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
-                  {mounted ? getInitials(session?.user?.name) : "?"}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <Avatar className="h-14 w-14">
+                  <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
+                  <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
+                    {mounted ? getInitials(session?.user?.name) : "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  onClick={() => setProfilePhotoPreviewOpen(true)}
+                  className="absolute -bottom-1 -right-1 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
+                  aria-label="Edit profile photo"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </div>
               <div className="min-w-0">
                 <p className="truncate text-[22px] font-bold tracking-tight">
                   {session?.user?.name || "User"}
@@ -1524,57 +1490,17 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
             </div>
-            <div className="mt-3">
-              <label
-                htmlFor="parent-profile-photo"
-                className={cn(
-                  "inline-flex min-h-11 min-w-11 items-center gap-2 rounded-full border border-border/60 bg-card/80 px-4 text-sm font-medium transition-colors",
-                  profileUploading ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/50",
-                )}
-              >
-                <Camera className="h-4 w-4" />
-                {profileUploading ? "Uploading..." : "Update photo"}
-              </label>
-              <input
-                id="parent-profile-photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                disabled={profileUploading}
-                onChange={async (event) => {
-                  const file = event.target.files?.[0];
-                  event.currentTarget.value = "";
-                  if (!file) return;
-                  if (file.size > PROFILE_PHOTO_MAX_BYTES) {
-                    toast.error("Photo must be under 5MB");
-                    return;
-                  }
-                  setProfileUploading(true);
-                  try {
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    const res = await fetch("/api/profile/photo", {
-                      method: "POST",
-                      body: formData,
-                    });
-                    let data: { imageUrl?: string; error?: string } = {};
-                    try {
-                      data = (await res.json()) as { imageUrl?: string; error?: string };
-                    } catch {
-                      throw new Error("Unexpected response while uploading photo");
-                    }
-                    if (!res.ok || !data.imageUrl) {
-                      throw new Error(data.error || "Failed to upload photo");
-                    }
-                    setProfileImage(data.imageUrl);
-                    toast.success("Profile photo updated");
-                  } catch (error) {
-                    toast.error(error instanceof Error ? error.message : "Failed to upload photo");
-                  } finally {
-                    setProfileUploading(false);
-                  }
-                }}
-              />
+            <input
+              ref={profilePhotoInputRef}
+              id="parent-profile-photo"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              disabled={profileUploading}
+              onChange={handleProfilePhotoInputChange}
+            />
+            <div className="mt-2 text-xs text-muted-foreground">
+              Tap the pencil icon to edit your profile photo.
             </div>
 
             {/* Wallet + Children cards */}
@@ -2352,6 +2278,46 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </BottomSheet>
+
+      <Dialog
+        open={profilePhotoPreviewOpen}
+        onOpenChange={(open) => setProfilePhotoPreviewOpen(open)}
+      >
+        <DialogContent className="max-w-sm gap-0 overflow-hidden p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Edit profile photo</DialogTitle>
+            <DialogDescription>
+              Preview your profile photo and tap edit to upload a new one.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            {profileImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={profileImage}
+                alt={session?.user?.name || "Profile"}
+                className="aspect-square w-full object-cover"
+              />
+            ) : (
+              <div className="flex aspect-square w-full items-center justify-center bg-muted text-5xl font-semibold text-muted-foreground">
+                {mounted ? getInitials(session?.user?.name) : "?"}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => profilePhotoInputRef.current?.click()}
+              disabled={profileUploading}
+              className={cn(
+                "absolute right-3 top-3 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors",
+                profileUploading ? "cursor-not-allowed opacity-70" : "hover:bg-muted/70",
+              )}
+              aria-label="Upload new profile photo"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Notice Detail Dialog */}
       <Dialog
