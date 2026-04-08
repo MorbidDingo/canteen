@@ -284,6 +284,22 @@ html {
   }
 }
 
+@media (max-width: 768px) {
+  body.mobile-no-select,
+  body.mobile-no-select * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  body.mobile-no-select .allow-mobile-select,
+  body.mobile-no-select .allow-mobile-select * {
+    user-select: text;
+    -webkit-user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
 /* Safe area padding for notched phones */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   main {

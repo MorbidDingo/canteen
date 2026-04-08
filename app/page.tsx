@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { CerteWordmark } from "@/components/certe-logo";
 import { useSession } from "@/lib/auth-client";
 
 type OrgContextDevice = {
@@ -49,9 +47,29 @@ function getTerminalRoute(devices: OrgContextDevice[]): string | null {
 export default function RootSplashPage() {
   const { data: session, isPending } = useSession();
   const router = useRouter();
+  const brandText = "Certe";
+  const [visibleChars, setVisibleChars] = useState(1);
+  const [minimumDelayDone, setMinimumDelayDone] = useState(false);
 
   useEffect(() => {
-    if (isPending) return;
+    const revealInterval = setInterval(() => {
+      setVisibleChars((prev) => (prev >= brandText.length ? prev : prev + 1));
+    }, 180);
+
+    const minimumDelayTimeout = setTimeout(() => {
+      setMinimumDelayDone(true);
+      setVisibleChars(brandText.length);
+      clearInterval(revealInterval);
+    }, 1500);
+
+    return () => {
+      clearInterval(revealInterval);
+      clearTimeout(minimumDelayTimeout);
+    };
+  }, [brandText.length]);
+
+  useEffect(() => {
+    if (!minimumDelayDone || isPending) return;
     if (session?.user) {
       const resolveAndRedirect = async () => {
         const role = session.user.role;
@@ -78,12 +96,13 @@ export default function RootSplashPage() {
       return;
     }
     router.replace("/landing");
-  }, [session, isPending, router]);
+  }, [session, isPending, minimumDelayDone, router]);
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center gap-4 px-4">
-      <CerteWordmark className="text-5xl" />
-      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <span className="font-[var(--font-brand)] text-6xl font-black tracking-[-0.04em] text-primary md:text-7xl">
+        {brandText.slice(0, visibleChars)}
+      </span>
     </div>
   );
 }
