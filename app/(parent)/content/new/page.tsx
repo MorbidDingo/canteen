@@ -18,6 +18,12 @@ import {
 } from "@/components/ui/select";
 import { BottomSheet } from "@/components/ui/motion";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft,
   Loader2,
   Plus,
@@ -36,6 +42,9 @@ import {
   Image as ImageIcon,
   FolderOpen,
   Upload,
+  ChevronDown,
+  Send,
+  Save,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -509,7 +518,8 @@ export default function NewPostPage() {
   /*  RENDER                                                          */
   /* ================================================================ */
   return (
-    <div className="mx-auto max-w-2xl px-5 pb-40 sm:px-8">
+    /* pb-24 = 6rem — clears the bottom tab bar (~5.5rem) with breathing room */
+    <div className="mx-auto max-w-2xl px-5 pb-24 sm:px-8">
       {/* ── Header ── */}
       <div className="sticky top-0 z-30 -mx-5 flex items-center gap-3 border-b border-border/10 bg-background/90 backdrop-blur-xl px-5 pb-3 pt-4">
         <button
@@ -536,22 +546,75 @@ export default function NewPostPage() {
           )}
         </div>
         {hasAnyPermission && (
-          <button
-            type="button"
-            disabled={submitting || !isValid}
-            onClick={() =>
-              mode === "FOLDER" ? handleSubmitFolder() : handleSubmitPost(false)
-            }
-            className="flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40 shrink-0"
-          >
-            {submitting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : mode === "FOLDER" ? (
-              "Create"
+          <>
+            {mode === "FOLDER" ? (
+              <button
+                type="button"
+                disabled={submitting || !isValid}
+                onClick={() => handleSubmitFolder()}
+                className="flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40 shrink-0"
+              >
+                {submitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  "Create"
+                )}
+              </button>
             ) : (
-              "Publish"
+              /* ── Publish / Draft dropdown button group ── */
+              <div className="flex shrink-0 items-center">
+                {/* Primary: Publish */}
+                <button
+                  type="button"
+                  disabled={submitting || !isPostValid}
+                  onClick={() => handleSubmitPost(false)}
+                  className="flex h-9 items-center justify-center rounded-l-full bg-primary pl-4 pr-3 text-[13px] font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <Send className="h-3.5 w-3.5" />
+                      Publish
+                    </span>
+                  )}
+                </button>
+                {/* Divider */}
+                <div className="h-9 w-px bg-primary-foreground/20" />
+                {/* Secondary: chevron → dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={submitting || !isPostValid}
+                      aria-label="More save options"
+                      className="flex h-9 w-8 items-center justify-center rounded-r-full bg-primary text-primary-foreground transition-all active:scale-95 disabled:opacity-40"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[140px]">
+                    <DropdownMenuItem
+                      disabled={submitting || !isPostValid}
+                      onClick={() => handleSubmitPost(false)}
+                      className="gap-2"
+                    >
+                      <Send className="h-3.5 w-3.5 text-primary" />
+                      Publish
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={submitting || !isPostValid}
+                      onClick={() => handleSubmitPost(true)}
+                      className="gap-2"
+                    >
+                      <Save className="h-3.5 w-3.5 text-muted-foreground" />
+                      Save as Draft
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             )}
-          </button>
+          </>
         )}
       </div>
 
@@ -885,53 +948,6 @@ export default function NewPostPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── Sticky bottom bar (post modes only) ── */}
-      {hasAnyPermission && mode !== "FOLDER" && (
-        <div className="fixed bottom-[max(6.5rem,calc(6.5rem+env(safe-area-inset-bottom)))] left-0 right-0 z-40 border-t border-border/10 bg-background/95 backdrop-blur-xl px-4 py-3">
-          <div className="mx-auto flex max-w-2xl items-center gap-2">
-            <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-muted/50 transition-colors active:bg-muted active:scale-95 min-h-[44px] min-w-[44px]">
-              <Paperclip className="h-4 w-4 text-muted-foreground" />
-              <input
-                type="file"
-                className="hidden"
-                multiple
-                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
-                onChange={handleFileChange}
-              />
-            </label>
-            {files.length > 0 && (
-              <span className="text-[12px] tabular-nums text-muted-foreground">
-                {files.length} file{files.length > 1 ? "s" : ""}
-              </span>
-            )}
-            <div className="flex-1" />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-10 rounded-full px-5 text-[14px] font-medium text-muted-foreground min-h-[44px]"
-              disabled={submitting || !isPostValid}
-              onClick={() => handleSubmitPost(true)}
-            >
-              {submitting && (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              )}
-              Draft
-            </Button>
-            <Button
-              size="sm"
-              className="h-10 rounded-full px-6 text-[14px] font-semibold shadow-sm min-h-[44px]"
-              disabled={submitting || !isPostValid}
-              onClick={() => handleSubmitPost(false)}
-            >
-              {submitting && (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              )}
-              Publish
-            </Button>
-          </div>
         </div>
       )}
 

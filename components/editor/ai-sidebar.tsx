@@ -224,8 +224,8 @@ export function AISidebar({ onAccept }: AISidebarProps) {
   return (
     <Sheet open={store.isOpen} onOpenChange={(open) => !open && store.close()}>
       <SheetContent
-        side="right"
-        className="flex w-full flex-col overflow-hidden sm:max-w-sm"
+        side="bottom"
+        className="flex max-h-[80vh] flex-col overflow-hidden rounded-t-2xl px-4 pb-6 pt-4 sm:mx-auto sm:max-w-lg sm:rounded-2xl"
         showCloseButton={false}
       >
         <SheetHeader className="shrink-0 border-b pb-3">

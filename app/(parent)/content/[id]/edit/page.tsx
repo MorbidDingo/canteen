@@ -23,6 +23,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft,
   Loader2,
   Plus,
@@ -38,6 +44,8 @@ import {
   Send,
   Lock,
   FileText,
+  Save,
+  ChevronDown,
 } from "lucide-react";
 
 type Tag = { id: string; name: string; color: string | null };
@@ -426,7 +434,7 @@ export default function EditPostPage() {
             {status}
           </Badge>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {postType === "ASSIGNMENT" && (
             <Link href={`/content/${postId}/submissions`}>
               <Button variant="outline" size="sm" className="h-7 text-xs">
@@ -445,6 +453,68 @@ export default function EditPostPage() {
             <Trash2 className="mr-1 h-3 w-3" />
             Delete
           </Button>
+
+          {/* Save / Publish / Close action dropdown */}
+          <div className="flex shrink-0 items-center">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSave()}
+              className="flex h-8 items-center justify-center rounded-l-full bg-primary pl-3.5 pr-2.5 text-[12px] font-semibold text-primary-foreground transition-all active:scale-95 disabled:opacity-40"
+            >
+              {saving ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Save className="h-3 w-3" />
+                  Save
+                </span>
+              )}
+            </button>
+            <div className="h-8 w-px bg-primary-foreground/20" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={saving}
+                  aria-label="More save options"
+                  className="flex h-8 w-7 items-center justify-center rounded-r-full bg-primary text-primary-foreground transition-all active:scale-95 disabled:opacity-40"
+                >
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[150px]">
+                <DropdownMenuItem
+                  disabled={saving}
+                  onClick={() => handleSave()}
+                  className="gap-2"
+                >
+                  <Save className="h-3.5 w-3.5 text-muted-foreground" />
+                  Save Changes
+                </DropdownMenuItem>
+                {status === "DRAFT" && (
+                  <DropdownMenuItem
+                    disabled={saving || audiences.length === 0}
+                    onClick={() => handleSave("PUBLISHED")}
+                    className="gap-2"
+                  >
+                    <Send className="h-3.5 w-3.5 text-primary" />
+                    Publish
+                  </DropdownMenuItem>
+                )}
+                {status === "PUBLISHED" && postType === "ASSIGNMENT" && (
+                  <DropdownMenuItem
+                    disabled={saving}
+                    onClick={() => handleSave("CLOSED")}
+                    className="gap-2"
+                  >
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                    Close Post
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -696,43 +766,6 @@ export default function EditPostPage() {
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="space-y-2 pt-2">
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={saving}
-            onClick={() => handleSave()}
-          >
-            {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            Save Changes
-          </Button>
-          {status === "DRAFT" && (
-            <Button
-              className="flex-1"
-              disabled={saving || audiences.length === 0}
-              onClick={() => handleSave("PUBLISHED")}
-            >
-              {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              <Send className="mr-1.5 h-4 w-4" />
-              Publish
-            </Button>
-          )}
-          {status === "PUBLISHED" && postType === "ASSIGNMENT" && (
-            <Button
-              variant="secondary"
-              className="flex-1"
-              disabled={saving}
-              onClick={() => handleSave("CLOSED")}
-            >
-              {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              <Lock className="mr-1.5 h-4 w-4" />
-              Close
-            </Button>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
