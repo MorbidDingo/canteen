@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   IoChevronBack,
@@ -16,8 +16,19 @@ type CalendarEvent = {
   title: string;
   date: string;
   endDate?: string;
-  type: "assignment" | "notice" | "holiday" | "exam";
+  type: "assignment" | "notice" | "holiday" | "exam" | "payment";
   postType?: string;
+  category?: string;
+  description?: string | null;
+  noticeId?: string;
+  acknowledged?: boolean;
+  amount?: number;
+  dueDate?: string | null;
+  paymentChildren?: Array<{
+    id: string;
+    name: string;
+    paid: boolean;
+  }>;
 };
 
 const DOT_COLORS = {
@@ -25,6 +36,7 @@ const DOT_COLORS = {
   notice: "bg-amber-500",
   holiday: "bg-emerald-500",
   exam: "bg-red-500",
+  payment: "bg-violet-500",
 } as const;
 
 const MONTH_NAMES = [
@@ -39,6 +51,7 @@ function toDateKey(d: Date): string {
 }
 
 export default function CalendarPage() {
+  const router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -46,17 +59,91 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
   const monthStr = `${currentMonth.year}-${String(currentMonth.month + 1).padStart(2, "0")}`;
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/content/calendar?month=${monthStr}`);
-      if (res.ok) {
-        const data = await res.json();
-        setEvents(data.events ?? []);
+      const [calendarRes, noticesRes, paymentsRes] = await Promise.all([
+        fetch(`/api/content/calendar?month=${monthStr}`),
+        fetch("/api/parent/notices", { cache: "no-store" }),
+        fetch("/api/parent/payment-events", { cache: "no-store" }),
+      ]);
+
+      const baseEvents: CalendarEvent[] = calendarRes.ok
+        ? (((await calendarRes.json()) as { events?: CalendarEvent[] }).events ?? [])
+        : [];
+
+      const noticeMap = new Map<
+        string,
+        { message: string; acknowledged: boolean }
+      >();
+      if (noticesRes.ok) {
+        const noticesData = (await noticesRes.json()) as {
+          notices?: Array<{
+            id: string;
+            message: string;
+            acknowledged: boolean;
+          }>;
+        };
+        for (const n of noticesData.notices ?? []) {
+          noticeMap.set(n.id, {
+            message: n.message,
+            acknowledged: n.acknowledged,
+          });
+        }
       }
+
+      const paymentEvents: CalendarEvent[] = [];
+      if (paymentsRes.ok) {
+        const paymentData = (await paymentsRes.json()) as {
+          events?: Array<{
+            id: string;
+            title: string;
+            description: string | null;
+            amount: number;
+            dueDate: string | null;
+            createdAt: string;
+            children: Array<{ id: string; name: string; paid: boolean }>;
+          }>;
+        };
+        for (const event of paymentData.events ?? []) {
+          const eventDate = event.dueDate ?? event.createdAt;
+          if (!eventDate) continue;
+          const d = new Date(eventDate);
+          if (
+            d.getFullYear() !== currentMonth.year ||
+            d.getMonth() !== currentMonth.month
+          ) {
+            continue;
+          }
+          paymentEvents.push({
+            id: event.id,
+            title: event.title,
+            date: eventDate,
+            type: "payment",
+            description: event.description,
+            amount: event.amount,
+            dueDate: event.dueDate,
+            paymentChildren: event.children,
+          });
+        }
+      }
+
+      const enriched = baseEvents.map((event) => {
+        if (event.type !== "notice" && event.type !== "exam") return event;
+        const notice = noticeMap.get(event.id);
+        return {
+          ...event,
+          description: notice?.message ?? event.description ?? null,
+          noticeId: notice ? event.id : undefined,
+          acknowledged: notice ? notice.acknowledged : true,
+        };
+      });
+
+      setEvents([...enriched, ...paymentEvents]);
     } catch {
       // silently fail
     } finally {
@@ -268,33 +355,27 @@ export default function CalendarPage() {
             </div>
           ) : (
             <div className="space-y-1">
-              {uniqueSelectedEvents.map((ev) => {
-                const isAssignment = ev.type === "assignment";
-                return (
-                  <div key={ev.id}>
-                    {isAssignment ? (
-                      <Link
-                        href={`/assignments/${ev.id}`}
-                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors active:bg-muted/30"
-                      >
-                        <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLORS[ev.type])} />
-                        <p className="min-w-0 flex-1 text-[14px] font-medium leading-tight">
-                          {ev.title}
-                          <span className="font-normal text-muted-foreground"> · Due</span>
-                        </p>
-                      </Link>
-                    ) : (
-                      <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
-                        <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLORS[ev.type])} />
-                        <p className="min-w-0 flex-1 text-[14px] font-medium leading-tight">
-                          {ev.type === "holiday" ? "Holiday" : ev.type === "exam" ? "Exam" : "Notice"}
-                          <span className="font-normal text-muted-foreground"> · {ev.title}</span>
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {uniqueSelectedEvents.map((ev) => (
+                <button
+                  key={`${ev.type}-${ev.id}`}
+                  type="button"
+                  onClick={() => setSelectedEvent(ev)}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors active:bg-muted/30"
+                >
+                  <span className={cn("h-2 w-2 shrink-0 rounded-full", DOT_COLORS[ev.type])} />
+                  <p className="min-w-0 flex-1 text-[14px] font-medium leading-tight">
+                    {ev.type === "assignment"
+                      ? ev.title
+                      : ev.type === "holiday"
+                        ? `Holiday · ${ev.title}`
+                        : ev.type === "exam"
+                          ? `Exam · ${ev.title}`
+                          : ev.type === "payment"
+                            ? `Payment · ${ev.title}`
+                            : `Notice · ${ev.title}`}
+                  </p>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -310,7 +391,6 @@ export default function CalendarPage() {
             {monthEvents.map((ev) => {
               const evDate = new Date(ev.date);
               const dayStr = evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-              const isAssignment = ev.type === "assignment";
               const innerContent = (
                 <>
                   {/* Colour accent bar */}
@@ -318,7 +398,15 @@ export default function CalendarPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-medium leading-tight truncate">{ev.title}</p>
                     <p className="text-[12px] text-muted-foreground mt-0.5">
-                      {ev.type === "holiday" ? "Holiday" : ev.type === "exam" ? "Exam" : ev.type === "assignment" ? "Due" : "Notice"}
+                      {ev.type === "holiday"
+                        ? "Holiday"
+                        : ev.type === "exam"
+                          ? "Exam"
+                          : ev.type === "assignment"
+                            ? "Due"
+                            : ev.type === "payment"
+                              ? "Payment"
+                              : "Notice"}
                       {" · "}
                       {dayStr}
                       {ev.endDate && ev.endDate !== ev.date && (
@@ -329,30 +417,166 @@ export default function CalendarPage() {
                 </>
               );
 
-              return isAssignment ? (
-                <Link
-                  key={ev.id}
-                  href={`/assignments/${ev.id}`}
-                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+              return (
+                <button
+                  key={`${ev.type}-${ev.id}`}
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl bg-card px-4 py-3 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
+                  onClick={() => setSelectedEvent(ev)}
                 >
                   {innerContent}
-                </Link>
-              ) : (
-                <div
-                  key={ev.id}
-                  className="flex items-center gap-3 rounded-xl bg-card px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-colors active:bg-muted/30"
-                  onClick={() => {
-                    const key = toDateKey(evDate);
-                    setSelectedDate(key);
-                  }}
-                >
-                  {innerContent}
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
       )}
+      <BottomSheet
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        snapPoints={[55]}
+      >
+        {selectedEvent && (
+          <div className="space-y-4 p-5">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                {selectedEvent.type === "payment"
+                  ? "Payment event"
+                  : selectedEvent.type === "assignment"
+                    ? "Assignment"
+                    : selectedEvent.type === "holiday"
+                      ? "Holiday"
+                      : selectedEvent.type === "exam"
+                        ? "Exam"
+                        : "Notice"}
+              </p>
+              <h3 className="mt-1 text-lg font-semibold leading-tight">{selectedEvent.title}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {new Date(selectedEvent.date).toLocaleString("en-IN", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+
+            {selectedEvent.description && (
+              <p className="rounded-xl border border-border/50 bg-card/60 p-3 text-sm text-muted-foreground">
+                {selectedEvent.description}
+              </p>
+            )}
+
+            {selectedEvent.type === "payment" && (
+              <div className="rounded-xl border border-border/50 bg-card/60 p-3">
+                <p className="text-xs text-muted-foreground">Amount</p>
+                <p className="text-lg font-semibold">₹{(selectedEvent.amount ?? 0).toFixed(2)}</p>
+                {selectedEvent.dueDate && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Due{" "}
+                    {new Date(selectedEvent.dueDate).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {selectedEvent.type === "payment" &&
+              selectedEvent.paymentChildren &&
+              selectedEvent.paymentChildren.length > 0 && (
+                <div className="space-y-2">
+                  {selectedEvent.paymentChildren.map((child) => (
+                    <div
+                      key={child.id}
+                      className="flex items-center justify-between rounded-xl border border-border/40 px-3 py-2"
+                    >
+                      <span className="text-sm">{child.name}</span>
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          child.paid ? "text-emerald-600" : "text-muted-foreground",
+                        )}
+                      >
+                        {child.paid ? "Paid" : "Pending"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            <div className="flex flex-col gap-2">
+              {selectedEvent.type === "assignment" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = selectedEvent.id;
+                    setSelectedEvent(null);
+                    router.push(`/assignments/${id}`);
+                  }}
+                  className="h-10 rounded-xl bg-primary text-sm font-medium text-primary-foreground"
+                >
+                  Open assignment
+                </button>
+              )}
+
+              {(selectedEvent.type === "notice" || selectedEvent.type === "exam") &&
+                selectedEvent.noticeId &&
+                selectedEvent.acknowledged === false && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const noticeId = selectedEvent.noticeId;
+                      await fetch("/api/parent/notices", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ noticeId }),
+                      });
+                      setEvents((prev) =>
+                        prev.map((event) =>
+                          event.noticeId === noticeId
+                            ? { ...event, acknowledged: true }
+                            : event,
+                        ),
+                      );
+                      setSelectedEvent((prev) =>
+                        prev ? { ...prev, acknowledged: true } : prev,
+                      );
+                    }}
+                    className="h-10 rounded-xl bg-violet-600 text-sm font-medium text-white"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+
+              {selectedEvent.type === "payment" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedEvent(null);
+                    router.push("/events");
+                  }}
+                  className="h-10 rounded-xl bg-primary text-sm font-medium text-primary-foreground"
+                >
+                  Open payment details
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setSelectedEvent(null)}
+                className="h-10 rounded-xl border border-border/60 bg-background text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </BottomSheet>
       {!loading && monthEvents.length === 0 && (
         <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center">
           <IoCalendar className="mx-auto h-7 w-7 text-muted-foreground/30" />

@@ -491,7 +491,7 @@ export default function MenuClient({
     });
 
     return result;
-  }, [items, searchQuery, categoryFilter]);
+  }, [items, searchQuery, categoryFilter, favourites]);
 
   return (
     <>
@@ -832,35 +832,35 @@ export default function MenuClient({
               </p>
             )}
 
-            {/* Price */}
-            <div>
-              {detailItem.discountedPrice != null ? (
-                <div className="flex items-baseline gap-2">
+            {/* Price + add button */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                {detailItem.discountedPrice != null ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[24px] font-bold tabular-nums">
+                      ₹{detailItem.discountedPrice}
+                    </span>
+                    <span className="text-[14px] text-muted-foreground line-through tabular-nums">
+                      ₹{detailItem.price}
+                    </span>
+                  </div>
+                ) : (
                   <span className="text-[24px] font-bold tabular-nums">
-                    ₹{detailItem.discountedPrice}
-                  </span>
-                  <span className="text-[14px] text-muted-foreground line-through tabular-nums">
                     ₹{detailItem.price}
                   </span>
-                </div>
-              ) : (
-                <span className="text-[24px] font-bold tabular-nums">
-                  ₹{detailItem.price}
-                </span>
-              )}
+                )}
+              </div>
+              <AddToCartButton
+                menuItemId={detailItem.id}
+                name={detailItem.name}
+                price={detailItem.price}
+                discountedPrice={detailItem.discountedPrice}
+                availableUnits={detailItem.availableUnits}
+                available={detailItem.available}
+                canteenId={detailItem.canteenId ?? ""}
+                canteenName={detailItem.canteenName ?? "Unknown"}
+              />
             </div>
-
-            {/* Add to cart button — full width */}
-            <AddToCartButton
-              menuItemId={detailItem.id}
-              name={detailItem.name}
-              price={detailItem.price}
-              discountedPrice={detailItem.discountedPrice}
-              availableUnits={detailItem.availableUnits}
-              available={detailItem.available}
-              canteenId={detailItem.canteenId ?? ""}
-              canteenName={detailItem.canteenName ?? "Unknown"}
-            />
           </div>
         </BottomSheet>
       )}
