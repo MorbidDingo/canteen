@@ -21,6 +21,7 @@ export function SafeHtml({ html, className }: SafeHtmlProps) {
     if (ref.current) {
       ref.current.innerHTML = DOMPurify.sanitize(html, {
         USE_PROFILES: { html: true },
+        ADD_ATTR: ["data-callout", "data-type", "data-checked"],
       });
     }
   }, [html]);
