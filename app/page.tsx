@@ -56,13 +56,7 @@ export default function RootSplashPage() {
   useEffect(() => {
     revealIntervalRef.current = setInterval(() => {
       setVisibleChars((prev) => {
-        if (prev >= BRAND_TEXT.length) {
-          if (revealIntervalRef.current) {
-            clearInterval(revealIntervalRef.current);
-            revealIntervalRef.current = null;
-          }
-          return prev;
-        }
+        if (prev >= BRAND_TEXT.length) return prev;
         return prev + 1;
       });
     }, 180);
