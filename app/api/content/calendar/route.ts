@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contentPost, managementNotice, schoolHoliday } from "@/lib/db/schema";
-import { eq, and, gte, lte, sql, or, isNotNull } from "drizzle-orm";
+import { eq, and, gte, lte, or, isNotNull } from "drizzle-orm";
 import { requireAccess } from "@/lib/auth-server";
 
 export async function GET(req: NextRequest) {
@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
       .select({
         id: managementNotice.id,
         title: managementNotice.title,
+        message: managementNotice.message,
         eventDate: managementNotice.eventDate,
         category: managementNotice.category,
       })
@@ -96,6 +97,7 @@ export async function GET(req: NextRequest) {
     type: "assignment" | "notice" | "holiday" | "exam";
     postType?: string;
     category?: string;
+    description?: string | null;
   };
 
   const events: CalendarEvent[] = [];
@@ -120,6 +122,7 @@ export async function GET(req: NextRequest) {
         date: n.eventDate.toISOString(),
         type: n.category === "EXAM" ? "exam" : "notice",
         category: n.category ?? "GENERAL",
+        description: n.message,
       });
     }
   }
@@ -131,7 +134,7 @@ export async function GET(req: NextRequest) {
       date: h.startDate.toISOString(),
       endDate: h.endDate?.toISOString(),
       type: "holiday",
-      ...(h.description ? {} : {}),
+      description: h.description ?? null,
     });
   }
 
