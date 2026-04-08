@@ -77,6 +77,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { PROFILE_PHOTO_MAX_BYTES } from "@/lib/profile-photo";
 
 type ParentMode = "canteen" | "library" | "content";
 type WalletSnapshot = {
@@ -139,6 +140,13 @@ type ReceiptItem = {
   receiptNumber: string;
   paidAt: string;
 };
+
+const MAIN_TAB_ORDER: Array<"food" | "library" | "pass" | "notes"> = [
+  "food",
+  "library",
+  "pass",
+  "notes",
+];
 
 function getParentMode(
   pathname: string,
@@ -210,14 +218,8 @@ function getActiveBottomTab(
 function getPreviousTab(
   current: "food" | "library" | "notes" | "pass",
 ): "food" | "library" | "notes" | "pass" {
-  const tabOrder: Array<"food" | "library" | "pass" | "notes"> = [
-    "food",
-    "library",
-    "pass",
-    "notes",
-  ];
-  const idx = tabOrder.indexOf(current);
-  return tabOrder[(idx - 1 + tabOrder.length) % tabOrder.length];
+  const idx = MAIN_TAB_ORDER.indexOf(current);
+  return MAIN_TAB_ORDER[(idx - 1 + MAIN_TAB_ORDER.length) % MAIN_TAB_ORDER.length];
 }
 
 function getPageTitle(
@@ -641,7 +643,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
       const currentPath = window.location.pathname;
       if (!rootTabPaths.has(currentPath)) return;
       if (!headerBackTarget || headerBackTarget === currentPath) return;
-      void router.replace(headerBackTarget);
+      void router.push(headerBackTarget);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -1543,7 +1545,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                   const file = event.target.files?.[0];
                   event.currentTarget.value = "";
                   if (!file) return;
-                  if (file.size > 5 * 1024 * 1024) {
+                  if (file.size > PROFILE_PHOTO_MAX_BYTES) {
                     toast.error("Photo must be under 5MB");
                     return;
                   }
@@ -1555,7 +1557,12 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                       method: "POST",
                       body: formData,
                     });
-                    const data = (await res.json()) as { imageUrl?: string; error?: string };
+                    let data: { imageUrl?: string; error?: string } = {};
+                    try {
+                      data = (await res.json()) as { imageUrl?: string; error?: string };
+                    } catch {
+                      throw new Error("Unexpected response while uploading photo");
+                    }
                     if (!res.ok || !data.imageUrl) {
                       throw new Error(data.error || "Failed to upload photo");
                     }

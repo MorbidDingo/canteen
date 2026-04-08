@@ -156,10 +156,11 @@ export function BottomSheet({
   const normalizedSnapPoints = useMemo(() => {
     const cleaned = Array.from(
       new Set(
-        snapPoints
-          .map((point) => Number(point))
-          .filter((point) => Number.isFinite(point))
-          .map((point) => Math.min(MAX_SNAP_POINT, Math.max(MIN_SNAP_POINT, point))),
+        snapPoints.flatMap((point) => {
+          const parsed = Number(point);
+          if (!Number.isFinite(parsed)) return [];
+          return [Math.min(MAX_SNAP_POINT, Math.max(MIN_SNAP_POINT, parsed))];
+        }),
       ),
     ).sort((a, b) => a - b);
 
@@ -224,7 +225,7 @@ export function BottomSheet({
     [currentSnap, handleClose, maxSnap, minSnap],
   );
 
-  const expandToMaxOnScrollIntent = useCallback(() => {
+  const tryExpandToMax = useCallback(() => {
     if (hasExpandedFromScrollRef.current || currentSnap >= maxSnap) return false;
     setCurrentSnap(maxSnap);
     hasExpandedFromScrollRef.current = true;
@@ -279,8 +280,9 @@ export function BottomSheet({
                   className="flex-1 overflow-y-auto overscroll-contain touch-pan-y px-5 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.75rem))]"
                   style={{ maxHeight: `calc(${currentSnap}dvh - 2.5rem)` }}
                   onWheelCapture={(event) => {
+                    if (event.ctrlKey || event.metaKey) return;
                     if (event.deltaY <= 0) return;
-                    if (expandToMaxOnScrollIntent()) {
+                    if (tryExpandToMax()) {
                       event.preventDefault();
                       event.stopPropagation();
                     }
@@ -292,7 +294,7 @@ export function BottomSheet({
                     if (touchStartYRef.current === null) return;
                     const currentY = event.touches[0]?.clientY ?? touchStartYRef.current;
                     const delta = touchStartYRef.current - currentY;
-                    if (delta > TOUCH_EXPAND_THRESHOLD && expandToMaxOnScrollIntent()) {
+                    if (delta > TOUCH_EXPAND_THRESHOLD && tryExpandToMax()) {
                       event.preventDefault();
                       event.stopPropagation();
                     }

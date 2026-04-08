@@ -4,6 +4,10 @@ import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
+import {
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_MIME_TYPES,
+} from "@/lib/profile-photo";
 
 export async function POST(request: NextRequest) {
   let access;
@@ -31,16 +35,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const validTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!validTypes.includes(file.type)) {
+    if (!PROFILE_PHOTO_MIME_TYPES.includes(file.type as (typeof PROFILE_PHOTO_MIME_TYPES)[number])) {
       return NextResponse.json(
         { error: "Invalid file type. Only JPEG, PNG, and WebP are allowed." },
         { status: 400 },
       );
     }
 
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > PROFILE_PHOTO_MAX_BYTES) {
       return NextResponse.json(
         { error: "File too large. Maximum size is 5MB." },
         { status: 400 },
@@ -56,9 +58,11 @@ export async function POST(request: NextRequest) {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             folder: `canteen/profile-photos/${userId}`,
-            public_id: `profile-${crypto.randomUUID()}`,
+            public_id: `profile-${userId}`,
             resource_type: "image",
             quality: "auto",
+            overwrite: true,
+            invalidate: true,
           },
           (error, result) => {
             if (error) {
