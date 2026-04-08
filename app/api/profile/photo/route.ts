@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { cloudinary, configureCloudinary } from "@/lib/cloudinary";
 import { requireAccess, AccessDeniedError } from "@/lib/auth-server";
 import { db } from "@/lib/db";
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             folder: `canteen/profile-photos/${userId}`,
-            public_id: `profile-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+            public_id: `profile-${crypto.randomUUID()}`,
             resource_type: "image",
             quality: "auto",
           },
@@ -80,12 +80,7 @@ export async function POST(request: NextRequest) {
     await db
       .update(user)
       .set({ image: uploadResult.secure_url, updatedAt: new Date() })
-      .where(
-        and(
-          eq(user.id, userId),
-          eq(user.id, access.session.user.id),
-        ),
-      );
+      .where(eq(user.id, userId));
 
     return NextResponse.json({ imageUrl: uploadResult.secure_url });
   } catch (error) {

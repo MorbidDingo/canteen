@@ -207,6 +207,19 @@ function getActiveBottomTab(
   return "settings";
 }
 
+function getPreviousTab(
+  current: "food" | "library" | "notes" | "pass",
+): "food" | "library" | "notes" | "pass" {
+  const tabOrder: Array<"food" | "library" | "pass" | "notes"> = [
+    "food",
+    "library",
+    "pass",
+    "notes",
+  ];
+  const idx = tabOrder.indexOf(current);
+  return tabOrder[(idx - 1 + tabOrder.length) % tabOrder.length];
+}
+
 function getPageTitle(
   pathname: string,
   searchParams?: URLSearchParams,
@@ -335,16 +348,8 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, [bottomTab, certePlusActive]);
   const previousTabRoute = useMemo(() => {
-    const tabOrder: Array<"food" | "library" | "pass" | "notes"> = [
-      "food",
-      "library",
-      "pass",
-      "notes",
-    ];
     if (bottomTab === "settings") return null;
-    const idx = tabOrder.indexOf(bottomTab);
-    if (idx < 0) return null;
-    const previousTab = tabOrder[(idx - 1 + tabOrder.length) % tabOrder.length];
+    const previousTab = getPreviousTab(bottomTab);
     if (previousTab === "food") return "/menu";
     if (previousTab === "library") return "/library-showcase";
     if (previousTab === "pass") return certePlusActive ? "/pre-orders" : "/certe-pass";

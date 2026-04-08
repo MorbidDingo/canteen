@@ -10,6 +10,15 @@ import {
 } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+const MIN_SNAP_POINT = 35;
+const MAX_SNAP_POINT = 95;
+const AUTO_MIN_SNAP = 80;
+const AUTO_MAX_SNAP = 92;
+const AUTO_EXPANSION_DELTA = 20;
+const DRAG_EXPAND_THRESHOLD = -70;
+const DRAG_COLLAPSE_THRESHOLD = 100;
+const TOUCH_EXPAND_THRESHOLD = 12;
+
 // ─── Spring Presets ─────────────────────────────────────────
 export const spring = {
   snappy: { type: "spring" as const, stiffness: 400, damping: 30 },
@@ -150,14 +159,17 @@ export function BottomSheet({
         snapPoints
           .map((point) => Number(point))
           .filter((point) => Number.isFinite(point))
-          .map((point) => Math.min(95, Math.max(35, point))),
+          .map((point) => Math.min(MAX_SNAP_POINT, Math.max(MIN_SNAP_POINT, point))),
       ),
     ).sort((a, b) => a - b);
 
     const base = cleaned.length > 0 ? cleaned : [60];
     if (base.length === 1) {
       const min = base[0];
-      const autoMax = Math.min(92, Math.max(min + 20, 80));
+      const autoMax = Math.min(
+        AUTO_MAX_SNAP,
+        Math.max(min + AUTO_EXPANSION_DELTA, AUTO_MIN_SNAP),
+      );
       return [min, autoMax];
     }
     return base;
@@ -195,12 +207,12 @@ export function BottomSheet({
 
   const handleDragEnd = useCallback(
     (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
-      if (info.offset.y < -70 && currentSnap < maxSnap) {
+      if (info.offset.y < DRAG_EXPAND_THRESHOLD && currentSnap < maxSnap) {
         setCurrentSnap(maxSnap);
         hasExpandedFromScrollRef.current = true;
         return;
       }
-      if (info.offset.y > 100 && currentSnap > minSnap) {
+      if (info.offset.y > DRAG_COLLAPSE_THRESHOLD && currentSnap > minSnap) {
         setCurrentSnap(minSnap);
         hasExpandedFromScrollRef.current = false;
         return;
@@ -280,7 +292,7 @@ export function BottomSheet({
                     if (touchStartYRef.current === null) return;
                     const currentY = event.touches[0]?.clientY ?? touchStartYRef.current;
                     const delta = touchStartYRef.current - currentY;
-                    if (delta > 12 && expandToMaxOnScrollIntent()) {
+                    if (delta > TOUCH_EXPAND_THRESHOLD && expandToMaxOnScrollIntent()) {
                       event.preventDefault();
                       event.stopPropagation();
                     }
