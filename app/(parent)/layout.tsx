@@ -1466,7 +1466,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           <div className="px-5 pt-2 pb-4">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Avatar className="h-14 w-14">
+                <Avatar className="h-20 w-20">
                   <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
                   <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">
                     {mounted ? getInitials(session?.user?.name) : "?"}
