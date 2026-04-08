@@ -1,6 +1,7 @@
 "use client";
 
-import { BubbleMenu as TiptapBubbleMenu, type Editor } from "@tiptap/react";
+import { BubbleMenu as TiptapBubbleMenu } from "@tiptap/react/menus";
+import { type Editor } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -55,10 +56,9 @@ export function EditorBubbleMenu({
   return (
     <TiptapBubbleMenu
       editor={editor}
-      tippyOptions={{
-        duration: 150,
+      options={{
         placement: "top",
-        animation: "shift-toward-subtle",
+        offset: 8,
       }}
       className={cn(
         "flex items-center gap-0.5 rounded-lg border bg-popover p-1 shadow-lg",

@@ -18,7 +18,7 @@ import {
   CodeXml,
   Minus,
   Link,
-  Image,
+  Image as ImageIcon,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -267,7 +267,7 @@ export function Toolbar({
           <Link className={iconSize} />
         </ToolbarButton>
         <ToolbarButton onClick={() => onImageClick?.()} tooltip="Insert image">
-          <Image className={iconSize} />
+          <ImageIcon className={iconSize} />
         </ToolbarButton>
 
         <ToolbarDivider />

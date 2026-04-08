@@ -13,7 +13,7 @@ import {
   Quote,
   CodeXml,
   Minus,
-  Image,
+  Image as ImageIcon,
   Sparkles,
 } from "lucide-react";
 
@@ -85,7 +85,7 @@ const SLASH_COMMANDS: SlashCommandItem[] = [
   {
     title: "Image",
     description: "Insert an image from URL",
-    icon: <Image className="h-4 w-4" />,
+    icon: <ImageIcon className="h-4 w-4" />,
     command: (editor) => {
       const url = window.prompt("Image URL:");
       if (url) {
@@ -110,6 +110,24 @@ export function SlashCommandMenu({
   position,
   onAIClick,
 }: SlashCommandMenuProps) {
+  if (!isOpen) return null;
+
+  return (
+    <SlashCommandMenuContent
+      editor={editor}
+      onClose={onClose}
+      position={position}
+      onAIClick={onAIClick}
+    />
+  );
+}
+
+function SlashCommandMenuContent({
+  editor,
+  onClose,
+  position,
+  onAIClick,
+}: Omit<SlashCommandMenuProps, "isOpen">) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -133,17 +151,6 @@ export function SlashCommandMenu({
       item.title.toLowerCase().includes(query.toLowerCase()) ||
       item.description.toLowerCase().includes(query.toLowerCase()),
   );
-
-  useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      setSelectedIndex(0);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
 
   const executeCommand = useCallback(
     (item: SlashCommandItem) => {
@@ -174,8 +181,6 @@ export function SlashCommandMenu({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (!isOpen) return;
-
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setSelectedIndex((prev) =>
@@ -198,23 +203,22 @@ export function SlashCommandMenu({
         onClose();
       } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
         setQuery((prev) => prev + e.key);
+        setSelectedIndex(0);
       } else if (e.key === "Backspace") {
         setQuery((prev) => prev.slice(0, -1));
+        setSelectedIndex(0);
       }
     },
-    [isOpen, filteredItems, selectedIndex, query, executeCommand, onClose],
+    [filteredItems, selectedIndex, query, executeCommand, onClose],
   );
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown, true);
-      return () => document.removeEventListener("keydown", handleKeyDown, true);
-    }
-  }, [isOpen, handleKeyDown]);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => document.removeEventListener("keydown", handleKeyDown, true);
+  }, [handleKeyDown]);
 
   // Close on click outside
   useEffect(() => {
-    if (!isOpen) return;
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         onClose();
@@ -222,9 +226,9 @@ export function SlashCommandMenu({
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [isOpen, onClose]);
+  }, [onClose]);
 
-  if (!isOpen || filteredItems.length === 0) return null;
+  if (filteredItems.length === 0) return null;
 
   return (
     <div
