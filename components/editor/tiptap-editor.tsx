@@ -247,6 +247,8 @@ export function TipTapEditor({
         "flex flex-col overflow-hidden rounded-lg border bg-background",
         "transition-shadow duration-200",
         "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+        /* cap height in normal mode so large content doesn't extend the page */
+        "max-h-[520px]",
         className,
       )}
     >

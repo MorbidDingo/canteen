@@ -1519,6 +1519,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               ...(certePlusActive
                 ? [{ label: "Pre-Orders", href: "/pre-orders" }]
                 : []),
+              { label: "Your Posts", href: "/content" },
               { label: "Order History", href: "/orders" },
               { label: "Library History", href: "/library-history" },
               { label: "Calendar", href: "/calendar" },
