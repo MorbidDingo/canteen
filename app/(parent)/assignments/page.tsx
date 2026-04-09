@@ -22,7 +22,7 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import { BottomSheet } from "@/components/ui/motion";
+import { BottomSheet, motion } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 type FeedAttachment = {
@@ -362,29 +362,70 @@ export default function AssignmentsFeedPage() {
 
   return (
     <div className="space-y-6 px-5 pt-2 pb-32 sm:px-8">
-      {/* Tab pills */}
+      {/* Animated toggle tabs */}
       <div className="flex items-center gap-2 pt-3">
-        {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => handleTabSwitch(tab)}
-            className={cn(
-              "min-h-11 min-w-11 rounded-full px-4 text-[14px] font-semibold transition-colors",
-              activeTab === tab
-                ? "bg-primary text-primary-foreground"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
-          </button>
-        ))}
+        <div
+          role="tablist"
+          className="relative flex min-h-11 rounded-full bg-primary/10 p-1"
+          onPointerDown={(e) => {
+            const el = e.currentTarget;
+            const startX = e.clientX;
+            const onMove = (ev: PointerEvent) => {
+              const dx = ev.clientX - startX;
+              if (Math.abs(dx) > 30) {
+                el.releasePointerCapture(ev.pointerId);
+                el.removeEventListener("pointermove", onMove);
+                el.removeEventListener("pointerup", onUp);
+                if (dx > 0 && activeTab === "ASSIGNMENT") {
+                  handleTabSwitch("NOTE");
+                } else if (dx < 0 && activeTab === "NOTE") {
+                  handleTabSwitch("ASSIGNMENT");
+                }
+              }
+            };
+            const onUp = () => {
+              el.removeEventListener("pointermove", onMove);
+              el.removeEventListener("pointerup", onUp);
+            };
+            el.setPointerCapture(e.pointerId);
+            el.addEventListener("pointermove", onMove);
+            el.addEventListener("pointerup", onUp);
+          }}
+        >
+          {/* Sliding focus indicator */}
+          <motion.div
+            className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
+            initial={false}
+            animate={{
+              left: activeTab === "ASSIGNMENT" ? "4px" : "50%",
+              right: activeTab === "NOTE" ? "4px" : "50%",
+            }}
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+          />
+          {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
+              onClick={() => handleTabSwitch(tab)}
+              className={cn(
+                "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
+                activeTab === tab
+                  ? "text-primary-foreground"
+                  : "text-primary hover:text-primary/80",
+              )}
+            >
+              {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
+            </button>
+          ))}
+        </div>
 
         <button
           type="button"
           onClick={() => setTagSheetOpen(true)}
           className={cn(
-            "ml-auto h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+            "ml-auto h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
             hasActiveFilters
               ? "text-primary"
               : "text-muted-foreground hover:text-foreground",
@@ -445,7 +486,7 @@ export default function AssignmentsFeedPage() {
             <button
               type="button"
               onClick={() => setCreateMenuOpen(true)}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[14px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <Plus className="h-3.5 w-3.5" />
               Create {activeTab === "ASSIGNMENT" ? "Assignment" : "Note"}
@@ -471,7 +512,7 @@ export default function AssignmentsFeedPage() {
                 setDateFilterMode("all");
                 setDateFilterValue("");
               }}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-4 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-muted/40 px-4 py-2 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
             >
               Clear filters
             </button>
@@ -482,7 +523,7 @@ export default function AssignmentsFeedPage() {
           {/* Drafts section */}
           {drafts.length > 0 && (
             <section className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Your Drafts
               </p>
               <div className="flex flex-col gap-2">
@@ -500,16 +541,16 @@ export default function AssignmentsFeedPage() {
                           <p className="text-[15px] font-semibold leading-snug truncate">
                             {draft.title || "Untitled"}
                           </p>
-                          <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                          <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                             Draft
                           </span>
                         </div>
                         {draft.body && (
-                          <p className="mt-0.5 line-clamp-1 text-[13px] text-muted-foreground">
+                          <p className="mt-0.5 line-clamp-1 text-[14px] text-muted-foreground">
                             {stripHtml(draft.body)}
                           </p>
                         )}
-                        <p className="mt-1 text-[11px] text-muted-foreground/60">
+                        <p className="mt-1 text-[13px] text-muted-foreground/60">
                           {draft.type === "ASSIGNMENT"
                             ? "Assignment"
                             : "Note"}{" "}
@@ -560,7 +601,7 @@ export default function AssignmentsFeedPage() {
           {/* Folders section */}
           {folders.length > 0 && (
             <section className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 Folders
               </p>
               <div className="flex flex-col gap-2">
@@ -578,7 +619,7 @@ export default function AssignmentsFeedPage() {
                         <p className="text-[15px] font-semibold leading-snug">
                           {folder.name}
                         </p>
-                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        <p className="mt-0.5 text-[14px] text-muted-foreground">
                           {folder.postCount} item
                           {folder.postCount !== 1 ? "s" : ""} ·{" "}
                           {folder.authorName}
@@ -595,7 +636,7 @@ export default function AssignmentsFeedPage() {
           {/* Posts section */}
           {filteredGrouped.map((group) => (
             <section key={group.label} className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {group.label}
               </p>
 
@@ -615,13 +656,13 @@ export default function AssignmentsFeedPage() {
 
                       {/* Body preview */}
                       {post.body && (
-                        <p className="mt-1 line-clamp-1 text-[13px] text-muted-foreground">
+                        <p className="mt-1 line-clamp-1 text-[14px] text-muted-foreground">
                           {stripHtml(post.body)}
                         </p>
                       )}
 
                       {/* Meta line */}
-                      <div className="mt-1.5 flex items-center gap-1 text-[12px]">
+                      <div className="mt-1.5 flex items-center gap-1 text-[14px]">
                         {post.dueAt && (
                           <>
                             <span
@@ -708,19 +749,19 @@ export default function AssignmentsFeedPage() {
               {page > 1 && (
                 <button
                   type="button"
-                  className="text-[13px] font-medium text-primary"
+                  className="text-[14px] font-medium text-primary"
                   onClick={() => setPage((p) => p - 1)}
                 >
                   ← Previous
                 </button>
               )}
-              <span className="text-[12px] tabular-nums text-muted-foreground">
+              <span className="text-[14px] tabular-nums text-muted-foreground">
                 {page}/{totalPages}
               </span>
               {page < totalPages && (
                 <button
                   type="button"
-                  className="text-[13px] font-medium text-primary"
+                  className="text-[14px] font-medium text-primary"
                   onClick={() => setPage((p) => p + 1)}
                 >
                   Next →
@@ -738,12 +779,12 @@ export default function AssignmentsFeedPage() {
         snapPoints={[55]}
       >
         <div className="space-y-4 p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Filters
           </p>
           <div className="space-y-4">
             <div>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</p>
+              <p className="mb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">Status</p>
               <div className="flex flex-wrap gap-2">
                 {([
                   { value: "all", label: "All" },
@@ -756,7 +797,7 @@ export default function AssignmentsFeedPage() {
                     type="button"
                     onClick={() => setStatusFilter(opt.value)}
                     className={cn(
-                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      "h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
                       statusFilter === opt.value
                         ? "bg-foreground text-background"
                         : "bg-muted/40 text-muted-foreground",
@@ -769,7 +810,7 @@ export default function AssignmentsFeedPage() {
             </div>
 
             <div>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Author</p>
+              <p className="mb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">Author</p>
               <div className="flex flex-wrap gap-2">
                 {([
                   { value: "all", label: "Everyone" },
@@ -781,7 +822,7 @@ export default function AssignmentsFeedPage() {
                     type="button"
                     onClick={() => setAuthorFilter(opt.value)}
                     className={cn(
-                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      "h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
                       authorFilter === opt.value
                         ? "bg-foreground text-background"
                         : "bg-muted/40 text-muted-foreground",
@@ -794,13 +835,13 @@ export default function AssignmentsFeedPage() {
             </div>
 
             <div>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Tag</p>
+              <p className="mb-2 text-[13px] font-medium uppercase tracking-wide text-muted-foreground">Tag</p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setTagFilter("all")}
                   className={cn(
-                    "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                    "h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
                     tagFilter === "all"
                       ? "bg-foreground text-background"
                       : "bg-muted/40 text-muted-foreground",
@@ -814,7 +855,7 @@ export default function AssignmentsFeedPage() {
                     type="button"
                     onClick={() => setTagFilter(t.id)}
                     className={cn(
-                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      "h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
                       tagFilter === t.id
                         ? "bg-foreground text-background"
                         : "bg-muted/40 text-muted-foreground",
@@ -827,7 +868,7 @@ export default function AssignmentsFeedPage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Date</p>
+              <p className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">Date</p>
               <div className="flex flex-wrap gap-2">
                 {([
                   { value: "all", label: "All Time" },
@@ -843,7 +884,7 @@ export default function AssignmentsFeedPage() {
                       setDateFilterValue("");
                     }}
                     className={cn(
-                      "h-8 rounded-full px-3 text-[13px] font-medium transition-colors",
+                      "h-8 rounded-full px-3 text-[14px] font-medium transition-colors",
                       dateFilterMode === opt.value
                         ? "bg-foreground text-background"
                         : "bg-muted/40 text-muted-foreground",
@@ -893,7 +934,7 @@ export default function AssignmentsFeedPage() {
                   setDateFilterValue("");
                   setTagSheetOpen(false);
                 }}
-                className="h-9 flex-1 rounded-xl bg-muted/40 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+                className="h-9 flex-1 rounded-xl bg-muted/40 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
               >
                 Reset
               </button>
@@ -902,7 +943,7 @@ export default function AssignmentsFeedPage() {
                 onClick={() => {
                   setTagSheetOpen(false);
                 }}
-                className="h-9 flex-1 rounded-xl bg-primary text-[13px] font-medium text-primary-foreground"
+                className="h-9 flex-1 rounded-xl bg-primary text-[14px] font-medium text-primary-foreground"
               >
                 Apply
               </button>
@@ -918,7 +959,7 @@ export default function AssignmentsFeedPage() {
         snapPoints={[40]}
       >
         <div className="space-y-3 p-5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Create new
           </p>
           <div className="space-y-2">
@@ -936,8 +977,8 @@ export default function AssignmentsFeedPage() {
                   <ClipboardList className="h-5 w-5 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold">New Assignment</p>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[15px] font-semibold">New Assignment</p>
+                  <p className="text-[14px] text-muted-foreground">
                     Create a task with a due date
                   </p>
                 </div>
@@ -956,8 +997,8 @@ export default function AssignmentsFeedPage() {
                   <StickyNote className="h-5 w-5 text-orange-500" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold">New Note</p>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[15px] font-semibold">New Note</p>
+                  <p className="text-[14px] text-muted-foreground">
                     Share an announcement or info
                   </p>
                 </div>
@@ -976,8 +1017,8 @@ export default function AssignmentsFeedPage() {
                   <FolderOpen className="h-5 w-5 text-violet-500" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold">New Folder</p>
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[15px] font-semibold">New Folder</p>
+                  <p className="text-[14px] text-muted-foreground">
                     Group notes &amp; assignments with shared audience
                   </p>
                 </div>
