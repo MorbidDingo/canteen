@@ -23,6 +23,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { BottomSheet, motion } from "@/components/ui/motion";
+import { hapticSelection } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 type FeedAttachment = {
