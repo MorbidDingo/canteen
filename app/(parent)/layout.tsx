@@ -2299,7 +2299,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         open={profilePhotoPreviewOpen}
         onOpenChange={(open) => setProfilePhotoPreviewOpen(open)}
       >
-        <DialogContent showCloseButton={false} className="z-[70] max-w-sm gap-0 overflow-hidden p-0">
+        <DialogContent className="z-[70] max-w-sm gap-0 overflow-hidden p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Edit profile photo</DialogTitle>
             <DialogDescription>

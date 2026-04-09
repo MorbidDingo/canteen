@@ -23,7 +23,6 @@ import {
   Pencil,
 } from "lucide-react";
 import { BottomSheet, motion } from "@/components/ui/motion";
-import { hapticSelection } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
 type FeedAttachment = {
@@ -362,7 +361,7 @@ export default function AssignmentsFeedPage() {
       <div className="flex items-center gap-2 pt-3">
         <div
           role="tablist"
-          className="relative grid min-h-11 grid-cols-2 rounded-full bg-muted/60 p-1"
+          className="relative flex min-h-11 rounded-full bg-primary/10 p-1"
           onPointerDown={(e) => {
             const el = e.currentTarget;
             const startX = e.clientX;
@@ -388,14 +387,15 @@ export default function AssignmentsFeedPage() {
             el.addEventListener("pointerup", onUp);
           }}
         >
-          {/* Sliding indicator */}
+          {/* Sliding focus indicator */}
           <motion.div
-            className="pointer-events-none absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-primary shadow-sm"
+            className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
             initial={false}
             animate={{
-              x: activeTab === "ASSIGNMENT" ? 4 : "calc(100% + 4px)",
+              left: activeTab === "ASSIGNMENT" ? "4px" : "50%",
+              right: activeTab === "NOTE" ? "4px" : "50%",
             }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
           />
           {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
             <button
@@ -405,10 +405,10 @@ export default function AssignmentsFeedPage() {
               aria-selected={activeTab === tab}
               onClick={() => handleTabSwitch(tab)}
               className={cn(
-                "relative z-10 min-h-9 rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
+                "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
                 activeTab === tab
                   ? "text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground/70",
+                  : "text-primary hover:text-primary/80",
               )}
             >
               {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
