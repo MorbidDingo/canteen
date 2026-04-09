@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
+import { hapticSuccess, hapticError } from "@/lib/haptics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -301,6 +302,7 @@ export default function EditPostPage() {
 
   async function handleSave(newStatus?: string) {
     if (!title.trim() || !body.trim()) {
+      hapticError();
       toast.error("Title and body are required");
       return;
     }
@@ -358,6 +360,7 @@ export default function EditPostPage() {
         setStatus(newStatus as typeof status);
       }
 
+      hapticSuccess();
       toast.success(
         newStatus === "PUBLISHED"
           ? "Post published"
@@ -373,6 +376,7 @@ export default function EditPostPage() {
         fetchPost();
       }
     } catch (err) {
+      hapticError();
       toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSaving(false);
@@ -385,9 +389,11 @@ export default function EditPostPage() {
     try {
       const res = await fetch(`/api/content/posts/${postId}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
+      hapticSuccess();
       toast.success("Post deleted");
       router.push("/content");
     } catch {
+      hapticError();
       toast.error("Failed to delete post");
     } finally {
       setDeleting(false);

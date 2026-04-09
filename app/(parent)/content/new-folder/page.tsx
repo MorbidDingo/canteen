@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { hapticSuccess, hapticError } from "@/lib/haptics";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -141,8 +142,8 @@ export default function NewFolderPage() {
   }
 
   async function handleCreate() {
-    if (!name.trim()) { toast.error("Folder name is required"); return; }
-    if (audiences.length === 0) { toast.error("Add at least one audience target"); return; }
+    if (!name.trim()) { hapticError(); toast.error("Folder name is required"); return; }
+    if (audiences.length === 0) { hapticError(); toast.error("Add at least one audience target"); return; }
 
     setSubmitting(true);
     try {
@@ -168,9 +169,11 @@ export default function NewFolderPage() {
       }
 
       const { folder } = await res.json();
+      hapticSuccess();
       toast.success("Folder created");
       router.push(`/assignments/folder/${folder.id}`);
     } catch (err) {
+      hapticError();
       toast.error(err instanceof Error ? err.message : "Failed to create folder");
     } finally {
       setSubmitting(false);
@@ -222,7 +225,7 @@ export default function NewFolderPage() {
             placeholder="Folder name…"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="border-0 bg-transparent px-0 text-xl font-semibold placeholder:text-muted-foreground/30 focus-visible:ring-0 h-auto py-0"
+            className="rounded-none border-0 border-b border-border/40 bg-transparent px-1 text-xl font-semibold placeholder:text-muted-foreground/30 focus-visible:ring-0 h-auto py-2"
           />
         </div>
 

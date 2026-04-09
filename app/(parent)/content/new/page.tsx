@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { hapticSuccess, hapticError } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -333,10 +334,12 @@ export default function NewPostPage() {
   /* ── Submit: Folder ── */
   async function handleSubmitFolder() {
     if (!title.trim()) {
+      hapticError();
       toast.error("Folder name is required");
       return;
     }
     if (audiences.length === 0) {
+      hapticError();
       toast.error("Add at least one audience target");
       return;
     }
@@ -363,9 +366,11 @@ export default function NewPostPage() {
         throw new Error(data.error || "Failed to create folder");
       }
       const { folder } = await res.json();
+      hapticSuccess();
       toast.success("Folder created");
       router.push(`/assignments/folder/${folder.id}`);
     } catch (err) {
+      hapticError();
       toast.error(
         err instanceof Error ? err.message : "Failed to create folder",
       );
@@ -377,14 +382,17 @@ export default function NewPostPage() {
   /* ── Submit: Post ── */
   async function handleSubmitPost(asDraft: boolean) {
     if (!title.trim()) {
+      hapticError();
       toast.error("Title is required");
       return;
     }
     if (!body.trim()) {
+      hapticError();
       toast.error("Body is required");
       return;
     }
     if (!urlFolderId && audiences.length === 0) {
+      hapticError();
       toast.error("Add at least one audience target");
       return;
     }
@@ -452,11 +460,13 @@ export default function NewPostPage() {
         });
       }
 
+      hapticSuccess();
       toast.success(asDraft ? "Draft saved" : "Post published");
       router.push(
         urlFolderId ? `/assignments/folder/${urlFolderId}` : "/assignments",
       );
     } catch (err) {
+      hapticError();
       toast.error(err instanceof Error ? err.message : "Failed to create post");
     } finally {
       setSubmitting(false);
@@ -669,7 +679,7 @@ export default function NewPostPage() {
                   placeholder="Folder name…"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="border-0 bg-transparent px-0 text-xl font-semibold placeholder:text-muted-foreground/25 focus-visible:ring-0 h-auto py-0"
+                  className="rounded-none border-0 border-b border-border/40 bg-transparent px-1 text-xl font-semibold placeholder:text-muted-foreground/25 focus-visible:ring-0 h-auto py-2"
                   autoFocus
                 />
               </div>
@@ -712,7 +722,7 @@ export default function NewPostPage() {
                 }
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mb-4 border-0 bg-transparent px-0 text-2xl font-bold placeholder:text-muted-foreground/25 focus-visible:ring-0 h-auto py-1 leading-tight"
+                className="mb-4 rounded-none border-0 border-b border-border/40 bg-transparent px-1 text-2xl font-bold placeholder:text-muted-foreground/25 focus-visible:ring-0 h-auto py-2 leading-tight"
                 autoFocus
               />
 
