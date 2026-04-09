@@ -69,6 +69,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -2298,7 +2299,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         open={profilePhotoPreviewOpen}
         onOpenChange={(open) => setProfilePhotoPreviewOpen(open)}
       >
-        <DialogContent className="z-[70] max-w-sm gap-0 overflow-hidden p-0">
+        <DialogContent showCloseButton={false} className="z-[70] max-w-sm gap-0 overflow-hidden p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Edit profile photo</DialogTitle>
             <DialogDescription>
@@ -2318,18 +2319,30 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 {mounted ? getInitials(session?.user?.name) : "?"}
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => profilePhotoInputRef.current?.click()}
-              disabled={profileUploading}
-              className={cn(
-                "absolute right-3 top-3 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors",
-                profileUploading ? "cursor-not-allowed opacity-70" : "hover:bg-muted/70",
-              )}
-              aria-label="Upload new profile photo"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+            {/* Action buttons — spaced apart so they never overlap */}
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => profilePhotoInputRef.current?.click()}
+                disabled={profileUploading}
+                className={cn(
+                  "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors",
+                  profileUploading ? "cursor-not-allowed opacity-70" : "hover:bg-muted/70",
+                )}
+                aria-label="Upload new profile photo"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <DialogClose asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
+                  aria-label="Close"
+                >
+                  <IoClose className="h-5 w-5" />
+                </button>
+              </DialogClose>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
