@@ -5,13 +5,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { BottomSheet } from "@/components/ui/motion";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -28,8 +21,6 @@ import {
 import {
   CERTE_PLUS,
   MENU_CATEGORY_LABELS,
-  PRE_ORDER_STATUS_LABELS,
-  MAX_ACTIVE_PREORDERS_PER_CHILD,
   type MenuCategory,
   type PreOrderStatus,
 } from "@/lib/constants";
@@ -62,6 +53,7 @@ type PreOrderWithItems = {
   mode: "ONE_DAY" | "SUBSCRIPTION";
   scheduledDate: string;
   subscriptionUntil: string | null;
+  lastFulfilledDate: string | null;
   status: PreOrderStatus;
   createdAt: string;
   items: {
@@ -145,6 +137,11 @@ function createClientId() {
   return `po-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function formatDateShort(isoDate: string) {
+  const date = new Date(`${isoDate}T00:00:00.000Z`);
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+}
+
 export default function PreOrdersPage({ embedded = false }: { embedded?: boolean }) {
   const certePlusStatus = useCertePlusStore((s) => s.status);
   const ensureCertePlusFresh = useCertePlusStore((s) => s.ensureFresh);
@@ -166,6 +163,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
   const [search, setSearch] = useState("");
   const [subscriptionEndDate, setSubscriptionEndDate] = useState<string | null>(null);
   const [subscriptionPlan, setSubscriptionPlan] = useState<string | null>(null);
+  const [wizardMenuItems, setWizardMenuItems] = useState<MenuOption[]>([]);
   const [settings, setSettings] = useState({
     minOrderValue: DEFAULT_MIN_ORDER,
     minDays: DEFAULT_MIN_DAYS,
@@ -189,6 +187,30 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
   const [editOpen, setEditOpen] = useState(false);
   const [editingPreOrder, setEditingPreOrder] = useState<PreOrderWithItems | null>(null);
   const [editRows, setEditRows] = useState<EditRow[]>([]);
+  const [editCanteenId, setEditCanteenId] = useState<string | null>(null);
+  const [editMenuItems, setEditMenuItems] = useState<MenuOption[]>([]);
+  const [editMenuLoading, setEditMenuLoading] = useState(false);
+  const [editAddingItem, setEditAddingItem] = useState(false);
+
+  const fetchEditMenu = useCallback(async (canteenId: string | null) => {
+    setEditMenuLoading(true);
+    try {
+      const url = canteenId
+        ? `/api/menu?canteenId=${encodeURIComponent(canteenId)}`
+        : "/api/menu";
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const raw = await res.json();
+      const items = ((raw.items || raw) as MenuOption[]).filter(
+        (m) => m.available && m.subscribable !== false,
+      );
+      setEditMenuItems(items);
+    } catch {
+      toast.error("Failed to load menu");
+    } finally {
+      setEditMenuLoading(false);
+    }
+  }, []);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -266,6 +288,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
   }, [ensureCertePlusFresh, fetchAll]);
 
   const menuById = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
+  const wizardMenuById = useMemo(() => new Map(wizardMenuItems.map((m) => [m.id, m])), [wizardMenuItems]);
   const childById = useMemo(() => new Map(children.map((c) => [c.id, c.name])), [children]);
   const controlByChild = useMemo(() => new Map(controls.map((c) => [c.childId, c])), [controls]);
   const breakLabelByName = useMemo(
@@ -276,15 +299,43 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
     [settings.breakSlots],
   );
 
-  const filteredMenu = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return menuItems;
-    return menuItems.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        (MENU_CATEGORY_LABELS[m.category] || m.category).toLowerCase().includes(q),
-    );
-  }, [menuItems, search]);
+  // Edit calculation memos (need menuById to be defined above)
+  const editOriginalTotal = useMemo(() => {
+    if (!editingPreOrder) return 0;
+    return editingPreOrder.items.reduce((sum, item) => {
+      const menu = menuById.get(item.menuItemId);
+      return sum + (menu?.discountedPrice ?? menu?.price ?? 0) * item.quantity;
+    }, 0);
+  }, [editingPreOrder, menuById]);
+
+  const editCurrentTotal = useMemo(() => {
+    return editRows.reduce((sum, row) => {
+      const menu = menuById.get(row.menuItemId);
+      return sum + (menu?.discountedPrice ?? menu?.price ?? 0) * row.quantity;
+    }, 0);
+  }, [editRows, menuById]);
+
+  const editDailyDiff = editCurrentTotal - editOriginalTotal;
+
+  const editRemainingDays = useMemo(() => {
+    if (!editingPreOrder) return 0;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    let effectiveStart: string;
+    if (editingPreOrder.lastFulfilledDate) {
+      const nextDay = addSchoolDays(editingPreOrder.lastFulfilledDate, 1);
+      effectiveStart = nextDay > todayIso ? nextDay : todayIso;
+    } else {
+      effectiveStart = editingPreOrder.scheduledDate > todayIso ? editingPreOrder.scheduledDate : todayIso;
+    }
+    const endIso = editingPreOrder.subscriptionUntil ?? editingPreOrder.scheduledDate;
+    return countSchoolDaysInclusive(effectiveStart, endIso);
+  }, [editingPreOrder]);
+
+  const editExtraPayment = useMemo(() => {
+    if (editDailyDiff <= 0 || editRemainingDays <= 0) return 0;
+    const platformFeeMultiplier = 1 + CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100;
+    return Math.round(editDailyDiff * editRemainingDays * platformFeeMultiplier * 100) / 100;
+  }, [editDailyDiff, editRemainingDays]);
 
   const startDate = getNextSchoolDayIso();
   const subscriptionEndIso = subscriptionEndDate
@@ -306,17 +357,19 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         hasBlocks: boolean;
       }
     >();
+    // Use wizard menu data when in wizard, otherwise the main menu data
+    const lookupMap = wizardMenuItems.length > 0 ? wizardMenuById : menuById;
 
     for (const childId of new Set(allocations.map((a) => a.childId))) {
       const rows = allocations.filter((a) => a.childId === childId);
       const total = rows.reduce((sum, row) => {
-        const menu = menuById.get(row.menuItemId);
+        const menu = lookupMap.get(row.menuItemId);
         return sum + (menu?.discountedPrice ?? menu?.price ?? 0) * row.quantity;
       }, 0);
 
       const control = controlByChild.get(childId);
       const hasBlocks = rows.some((row) => {
-        const menu = menuById.get(row.menuItemId);
+        const menu = lookupMap.get(row.menuItemId);
         if (!menu || !control) return false;
         return (
           control.blockedCategories.includes(menu.category) ||
@@ -334,20 +387,10 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
     }
 
     return map;
-  }, [allocations, menuById, controlByChild, settings.minOrderValue]);
+  }, [allocations, menuById, wizardMenuById, wizardMenuItems.length, controlByChild, settings.minOrderValue]);
 
   const hasBelowMin = Array.from(summaryByChild.values()).some((v) => v.belowMin);
   const hasBlocks = Array.from(summaryByChild.values()).some((v) => v.hasBlocks);
-  const selectedCanteenLabel = selectedCanteen
-    ? canteens.find((c) => c.id === selectedCanteen)?.name ?? "Selected canteen"
-    : "All canteens";
-
-  const getDisplayStatusLabel = (po: PreOrderWithItems) => {
-    if (po.mode === "SUBSCRIPTION" && po.status === "PENDING") {
-      return "Active";
-    }
-    return PRE_ORDER_STATUS_LABELS[po.status];
-  };
 
   const addItem = (menuItemId: string) => {
     if (!assignChildId) return toast.error("Select child first");
@@ -491,13 +534,47 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
   // Wizard step state
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [wizardCanteenId, setWizardCanteenId] = useState<string | null>(null);
 
   const openWizard = () => {
     setAllocations([]);
+    setWizardCanteenId(selectedCanteen || null);
     setWizardStep(1);
     setWizardOpen(true);
   };
+
+  // Refetch menu when wizard canteen changes
+  const [wizardMenuLoading, setWizardMenuLoading] = useState(false);
+  const fetchWizardMenu = useCallback(async (canteenId: string | null) => {
+    setWizardMenuLoading(true);
+    try {
+      const url = canteenId
+        ? `/api/menu?canteenId=${encodeURIComponent(canteenId)}`
+        : "/api/menu";
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const raw = await res.json();
+      const items = ((raw.items || raw) as MenuOption[]).filter(
+        (m) => m.available && m.subscribable !== false,
+      );
+      setWizardMenuItems(items);
+    } catch {
+      toast.error("Failed to load menu");
+    } finally {
+      setWizardMenuLoading(false);
+    }
+  }, []);
+
+  const filteredWizardMenu = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return wizardMenuItems;
+    return wizardMenuItems.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        (MENU_CATEGORY_LABELS[m.category] || m.category).toLowerCase().includes(q),
+    );
+  }, [wizardMenuItems, search]);
 
   const openPaymentDialog = () => {
     if (allocations.length === 0) return toast.error("Add at least one allocation");
@@ -531,12 +608,18 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         breakName: i.breakName || fallbackBreak,
       })),
     );
+    setEditAddingItem(false);
+    setEditCanteenId(selectedCanteen || null);
+    setEditMenuItems([]);
     setEditOpen(true);
   };
 
   const saveEdit = async () => {
     if (!editingPreOrder) return;
     if (editRows.length === 0) return toast.error("Add at least one row");
+    if (editExtraPayment > 0 && walletBalance !== null && walletBalance < editExtraPayment) {
+      return toast.error(`Insufficient wallet balance. Extra required: ₹${editExtraPayment.toFixed(2)}, Available: ₹${walletBalance.toFixed(2)}.`);
+    }
     setSavingEdit(true);
     try {
       const res = await fetch("/api/pre-orders", {
@@ -553,9 +636,16 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
       });
       const data = await res.json();
       if (!res.ok) return toast.error(data.error || "Failed to update pre-order");
-      toast.success("Pre-order updated");
+      const extra = Number(data.extraPaymentAmount) || 0;
+      if (extra > 0) {
+        toast.success(`Pre-order updated! ₹${extra.toFixed(2)} deducted from wallet.`);
+        setWalletBalance((prev) => prev !== null ? prev - extra : null);
+      } else {
+        toast.success("Pre-order updated");
+      }
       setEditOpen(false);
       setEditingPreOrder(null);
+      setEditAddingItem(false);
       await fetchAll();
     } catch {
       toast.error("Failed to update pre-order");
@@ -602,9 +692,11 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
     <div className={embedded ? "space-y-6 pb-28" : "mx-auto max-w-2xl px-4 py-5 space-y-6 pb-28"}>
       {/* ── Header ── */}
       <div>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Schedule daily meals for your children
-        </p>
+        {preOrders.length === 0 && (
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Create a pass for daily food subscriptions
+          </p>
+        )}
       </div>
 
       {/* ── Plan summary strip ── */}
@@ -620,7 +712,10 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {startDate} → {endDate}
+            {formatDateShort(startDate)} → {formatDateShort(endDate)}
+          </p>
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+            Mon–Fri only · Weekends are not included in the pass
           </p>
         </div>
       </div>
@@ -651,13 +746,14 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                     {po.items.map((i) => `${i.name} × ${i.quantity}`).join(", ")}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {po.scheduledDate} → {po.subscriptionUntil || "—"}
+                    {formatDateShort(po.scheduledDate)} → {po.subscriptionUntil ? formatDateShort(po.subscriptionUntil) : "—"}
                     {po.mode === "SUBSCRIPTION" && po.status === "PENDING" && (
                       <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
                         · {countSchoolDaysInclusive(new Date().toISOString().slice(0, 10), po.subscriptionUntil || po.scheduledDate)} days left
                       </span>
                     )}
                   </p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Mon–Fri only</p>
                 </div>
                 {po.status === "PENDING" && (
                   <button
@@ -683,6 +779,14 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         + New Pass
       </button>
 
+      {/* ── Priority access badge — fixed above bottom nav ── */}
+      <div className="fixed bottom-20 left-0 right-0 z-10 flex justify-center pointer-events-none">
+        <div className="flex items-center gap-1.5 rounded-full bg-primary/5 border border-primary/10 px-4 py-1.5">
+          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+          <span className="text-[11px] font-medium text-primary">Priority access</span>
+        </div>
+      </div>
+
       {/* ── New Pass Wizard Sheet ── */}
       <BottomSheet
         open={wizardOpen}
@@ -692,7 +796,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
         <div className="px-5 pb-8 pt-2">
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-5">
-            {[1, 2, 3].map((s) => (
+            {[1, 2, 3, 4].map((s) => (
               <div
                 key={s}
                 className={cn(
@@ -703,8 +807,58 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             ))}
           </div>
 
-          {/* Step 1 — Select child + break */}
+          {/* Step 1 — Select canteen */}
           {wizardStep === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Choose canteen</h2>
+                <p className="text-[13px] text-muted-foreground mt-0.5">Select which canteen to order from</p>
+              </div>
+
+              <div className="space-y-2">
+                {canteens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">No canteens available</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {canteens.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setWizardCanteenId(c.id)}
+                        className={cn(
+                          "rounded-2xl p-4 text-left transition-all",
+                          wizardCanteenId === c.id
+                            ? "bg-primary/10 border border-primary"
+                            : "bg-card border border-border",
+                        )}
+                      >
+                        <p className={cn("text-sm font-medium", wizardCanteenId === c.id && "text-primary")}>
+                          {c.name}
+                        </p>
+                        {c.location && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{c.location}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                className="w-full h-12 rounded-2xl"
+                disabled={!wizardCanteenId && canteens.length > 0}
+                onClick={() => {
+                  void fetchWizardMenu(wizardCanteenId);
+                  setWizardStep(2);
+                }}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+
+          {/* Step 2 — Select child + break */}
+          {wizardStep === 2 && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">Who is this for?</h2>
@@ -760,23 +914,32 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                 </div>
               </div>
 
-              <Button
-                className="w-full h-12 rounded-2xl"
-                disabled={!assignChildId}
-                onClick={() => setWizardStep(2)}
-              >
-                Next
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(1)}>
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 h-12 rounded-2xl"
+                  disabled={!assignChildId}
+                  onClick={() => setWizardStep(3)}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
 
-          {/* Step 2 — Pick items */}
-          {wizardStep === 2 && (
+          {/* Step 3 — Pick items */}
+          {wizardStep === 3 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">Pick items</h2>
                 <p className="text-[13px] text-muted-foreground mt-0.5">
                   {childById.get(assignChildId)} · {assignBreak}
+                  {(() => {
+                    const wc = wizardCanteenId ? canteens.find(c => c.id === wizardCanteenId) : null;
+                    return wc ? <span> · {wc.name}</span> : null;
+                  })()}
                 </p>
               </div>
 
@@ -791,77 +954,85 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                 />
               </div>
 
-              {/* Menu grid — 2 columns, matching menu page card style */}
-              <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-auto overscroll-contain pb-2">
-                {filteredMenu.slice(0, 50).map((item) => {
-                  const qty = allocations
-                    .filter((a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak)
-                    .reduce((s, a) => s + a.quantity, 0);
+              {wizardMenuLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {/* Menu grid — 2 columns */}
+                  <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-auto overscroll-contain pb-2">
+                    {filteredWizardMenu.slice(0, 50).map((item) => {
+                      const qty = allocations
+                        .filter((a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak)
+                        .reduce((s, a) => s + a.quantity, 0);
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
-                    >
-                      <div className="p-3">
-                        <p className="text-sm font-semibold truncate">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {MENU_CATEGORY_LABELS[item.category]}
-                        </p>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-base font-bold tabular-nums">
-                            ₹{item.discountedPrice ?? item.price}
-                          </span>
-                          {qty === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => addItem(item.id)}
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md active:scale-95 transition-transform"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          ) : (
-                            <div className="flex items-center gap-1 rounded-full bg-primary px-1.5 py-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const alloc = allocations.find(
-                                    (a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak,
-                                  );
-                                  if (alloc) changeQty(alloc.id, -1);
-                                }}
-                                className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span className="w-5 text-center text-xs font-bold text-primary-foreground tabular-nums">{qty}</span>
-                              <button
-                                type="button"
-                                onClick={() => addItem(item.id)}
-                                className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-2xl bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden"
+                        >
+                          <div className="p-3">
+                            <p className="text-sm font-semibold truncate">{item.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {MENU_CATEGORY_LABELS[item.category]}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between">
+                              <span className="text-base font-bold tabular-nums">
+                                ₹{item.discountedPrice ?? item.price}
+                              </span>
+                              {qty === 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => addItem(item.id)}
+                                  className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md active:scale-95 transition-transform"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-1 rounded-full bg-primary px-1.5 py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const alloc = allocations.find(
+                                        (a) => a.menuItemId === item.id && a.childId === assignChildId && a.breakName === assignBreak,
+                                      );
+                                      if (alloc) changeQty(alloc.id, -1);
+                                    }}
+                                    className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
+                                  >
+                                    <Minus className="h-3.5 w-3.5" />
+                                  </button>
+                                  <span className="w-5 text-center text-xs font-bold text-primary-foreground tabular-nums">{qty}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => addItem(item.id)}
+                                    className="flex h-6 w-6 items-center justify-center rounded-full text-primary-foreground"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {filteredMenu.length === 0 && (
-                  <p className="col-span-2 py-8 text-center text-xs text-muted-foreground">No items found</p>
-                )}
-              </div>
+                      );
+                    })}
+                    {filteredWizardMenu.length === 0 && (
+                      <p className="col-span-2 py-8 text-center text-xs text-muted-foreground">No items found</p>
+                    )}
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(1)}>
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(2)}>
                   Back
                 </Button>
                 <Button
                   className="flex-1 h-12 rounded-2xl"
                   disabled={allocations.length === 0}
-                  onClick={() => setWizardStep(3)}
+                  onClick={() => setWizardStep(4)}
                 >
                   Review ({allocations.reduce((s, a) => s + a.quantity, 0)} items)
                 </Button>
@@ -869,20 +1040,23 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             </div>
           )}
 
-          {/* Step 3 — Review + pay */}
-          {wizardStep === 3 && (
+          {/* Step 4 — Review + pay */}
+          {wizardStep === 4 && (
             <div className="space-y-5">
               <div>
                 <h2 className="text-lg font-semibold tracking-tight">Review</h2>
                 <p className="text-[13px] text-muted-foreground mt-0.5">
                   {childById.get(assignChildId)} · {assignBreak} · {periodSchoolDays} school days
                 </p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                  Mon–Fri only · Weekends excluded
+                </p>
               </div>
 
               {/* Line items */}
               <div className="space-y-3">
                 {allocations.map((row) => {
-                  const menu = menuById.get(row.menuItemId);
+                  const menu = wizardMenuById.get(row.menuItemId) ?? menuById.get(row.menuItemId);
                   return (
                     <div key={row.id} className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -942,7 +1116,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(2)}>
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setWizardStep(3)}>
                   Back
                 </Button>
                 <Button
@@ -967,100 +1141,230 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
       </BottomSheet>
 
       {/* ── Edit Pass Sheet ── */}
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} snapPoints={[85]}>
-        <div className="px-5 pb-8 pt-2 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">Edit Pass</h2>
-            <p className="text-[13px] text-muted-foreground mt-0.5">
-              {editingPreOrder?.childName}
-            </p>
+      <BottomSheet open={editOpen} onClose={() => { setEditOpen(false); setEditAddingItem(false); }} snapPoints={[92]}>
+        <div className="px-5 pb-8 pt-2 space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <CalendarClock className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold tracking-tight">Edit Pass</h2>
+              <p className="text-[13px] text-muted-foreground mt-0.5">
+                {editingPreOrder?.childName}
+                {editRemainingDays > 0 && (
+                  <span className="ml-1.5 text-emerald-600 dark:text-emerald-400">
+                    · {editRemainingDays} days left
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
 
-          <div className="max-h-[50vh] space-y-2.5 overflow-auto overscroll-contain">
-            {editRows.map((row) => {
-              const menu = menuById.get(row.menuItemId);
-              return (
-                <div key={row.id} className="rounded-2xl bg-card p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)] space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium truncate">{menu?.name ?? "Item"}</p>
-                    <button
-                      type="button"
-                      className="text-muted-foreground active:opacity-70"
-                      onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+          {/* Current items */}
+          {!editAddingItem && (
+            <>
+              <div className="max-h-[40vh] space-y-2 overflow-auto overscroll-contain">
+                {editRows.map((row) => {
+                  const menu = menuById.get(row.menuItemId);
+                  const unitPrice = menu?.discountedPrice ?? menu?.price ?? 0;
+                  return (
+                    <div key={row.id} className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{menu?.name ?? "Item"}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {breakLabelByName.get(row.breakName) ?? row.breakName} · ₹{unitPrice}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1 rounded-full bg-muted/50 px-1.5 py-1">
+                          <button
+                            type="button"
+                            className="flex h-7 w-7 items-center justify-center rounded-full active:scale-95 transition-transform"
+                            onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="w-6 text-center text-sm font-bold tabular-nums">{row.quantity}</span>
+                          <button
+                            type="button"
+                            className="flex h-7 w-7 items-center justify-center rounded-full active:scale-95 transition-transform"
+                            onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex h-7 w-7 items-center justify-center rounded-full text-destructive/60 hover:text-destructive active:scale-95 transition-all"
+                          onClick={() => setEditRows((prev) => prev.filter((x) => x.id !== row.id))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Extra payment notice */}
+              {editDailyDiff !== 0 && (
+                <div className={cn(
+                  "rounded-2xl p-3.5 text-sm",
+                  editDailyDiff > 0 ? "bg-amber-50 dark:bg-amber-950/20" : "bg-emerald-50 dark:bg-emerald-950/20",
+                )}>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Daily change</span>
+                    <span className={cn("font-semibold tabular-nums", editDailyDiff > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400")}>
+                      {editDailyDiff > 0 ? "+" : ""}₹{Math.round(editDailyDiff)}/day
+                    </span>
                   </div>
-                  <div className="space-y-2">
-                    <Select value={row.menuItemId} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, menuItemId: value } : x)))}>
-                      <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
-                      <SelectContent>
-                        {menuItems.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={row.breakName} onValueChange={(value) => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, breakName: value } : x)))}>
-                      <SelectTrigger className="h-9 rounded-xl text-xs"><SelectValue placeholder="Select break" /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from(new Set([...settings.breaks, ...editRows.map((x) => x.breakName)])).map((breakName) => (
-                          <SelectItem key={breakName} value={breakName}>{breakLabelByName.get(breakName) ?? breakName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border active:scale-95 transition-transform"
-                      onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x)))}
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-8 text-center text-sm font-bold tabular-nums">{row.quantity}</span>
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border active:scale-95 transition-transform"
-                      onClick={() => setEditRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, quantity: x.quantity + 1 } : x)))}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+                  {editExtraPayment > 0 && (
+                    <>
+                      <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
+                        <span>+₹{Math.round(editDailyDiff)} × {editRemainingDays} days + 2% fee</span>
+                      </div>
+                      <Separator className="my-2" />
+                      <div className="flex justify-between font-bold">
+                        <span>Extra payment</span>
+                        <span className="tabular-nums text-amber-700 dark:text-amber-400">₹{editExtraPayment.toFixed(2)}</span>
+                      </div>
+                      {walletBalance !== null && (
+                        <p className={cn("text-xs mt-1", walletBalance >= editExtraPayment ? "text-emerald-600" : "text-red-600")}>
+                          Wallet: ₹{walletBalance.toFixed(2)} {walletBalance >= editExtraPayment ? "✓" : "— top up needed"}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {editDailyDiff < 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Daily cost reduced. No refund for already-paid days.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Add item button */}
+              <button
+                type="button"
+                className="w-full rounded-2xl border-2 border-dashed border-primary/30 py-3.5 text-center text-sm font-medium text-primary active:scale-[0.98] transition-transform"
+                onClick={() => {
+                  setEditAddingItem(true);
+                  if (editMenuItems.length === 0) {
+                    void fetchEditMenu(editCanteenId);
+                  }
+                }}
+              >
+                <Plus className="inline h-4 w-4 mr-1 -mt-0.5" />
+                Add Item
+              </button>
+
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => { setEditOpen(false); setEditAddingItem(false); }} disabled={savingEdit}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 h-12 rounded-2xl"
+                  onClick={saveEdit}
+                  disabled={savingEdit || editRows.length === 0 || (editExtraPayment > 0 && walletBalance !== null && walletBalance < editExtraPayment)}
+                >
+                  {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {editExtraPayment > 0 ? `Save · Pay ₹${editExtraPayment.toFixed(0)}` : "Save"}
+                </Button>
+              </div>
+            </>
+          )}
+
+          {/* Add item sub-view with canteen selector */}
+          {editAddingItem && (
+            <>
+              <div>
+                <h3 className="text-base font-semibold tracking-tight">Add an item</h3>
+                <p className="text-[13px] text-muted-foreground mt-0.5">Select canteen and pick items</p>
+              </div>
+
+              {/* Canteen selector */}
+              {canteens.length > 1 && (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Canteen</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {canteens.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setEditCanteenId(c.id);
+                          void fetchEditMenu(c.id);
+                        }}
+                        className={cn(
+                          "shrink-0 rounded-full px-4 py-2 text-xs font-medium transition-all",
+                          editCanteenId === c.id
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground",
+                        )}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
 
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-2xl"
-            onClick={() =>
-              setEditRows((prev) => [
-                ...prev,
-                {
-                  id: crypto.randomUUID(),
-                  menuItemId: menuItems[0]?.id || "",
-                  quantity: 1,
-                  breakName: settings.breaks[0] || DEFAULT_BREAKS[0],
-                },
-              ])
-            }
-            disabled={menuItems.length === 0}
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Add Item
-          </Button>
+              {editMenuLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 max-h-[40vh] overflow-auto overscroll-contain pb-2">
+                  {editMenuItems.map((item) => {
+                    const alreadyAdded = editRows.some((r) => r.menuItemId === item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          if (alreadyAdded) return;
+                          setEditRows((prev) => [
+                            ...prev,
+                            {
+                              id: crypto.randomUUID(),
+                              menuItemId: item.id,
+                              quantity: 1,
+                              breakName: settings.breaks[0] || DEFAULT_BREAKS[0],
+                            },
+                          ]);
+                          setEditAddingItem(false);
+                        }}
+                        disabled={alreadyAdded}
+                        className={cn(
+                          "rounded-2xl bg-card p-3 text-left shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all active:scale-[0.98]",
+                          alreadyAdded && "opacity-40",
+                        )}
+                      >
+                        <p className="text-sm font-semibold truncate">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">{MENU_CATEGORY_LABELS[item.category]}</p>
+                        <p className="text-base font-bold tabular-nums mt-1.5">₹{item.discountedPrice ?? item.price}</p>
+                        {alreadyAdded && (
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Already added</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {editMenuItems.length === 0 && !editMenuLoading && (
+                    <p className="col-span-2 py-8 text-center text-xs text-muted-foreground">No items available</p>
+                  )}
+                </div>
+              )}
 
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex-1 h-12 rounded-2xl" onClick={() => setEditOpen(false)} disabled={savingEdit}>
-              Cancel
-            </Button>
-            <Button className="flex-1 h-12 rounded-2xl" onClick={saveEdit} disabled={savingEdit || editRows.length === 0}>
-              {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Save
-            </Button>
-          </div>
+              <Button
+                variant="outline"
+                className="w-full h-12 rounded-2xl"
+                onClick={() => setEditAddingItem(false)}
+              >
+                Back to edit
+              </Button>
+            </>
+          )}
         </div>
       </BottomSheet>
 
@@ -1120,7 +1424,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
           {/* Period */}
           <p className="text-xs text-muted-foreground text-center">
-            {startDate} → {endDate}
+            {formatDateShort(startDate)} → {formatDateShort(endDate)} · Mon–Fri only
           </p>
 
           {/* Slider */}

@@ -650,6 +650,8 @@ export async function POST(request: Request) {
 }
 
 // PUT /api/pre-orders - edit food and break only for an active subscription pre-order
+// When items are added or quantities increased, the extra daily cost × remaining school days is charged from wallet.
+// When items are removed or quantities decreased, no refund is given (the user simply pays less going forward on kiosk).
 export async function PUT(request: Request) {
   const session = await getSession();
   if (!session?.user) {
@@ -676,6 +678,9 @@ export async function PUT(request: Request) {
         parentId: preOrder.parentId,
         status: preOrder.status,
         mode: preOrder.mode,
+        scheduledDate: preOrder.scheduledDate,
+        subscriptionUntil: preOrder.subscriptionUntil,
+        lastFulfilledDate: preOrder.lastFulfilledDate,
       })
       .from(preOrder)
       .where(and(eq(preOrder.id, body.preOrderId), eq(preOrder.parentId, session.user.id)))
@@ -836,7 +841,96 @@ export async function PUT(request: Request) {
       }
     }
 
+    // ── Calculate remaining school days for this pre-order ──
+    const todayIso = toIsoDate(new Date());
+    // If last fulfilled date exists, the next unfulfilled day is the next school day after it
+    let effectiveStart: string;
+    if (target.lastFulfilledDate) {
+      const nextDay = addSchoolDays(target.lastFulfilledDate, 1);
+      effectiveStart = nextDay > todayIso ? nextDay : todayIso;
+    } else {
+      effectiveStart = target.scheduledDate > todayIso ? target.scheduledDate : todayIso;
+    }
+    const endIso = target.subscriptionUntil ?? target.scheduledDate;
+    const remainingSchoolDays = countSchoolDaysInclusive(effectiveStart, endIso);
+
+    // ── Determine extra payment needed ──
+    const dailyDiff = updatedTotal - existingTotal;
+    const platformFeeMultiplier = 1 + CERTE_PLUS.PRE_ORDER_PLATFORM_FEE_PERCENT / 100;
+    // Only charge extra when daily cost increases; no refund for decreases
+    const extraPaymentAmount = dailyDiff > 0 && remainingSchoolDays > 0
+      ? Math.round(dailyDiff * remainingSchoolDays * platformFeeMultiplier * 100) / 100
+      : 0;
+
+    // ── Find family wallet if extra payment needed ──
+    let familyWallet: { id: string; balance: number } | null = null;
+    if (extraPaymentAmount > 0) {
+      const siblingChildRows = await db
+        .select({ id: child.id })
+        .from(child)
+        .where(eq(child.parentId, session.user.id));
+      const siblingChildIds = siblingChildRows.map((c) => c.id);
+
+      const wallets = await db
+        .select({ id: wallet.id, balance: wallet.balance, childId: wallet.childId })
+        .from(wallet)
+        .where(inArray(wallet.childId, siblingChildIds))
+        .orderBy(asc(wallet.createdAt))
+        .limit(1);
+
+      if (wallets.length === 0) {
+        return NextResponse.json(
+          { error: "No wallet found. Please ensure a child is linked to your account." },
+          { status: 400 },
+        );
+      }
+
+      familyWallet = wallets[0];
+
+      if (familyWallet.balance < extraPaymentAmount) {
+        return NextResponse.json(
+          {
+            error: `Insufficient wallet balance. Extra amount required: ₹${extraPaymentAmount.toFixed(2)} for ${remainingSchoolDays} remaining school days. Available: ₹${familyWallet.balance.toFixed(2)}. Please top up your wallet.`,
+            extraRequired: extraPaymentAmount,
+            available: familyWallet.balance,
+            remainingSchoolDays,
+          },
+          { status: 402 },
+        );
+      }
+    }
+
     await db.transaction(async (tx) => {
+      // If extra payment is needed, deduct from wallet
+      if (extraPaymentAmount > 0 && familyWallet) {
+        // Re-fetch wallet inside transaction to prevent race conditions
+        const [latestWallet] = await tx
+          .select()
+          .from(wallet)
+          .where(eq(wallet.id, familyWallet.id))
+          .limit(1);
+
+        if (!latestWallet || latestWallet.balance < extraPaymentAmount) {
+          throw new Error(
+            `Insufficient wallet balance. Required: ₹${extraPaymentAmount.toFixed(2)}, Available: ₹${(latestWallet?.balance ?? 0).toFixed(2)}`,
+          );
+        }
+
+        const newBalance = latestWallet.balance - extraPaymentAmount;
+        await tx
+          .update(wallet)
+          .set({ balance: newBalance, updatedAt: new Date() })
+          .where(eq(wallet.id, latestWallet.id));
+
+        await tx.insert(walletTransaction).values({
+          walletId: latestWallet.id,
+          type: "DEBIT",
+          amount: extraPaymentAmount,
+          balanceAfter: newBalance,
+          description: `Pre-order edit: extra ₹${dailyDiff.toFixed(0)}/day × ${remainingSchoolDays} days + 2% fee`,
+        });
+      }
+
       const existingFulfilledMap = new Map(
         existingRows.map((row) => [`${row.menuItemId}::${row.breakName || ""}`, row.lastFulfilledOn] as const),
       );
@@ -854,7 +948,13 @@ export async function PUT(request: Request) {
 
     broadcast("orders-updated");
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      extraPaymentAmount,
+      remainingSchoolDays,
+      previousDailyTotal: Math.round(existingTotal),
+      updatedDailyTotal: Math.round(updatedTotal),
+    });
   } catch (error) {
     console.error("Edit pre-order error:", error);
     return NextResponse.json({ error: "Failed to update pre-order" }, { status: 500 });
