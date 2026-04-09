@@ -365,6 +365,7 @@ export default function AssignmentsFeedPage() {
       {/* Animated toggle tabs */}
       <div className="flex items-center gap-2 pt-3">
         <div
+          role="tablist"
           className="relative flex min-h-11 rounded-full bg-primary/10 p-1"
           onPointerDown={(e) => {
             const el = e.currentTarget;
@@ -405,6 +406,8 @@ export default function AssignmentsFeedPage() {
             <button
               key={tab}
               type="button"
+              role="tab"
+              aria-selected={activeTab === tab}
               onClick={() => handleTabSwitch(tab)}
               className={cn(
                 "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
