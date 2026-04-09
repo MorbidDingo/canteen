@@ -1506,15 +1506,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
             </div>
-            <input
-              ref={profilePhotoInputRef}
-              id="parent-profile-photo"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="sr-only"
-              disabled={profileUploading}
-              onChange={handleProfilePhotoInputChange}
-            />
             <div className="mt-2 text-xs text-muted-foreground">
               Select the pencil icon to edit your profile photo.
             </div>
@@ -2294,6 +2285,17 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </BottomSheet>
+
+      {/* Hidden file input – lives outside all sheets/dialogs so the ref is always reachable */}
+      <input
+        ref={profilePhotoInputRef}
+        id="parent-profile-photo"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        disabled={profileUploading}
+        onChange={handleProfilePhotoInputChange}
+      />
 
       <Dialog
         open={profilePhotoPreviewOpen}

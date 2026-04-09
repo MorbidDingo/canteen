@@ -34,6 +34,7 @@ import Link from "next/link";
 import { BottomSheet } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 import type { PaymentMethod } from "@/lib/constants";
+import { hapticSelection, hapticSuccess } from "@/lib/haptics";
 
 // Extend Window for Razorpay checkout
 declare global {
@@ -361,6 +362,7 @@ export default function CartPage() {
 
   // ─── Slide-to-pay handlers ──────────────────────────
   const THUMB_SIZE = 52;
+  const lastHapticThreshold = useRef(0);
 
   const getTrackWidth = () => {
     if (!slideTrackRef.current) return 300;
@@ -370,8 +372,10 @@ export default function CartPage() {
   const handlePointerDown = (e: React.PointerEvent) => {
     if (slideState !== "idle" || !hasEnoughBalance) return;
     isDragging.current = true;
+    lastHapticThreshold.current = 0;
     startX.current = e.clientX - slideX;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    hapticSelection();
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -379,6 +383,13 @@ export default function CartPage() {
     const maxX = getTrackWidth();
     const newX = Math.max(0, Math.min(e.clientX - startX.current, maxX));
     setSlideX(newX);
+    // Haptic ticks at 25%, 50%, 75% progress
+    const progress = newX / maxX;
+    const step = Math.floor(progress * 4);
+    if (step > lastHapticThreshold.current) {
+      lastHapticThreshold.current = step;
+      hapticSelection();
+    }
   };
 
   const handlePointerUp = () => {
@@ -388,6 +399,7 @@ export default function CartPage() {
     if (slideX > maxX * 0.85) {
       setSlideX(maxX);
       setSlideState("paying");
+      hapticSuccess();
       handleWalletPayment();
     } else {
       setSlideX(0);
@@ -503,6 +515,7 @@ export default function CartPage() {
       // Animate: paying → paid
       await new Promise((r) => setTimeout(r, 1500));
       setSlideState("paid");
+      hapticSuccess();
 
       await new Promise((r) => setTimeout(r, 1200));
       toast.success("Paid via wallet! Order placed.");
@@ -915,13 +928,23 @@ export default function CartPage() {
           ) : (
             paymentMethod === "WALLET" && selectedWallet && (
               <div className="space-y-3">
-                {/* Wallet balance */}
-                <div className="rounded-2xl border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden p-4">
-                  <p className="text-xs text-orange-200/70">{selectedWallet.childName}&apos;s Balance</p>
-                  <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
-                    <IndianRupee className="h-4 w-4 text-orange-400" />
-                    {selectedWallet.balance.toFixed(2)}
-                  </p>
+                {/* Wallet balance — premium card */}
+                <div className="relative rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 text-white overflow-hidden p-4">
+                  {/* Shimmer overlay */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-shine-sweep" />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wider text-zinc-400">{selectedWallet.childName}&apos;s Balance</p>
+                      <p className="text-2xl font-bold flex items-center gap-1 mt-1 text-white">
+                        <IndianRupee className="h-5 w-5 text-emerald-400" />
+                        {selectedWallet.balance.toFixed(2)}
+                      </p>
+                    </div>
+                    <Wallet className="h-8 w-8 text-emerald-400/30" />
+                  </div>
+                  {!hasEnoughBalance && (
+                    <p className="text-[11px] text-red-300/80 mt-2">Insufficient balance for this order</p>
+                  )}
                 </div>
 
                 {/* Slide to pay */}
@@ -951,8 +974,10 @@ export default function CartPage() {
                       </div>
                     )}
                     {slideState === "paid" && (
-                      <div className="flex items-center gap-2 text-white animate-scale-in">
-                        <Check className="h-5 w-5" />
+                      <div className="flex items-center gap-2 text-white animate-paid-reveal">
+                        <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength="1" />
+                        </svg>
                         <span className="text-sm font-bold">Paid ₹{total.toFixed(2)}!</span>
                       </div>
                     )}
@@ -1063,14 +1088,20 @@ export default function CartPage() {
                   )}
 
                   {selectedWallet && (
-                    <div className="rounded-2xl border border-orange-400/10 bg-gradient-to-br from-orange-900 via-amber-950 to-orange text-white overflow-hidden p-4">
-                      <p className="text-xs text-orange-200/70">{selectedWallet.childName}&apos;s Balance</p>
-                      <p className="text-xl font-semibold flex items-center gap-1 mt-0.5 text-orange-300">
-                        <IndianRupee className="h-4 w-4 text-orange-400" />
-                        {selectedWallet.balance.toFixed(2)}
-                      </p>
+                    <div className="relative rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 text-white overflow-hidden p-4">
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-shine-sweep" />
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-zinc-400">{selectedWallet.childName}&apos;s Balance</p>
+                          <p className="text-2xl font-bold flex items-center gap-1 mt-1 text-white">
+                            <IndianRupee className="h-5 w-5 text-emerald-400" />
+                            {selectedWallet.balance.toFixed(2)}
+                          </p>
+                        </div>
+                        <Wallet className="h-8 w-8 text-emerald-400/30" />
+                      </div>
                       {!hasEnoughBalance && (
-                        <p className="text-[11px] text-orange-300/80 mt-1">Insufficient balance</p>
+                        <p className="text-[11px] text-red-300/80 mt-2">Insufficient balance for this order</p>
                       )}
                     </div>
                   )}
@@ -1117,8 +1148,10 @@ export default function CartPage() {
                           </div>
                         )}
                         {slideState === "paid" && (
-                          <div className="flex items-center gap-2 text-white">
-                            <Check className="h-5 w-5" />
+                          <div className="flex items-center gap-2 text-white animate-paid-reveal">
+                            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength="1" />
+                            </svg>
                             <span className="text-sm font-bold">Paid ₹{total.toFixed(0)}!</span>
                           </div>
                         )}

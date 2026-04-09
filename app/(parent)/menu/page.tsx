@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { UtensilsCrossed, Loader2, ArrowRight } from "lucide-react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { UtensilsCrossed, Loader2, ArrowRight, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import MenuClient from "../../../components/menu-client";
 import { useRealtimeData } from "@/lib/events";
 import { useCartStore } from "@/lib/store/cart-store";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePersistedSelection } from "@/lib/use-persisted-selection";
+import { hapticNudge } from "@/lib/haptics";
 
 interface MenuItem {
   id: string;
@@ -59,7 +60,21 @@ export default function MenuPage() {
   } = usePersistedSelection("certe:selected-canteen-id");
   const cartCount = useCartStore((s) => s.getItemCount());
   const cartTotal = useCartStore((s) => s.getTotal());
+  const clearCart = useCartStore((s) => s.clearCart);
   const router = useRouter();
+  const prevCartCountRef = useRef(cartCount);
+  const [cartPop, setCartPop] = useState(false);
+
+  // Detect first item added → haptic + pop animation
+  useEffect(() => {
+    if (prevCartCountRef.current === 0 && cartCount === 1) {
+      hapticNudge();
+      setCartPop(true);
+      const timer = setTimeout(() => setCartPop(false), 500);
+      return () => clearTimeout(timer);
+    }
+    prevCartCountRef.current = cartCount;
+  }, [cartCount]);
 
   const fetchMenu = useCallback(async () => {
     try {
@@ -147,34 +162,48 @@ export default function MenuPage() {
         </>
       )}
 
-      {/* Floating cart bar */}
+      {/* Compact floating cart pill – left-aligned */}
       <AnimatePresence>
         {cartCount > 0 && (
           <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 28 }}
-            className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] left-5 right-5 z-40 md:hidden pointer-events-auto"
+            initial={{ y: 60, opacity: 0, scale: 0.85 }}
+            animate={{
+              y: 0,
+              opacity: 1,
+              scale: cartPop ? [1.08, 1] : 1,
+            }}
+            exit={{ y: 60, opacity: 0, scale: 0.85 }}
+            transition={{ type: "spring", stiffness: 340, damping: 26 }}
+            className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] left-4 z-40 md:hidden pointer-events-auto"
           >
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push("/cart");
-              }}
-              className="flex w-full items-center justify-between rounded-2xl bg-primary px-5 h-14 text-primary-foreground shadow-xl active:scale-[0.98] transition-transform"
-            >
-              <span className="text-[14px] font-semibold">
-                {cartCount} {cartCount === 1 ? "item" : "items"}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[16px] font-bold tabular-nums">
-                  ₹{cartTotal.toFixed(0)}
+            <div className="flex items-center gap-1">
+              {/* Cart info button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push("/cart");
+                }}
+                className="flex items-center gap-2.5 rounded-full bg-primary pl-4 pr-3 h-11 min-h-11 text-primary-foreground shadow-lg active:scale-[0.97] transition-transform"
+              >
+                <span className="text-[13px] font-semibold tabular-nums whitespace-nowrap">
+                  {cartCount} · ₹{cartTotal.toFixed(0)}
                 </span>
-                <ArrowRight className="h-4 w-4" />
-              </div>
-            </button>
+                <ArrowRight className="h-3.5 w-3.5 opacity-70" />
+              </button>
+              {/* Clear cart button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearCart();
+                }}
+                className="flex items-center justify-center rounded-full bg-muted/90 h-9 w-9 min-h-9 min-w-9 shadow-md active:scale-[0.92] transition-transform"
+                aria-label="Clear cart"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
