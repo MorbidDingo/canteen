@@ -289,6 +289,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
   const menuById = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
   const wizardMenuById = useMemo(() => new Map(wizardMenuItems.map((m) => [m.id, m])), [wizardMenuItems]);
+  const editMenuById = useMemo(() => new Map(editMenuItems.map((m) => [m.id, m])), [editMenuItems]);
   const childById = useMemo(() => new Map(children.map((c) => [c.id, c.name])), [children]);
   const controlByChild = useMemo(() => new Map(controls.map((c) => [c.childId, c])), [controls]);
   const breakLabelByName = useMemo(
@@ -310,10 +311,10 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
 
   const editCurrentTotal = useMemo(() => {
     return editRows.reduce((sum, row) => {
-      const menu = menuById.get(row.menuItemId);
+      const menu = menuById.get(row.menuItemId) ?? editMenuById.get(row.menuItemId);
       return sum + (menu?.discountedPrice ?? menu?.price ?? 0) * row.quantity;
     }, 0);
-  }, [editRows, menuById]);
+  }, [editRows, menuById, editMenuById]);
 
   const editDailyDiff = editCurrentTotal - editOriginalTotal;
 
@@ -1166,7 +1167,7 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
             <>
               <div className="max-h-[40vh] space-y-2 overflow-auto overscroll-contain">
                 {editRows.map((row) => {
-                  const menu = menuById.get(row.menuItemId);
+                  const menu = menuById.get(row.menuItemId) ?? editMenuById.get(row.menuItemId);
                   const unitPrice = menu?.discountedPrice ?? menu?.price ?? 0;
                   return (
                     <div key={row.id} className="flex items-center gap-3 rounded-2xl bg-card p-3.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
