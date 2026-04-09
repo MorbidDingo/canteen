@@ -976,7 +976,7 @@ export default function CartPage() {
                     {slideState === "paid" && (
                       <div className="flex items-center gap-2 text-white animate-paid-reveal">
                         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength="1" />
+                          <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength={1} />
                         </svg>
                         <span className="text-sm font-bold">Paid ₹{total.toFixed(2)}!</span>
                       </div>
@@ -1150,7 +1150,7 @@ export default function CartPage() {
                         {slideState === "paid" && (
                           <div className="flex items-center gap-2 text-white animate-paid-reveal">
                             <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength="1" />
+                              <path d="M4 12l5 5L20 6" className="animate-tick-draw" pathLength={1} />
                             </svg>
                             <span className="text-sm font-bold">Paid ₹{total.toFixed(0)}!</span>
                           </div>
