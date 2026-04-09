@@ -498,9 +498,9 @@ export default function MenuClient({
     <>
       {/* ── Search bar ── */}
       <div
-        className="sticky z-30 bg-background pb-2 -mt-1"
+        className="sticky z-30 bg-background pb-2 pt-1"
         style={
-          { top: "calc(var(--header-h, 56px) - 4px)" } as React.CSSProperties
+          { top: "var(--header-h, 56px)" } as React.CSSProperties
         }
       >
         <div className="relative">
