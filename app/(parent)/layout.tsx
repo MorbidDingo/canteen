@@ -357,6 +357,12 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const triggerHaptic = useCallback(() => {
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(10);
+    }
+  }, []);
+
   const handleProfilePhotoInputChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.currentTarget.value = "";
@@ -1397,6 +1403,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 <Link
                   key={tab.key}
                   href={tab.href}
+                  onClick={triggerHaptic}
                   className={cn(
                     "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[2px] rounded-full py-2 transition-all duration-200",
                     isActive

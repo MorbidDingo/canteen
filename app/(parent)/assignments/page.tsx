@@ -22,7 +22,7 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import { BottomSheet } from "@/components/ui/motion";
+import { BottomSheet, motion } from "@/components/ui/motion";
 import { cn } from "@/lib/utils";
 
 type FeedAttachment = {
@@ -362,23 +362,61 @@ export default function AssignmentsFeedPage() {
 
   return (
     <div className="space-y-6 px-5 pt-2 pb-32 sm:px-8">
-      {/* Tab pills */}
+      {/* Animated toggle tabs */}
       <div className="flex items-center gap-2 pt-3">
-        {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => handleTabSwitch(tab)}
-            className={cn(
-              "min-h-11 min-w-11 rounded-full px-4 text-[15px] font-semibold transition-colors",
-              activeTab === tab
-                ? "bg-primary text-primary-foreground"
-                : "bg-primary/10 text-primary hover:bg-primary/20",
-            )}
-          >
-            {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
-          </button>
-        ))}
+        <div
+          className="relative flex min-h-11 rounded-full bg-primary/10 p-1"
+          onPointerDown={(e) => {
+            const el = e.currentTarget;
+            const startX = e.clientX;
+            const onMove = (ev: PointerEvent) => {
+              const dx = ev.clientX - startX;
+              if (Math.abs(dx) > 30) {
+                el.releasePointerCapture(ev.pointerId);
+                el.removeEventListener("pointermove", onMove);
+                el.removeEventListener("pointerup", onUp);
+                if (dx > 0 && activeTab === "ASSIGNMENT") {
+                  handleTabSwitch("NOTE");
+                } else if (dx < 0 && activeTab === "NOTE") {
+                  handleTabSwitch("ASSIGNMENT");
+                }
+              }
+            };
+            const onUp = () => {
+              el.removeEventListener("pointermove", onMove);
+              el.removeEventListener("pointerup", onUp);
+            };
+            el.setPointerCapture(e.pointerId);
+            el.addEventListener("pointermove", onMove);
+            el.addEventListener("pointerup", onUp);
+          }}
+        >
+          {/* Sliding focus indicator */}
+          <motion.div
+            className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
+            initial={false}
+            animate={{
+              left: activeTab === "ASSIGNMENT" ? "4px" : "50%",
+              right: activeTab === "NOTE" ? "4px" : "50%",
+            }}
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+          />
+          {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => handleTabSwitch(tab)}
+              className={cn(
+                "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
+                activeTab === tab
+                  ? "text-primary-foreground"
+                  : "text-primary hover:text-primary/80",
+              )}
+            >
+              {tab === "ASSIGNMENT" ? "Assignments" : "Notes"}
+            </button>
+          ))}
+        </div>
 
         <button
           type="button"
