@@ -902,7 +902,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 <span className="flex items-center gap-1 text-xs font-semibold text-green-600 dark:text-green-400">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                   {c.receipt && (
-                    <span className="text-[10px] text-muted-foreground ml-1">
+                    <span className="text-[12px] text-muted-foreground ml-1">
                       {c.receipt.receiptNumber}
                     </span>
                   )}
@@ -971,7 +971,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                       {event.dueDate && (
                         <p
                           className={cn(
-                            "text-[11px] mt-1",
+                            "text-[13px] mt-1",
                             overdue && !paid
                               ? "text-destructive font-medium"
                               : "text-muted-foreground",
@@ -996,7 +996,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                         ₹{event.amount.toFixed(0)}
                       </p>
                       {paid && (
-                        <span className="text-[10px] text-green-600 font-medium flex items-center gap-0.5 justify-end">
+                        <span className="text-[12px] text-green-600 font-medium flex items-center gap-0.5 justify-end">
                           <CheckCircle2 className="h-3 w-3" />
                           Paid
                         </span>
@@ -1092,7 +1092,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                       {n.message}
                     </p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <p className="text-[10px] text-muted-foreground/70">
+                      <p className="text-[12px] text-muted-foreground/70">
                         {n.childName} ·{" "}
                         {new Date(n.createdAt).toLocaleTimeString(undefined, {
                           hour: "2-digit",
@@ -1100,12 +1100,12 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                         })}
                       </p>
                       {isPayment && (
-                        <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                        <span className="text-[12px] font-medium text-emerald-600 dark:text-emerald-400">
                           View payment →
                         </span>
                       )}
                       {isEvent && (
-                        <span className="text-[10px] font-medium text-blue-500">
+                        <span className="text-[12px] font-medium text-blue-500">
                           View in calendar →
                         </span>
                       )}
@@ -1151,13 +1151,13 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                     {n.message}
                   </p>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    <p className="text-[10px] text-muted-foreground/70">
+                    <p className="text-[12px] text-muted-foreground/70">
                       {new Date(n.createdAt).toLocaleTimeString(undefined, {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </p>
-                    <span className="text-[10px] font-medium text-violet-500">
+                    <span className="text-[12px] font-medium text-violet-500">
                       View in calendar →
                     </span>
                   </div>
@@ -1220,14 +1220,14 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
           {/* Left: Context-sensitive title / greeting */}
           <div className="flex min-w-0 items-center gap-2">
             <div className="min-w-0">
-            <span className="text-[28px] font-semibold tracking-tight">
+            <span className="text-[30px] font-semibold tracking-tight">
               {pageTitle}
             </span>
             {showVenueChip && (
               <button
                 type="button"
                 onClick={() => setVenuePickerOpen(true)}
-                className="flex items-center gap-1 mt-0 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                className="flex items-center gap-1 mt-0 text-[15px] text-muted-foreground transition-colors hover:text-foreground"
               >
                 {venueType === "canteen" ? (
                   <Store className="h-3 w-3 shrink-0" />
@@ -1299,7 +1299,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         snapPoints={[40]}
       >
         <div className="space-y-4">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-[13px] font-medium uppercase tracking-wide text-muted-foreground">
             {venueType === "canteen" ? "Select Cafeteria" : "Select Library"}
           </p>
           <div className="space-y-1">
@@ -1354,7 +1354,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                       {venue.name}
                     </p>
                     {venue.location && (
-                      <p className="text-[12px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <p className="text-[14px] text-muted-foreground flex items-center gap-1 mt-0.5">
                         <MapPin className="h-3 w-3 shrink-0" />
                         <span className="truncate">{venue.location}</span>
                       </p>
@@ -1381,10 +1381,10 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
 
       {/* Bottom tab bar — GitHub iOS-style circular floating bar */}
       <nav
-        className="fixed bottom-3 left-0 right-0 z-50 flex items-center justify-center gap-2.5 px-4"
+        className="fixed bottom-3 left-0 right-0 z-50 mx-auto flex w-[85%] max-w-md items-center justify-center gap-2.5"
         style={{ paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}
       >
-        <div className="relative overflow-hidden rounded-full border border-black/[0.06] bg-white/80 px-1.5 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-slate-900/80 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+        <div className="relative min-w-0 flex-1 overflow-hidden rounded-full border border-black/[0.06] bg-white/80 px-1.5 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-2xl dark:border-white/[0.12] dark:bg-slate-900/80 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
           {/* Subtle top highlight */}
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/90 to-transparent dark:via-white/10" />
 
@@ -1398,7 +1398,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                   key={tab.key}
                   href={tab.href}
                   className={cn(
-                    "relative flex flex-col items-center justify-center gap-[2px] rounded-full px-4 py-2 transition-all duration-200",
+                    "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-[2px] rounded-full py-2 transition-all duration-200",
                     isActive
                       ? "text-primary"
                       : "text-slate-500 dark:text-slate-400",
@@ -1423,7 +1423,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                   </span>
                   <span
                     className={cn(
-                      "relative text-[9px] font-semibold leading-none tracking-wide",
+                      "relative text-[10px] font-semibold leading-none tracking-wide",
                       isActive
                         ? "text-primary"
                         : "text-slate-500 dark:text-slate-400",
@@ -1441,13 +1441,18 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={() => setProfileSheetOpen(true)}
-          className="relative shrink-0 h-[46px] w-[46px] min-w-[46px] aspect-square overflow-hidden rounded-full border border-black/[0.06] bg-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-2xl transition-all duration-200 active:scale-95 dark:border-white/[0.12] dark:bg-slate-900/80 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+          className={cn(
+            "relative shrink-0 h-[46px] w-[46px] min-w-[46px] aspect-square overflow-hidden rounded-full bg-white/80 shadow-[0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-2xl transition-all duration-200 active:scale-95 dark:bg-slate-900/80 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]",
+            certePlusActive
+              ? "ring-2 ring-amber-400/80 dark:ring-amber-500/70"
+              : "ring-2 ring-slate-300/70 dark:ring-slate-500/50",
+          )}
           aria-label="Profile"
         >
           <div className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-b from-white/50 to-transparent dark:from-white/5" />
           <Avatar className="relative h-full w-full">
             <AvatarImage src={profileImage ?? undefined} alt={session?.user?.name || "Profile"} />
-            <AvatarFallback className="text-[13px] font-bold text-slate-700 dark:text-slate-200">
+            <AvatarFallback className="text-[15px] font-bold text-slate-700 dark:text-slate-200">
               {mounted ? getInitials(session?.user?.name) : "?"}
             </AvatarFallback>
           </Avatar>
@@ -1474,7 +1479,10 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 </Avatar>
                 <button
                   type="button"
-                  onClick={() => setProfilePhotoPreviewOpen(true)}
+                  onClick={() => {
+                    setProfileSheetOpen(false);
+                    setProfilePhotoPreviewOpen(true);
+                  }}
                   className="absolute bottom-0 right-0 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
                   aria-label="Edit profile photo"
                 >
@@ -1482,10 +1490,10 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-[22px] font-bold tracking-tight">
+                <p className="truncate text-[24px] font-bold tracking-tight">
                   {session?.user?.name || "User"}
                 </p>
-                <p className="truncate text-[13px] text-muted-foreground">
+                <p className="truncate text-[15px] text-muted-foreground">
                   {session?.user?.email}
                 </p>
               </div>
@@ -1564,20 +1572,20 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold">Certe+</p>
+                <p className="text-[15px] font-semibold">Certe+</p>
                 {certePlusActive ? (
-                  <p className="text-[12px] text-amber-700 dark:text-amber-400">
+                  <p className="text-[14px] text-amber-700 dark:text-amber-400">
                     Active ·{" "}
                     {certePlusStatus?.subscription?.plan || "Subscribed"}
                   </p>
                 ) : (
-                  <p className="text-[12px] text-muted-foreground">
+                  <p className="text-[14px] text-muted-foreground">
                     View benefits & subscribe
                   </p>
                 )}
               </div>
               {!certePlusActive && (
-                <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground">
+                <span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[13px] font-semibold text-primary-foreground">
                   Get
                 </span>
               )}
@@ -1914,7 +1922,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                       Payments
                     </h3>
                     {pendingEventsCount > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[12px] font-bold text-white">
                         {pendingEventsCount}
                       </span>
                     )}
@@ -2220,7 +2228,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                           Payments
                         </SheetTitle>
                         {pendingEventsCount > 0 && (
-                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-white">
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[12px] font-bold text-white">
                             {pendingEventsCount}
                           </span>
                         )}
@@ -2283,7 +2291,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         open={profilePhotoPreviewOpen}
         onOpenChange={(open) => setProfilePhotoPreviewOpen(open)}
       >
-        <DialogContent className="max-w-sm gap-0 overflow-hidden p-0">
+        <DialogContent className="z-[70] max-w-sm gap-0 overflow-hidden p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Edit profile photo</DialogTitle>
             <DialogDescription>
@@ -2340,7 +2348,7 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
               {activeNotice?.message}
             </p>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             {activeNotice &&
               new Date(activeNotice.createdAt).toLocaleString(undefined, {
                 dateStyle: "medium",
