@@ -53,6 +53,7 @@ type PreOrderWithItems = {
   mode: "ONE_DAY" | "SUBSCRIPTION";
   scheduledDate: string;
   subscriptionUntil: string | null;
+  lastFulfilledDate: string | null;
   status: PreOrderStatus;
   createdAt: string;
   items: {
@@ -319,9 +320,13 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
   const editRemainingDays = useMemo(() => {
     if (!editingPreOrder) return 0;
     const todayIso = new Date().toISOString().slice(0, 10);
-    const effectiveStart = todayIso > editingPreOrder.scheduledDate
-      ? todayIso
-      : editingPreOrder.scheduledDate;
+    let effectiveStart: string;
+    if (editingPreOrder.lastFulfilledDate) {
+      const nextDay = addSchoolDays(editingPreOrder.lastFulfilledDate, 1);
+      effectiveStart = nextDay > todayIso ? nextDay : todayIso;
+    } else {
+      effectiveStart = editingPreOrder.scheduledDate > todayIso ? editingPreOrder.scheduledDate : todayIso;
+    }
     const endIso = editingPreOrder.subscriptionUntil ?? editingPreOrder.scheduledDate;
     return countSchoolDaysInclusive(effectiveStart, endIso);
   }, [editingPreOrder]);
@@ -631,9 +636,10 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
       });
       const data = await res.json();
       if (!res.ok) return toast.error(data.error || "Failed to update pre-order");
-      if (data.extraPaymentAmount > 0) {
-        toast.success(`Pre-order updated! ₹${(data.extraPaymentAmount as number).toFixed(2)} deducted from wallet.`);
-        setWalletBalance((prev) => prev !== null ? prev - (data.extraPaymentAmount as number) : null);
+      const extra = Number(data.extraPaymentAmount) || 0;
+      if (extra > 0) {
+        toast.success(`Pre-order updated! ₹${extra.toFixed(2)} deducted from wallet.`);
+        setWalletBalance((prev) => prev !== null ? prev - extra : null);
       } else {
         toast.success("Pre-order updated");
       }
@@ -930,9 +936,10 @@ export default function PreOrdersPage({ embedded = false }: { embedded?: boolean
                 <h2 className="text-lg font-semibold tracking-tight">Pick items</h2>
                 <p className="text-[13px] text-muted-foreground mt-0.5">
                   {childById.get(assignChildId)} · {assignBreak}
-                  {wizardCanteenId && canteens.find(c => c.id === wizardCanteenId) && (
-                    <span> · {canteens.find(c => c.id === wizardCanteenId)!.name}</span>
-                  )}
+                  {(() => {
+                    const wc = wizardCanteenId ? canteens.find(c => c.id === wizardCanteenId) : null;
+                    return wc ? <span> · {wc.name}</span> : null;
+                  })()}
                 </p>
               </div>
 

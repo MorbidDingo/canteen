@@ -843,9 +843,14 @@ export async function PUT(request: Request) {
 
     // ── Calculate remaining school days for this pre-order ──
     const todayIso = toIsoDate(new Date());
-    const effectiveStart = todayIso > (target.lastFulfilledDate ?? target.scheduledDate)
-      ? todayIso
-      : (target.lastFulfilledDate ?? target.scheduledDate);
+    // If last fulfilled date exists, the next unfulfilled day is the next school day after it
+    let effectiveStart: string;
+    if (target.lastFulfilledDate) {
+      const nextDay = addSchoolDays(target.lastFulfilledDate, 1);
+      effectiveStart = nextDay > todayIso ? nextDay : todayIso;
+    } else {
+      effectiveStart = target.scheduledDate > todayIso ? target.scheduledDate : todayIso;
+    }
     const endIso = target.subscriptionUntil ?? target.scheduledDate;
     const remainingSchoolDays = countSchoolDaysInclusive(effectiveStart, endIso);
 
@@ -898,17 +903,11 @@ export async function PUT(request: Request) {
     await db.transaction(async (tx) => {
       // If extra payment is needed, deduct from wallet
       if (extraPaymentAmount > 0 && familyWallet) {
-        const siblingChildRows = await tx
-          .select({ id: child.id })
-          .from(child)
-          .where(eq(child.parentId, session.user.id));
-        const siblingChildIds = siblingChildRows.map((c) => c.id);
-
+        // Re-fetch wallet inside transaction to prevent race conditions
         const [latestWallet] = await tx
           .select()
           .from(wallet)
-          .where(inArray(wallet.childId, siblingChildIds))
-          .orderBy(asc(wallet.createdAt))
+          .where(eq(wallet.id, familyWallet.id))
           .limit(1);
 
         if (!latestWallet || latestWallet.balance < extraPaymentAmount) {
@@ -921,7 +920,7 @@ export async function PUT(request: Request) {
         await tx
           .update(wallet)
           .set({ balance: newBalance, updatedAt: new Date() })
-          .where(inArray(wallet.childId, siblingChildIds));
+          .where(eq(wallet.id, latestWallet.id));
 
         await tx.insert(walletTransaction).values({
           walletId: latestWallet.id,
