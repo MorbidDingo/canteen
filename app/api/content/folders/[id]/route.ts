@@ -120,7 +120,7 @@ export async function GET(
 
   // Fetch attachments for visible posts
   const postIds = visiblePosts.map((p) => p.id);
-  let attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  const attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
 
   if (postIds.length > 0) {
     const postAttachments = await db
