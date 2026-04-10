@@ -27,6 +27,9 @@ import { BottomSheet, motion } from "@/components/ui/motion";
 import { hapticSelection } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 
+/** Padding inside the tab container — matches the `p-1` (4px) on the tablist */
+const TAB_PADDING = "4px";
+
 type FeedAttachment = {
   id: string;
   originalFileName: string | null;
@@ -391,12 +394,12 @@ export default function AssignmentsFeedPage() {
         >
           {/* Sliding focus indicator */}
           <motion.div
-            className="absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-primary shadow-sm"
+            className={`absolute inset-y-1 w-[calc(50%-${TAB_PADDING})] rounded-full bg-primary shadow-sm`}
             initial={false}
             animate={{
-              x: activeTab === "ASSIGNMENT" ? 0 : "calc(100% + 4px)",
+              x: activeTab === "ASSIGNMENT" ? 0 : `calc(100% + ${TAB_PADDING})`,
             }}
-            style={{ left: "4px" }}
+            style={{ left: TAB_PADDING }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
           />
           {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (

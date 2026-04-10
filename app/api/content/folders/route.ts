@@ -12,6 +12,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, count, sql, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
+import { MANAGEMENT_ROLES } from "@/lib/content-audience";
 import { getContentPermission } from "@/lib/content-permission";
 import { logAudit, AUDIT_ACTIONS } from "@/lib/audit";
 
@@ -113,9 +114,6 @@ export async function GET(request: NextRequest) {
 
   const organizationId = access.activeOrganizationId!;
   const userId = access.actorUserId;
-
-  /** Roles that can see all org folders regardless of audience */
-  const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
 
   // Check user role
   const userMemberships = await db

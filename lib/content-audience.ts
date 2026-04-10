@@ -9,7 +9,7 @@ import {
 import { eq, and, or, inArray } from "drizzle-orm";
 
 /** Roles that can see all org content regardless of audience targeting */
-const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
+export const MANAGEMENT_ROLES = new Set(["OWNER", "ADMIN", "MANAGEMENT", "OPERATOR"]);
 
 /**
  * Check if a user has audience access to a specific post.
