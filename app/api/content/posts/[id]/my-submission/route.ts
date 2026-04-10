@@ -74,5 +74,11 @@ export async function GET(
     .from(contentSubmissionAttachment)
     .where(eq(contentSubmissionAttachment.submissionId, submission.id));
 
-  return NextResponse.json({ submission, attachments });
+  return NextResponse.json({
+    submission: {
+      ...submission,
+      submittedAt: submission.createdAt,
+    },
+    attachments,
+  });
 }

@@ -21,6 +21,7 @@ import {
   Send,
   Trash2,
   Pencil,
+  CheckCircle2,
 } from "lucide-react";
 import { BottomSheet, motion } from "@/components/ui/motion";
 import { hapticSelection } from "@/lib/haptics";
@@ -646,9 +647,17 @@ export default function AssignmentsFeedPage() {
                     >
                       <Link href={`/assignments/${post.id}`} className="block">
                       {/* Title */}
-                      <p className="line-clamp-2 text-[16px] font-semibold leading-snug">
-                        {post.title}
-                      </p>
+                      <div className="flex items-start gap-2">
+                        <p className="line-clamp-2 min-w-0 flex-1 text-[16px] font-semibold leading-snug">
+                          {post.title}
+                        </p>
+                        {post.hasSubmitted && post.type === "ASSIGNMENT" && (
+                          <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Submitted
+                          </span>
+                        )}
+                      </div>
 
                       {/* Body preview */}
                       {post.body && (

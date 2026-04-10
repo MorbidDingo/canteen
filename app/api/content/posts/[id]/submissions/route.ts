@@ -119,6 +119,9 @@ export async function GET(
 
   const result = submissions.map((s) => ({
     ...s,
+    submittedAt: s.createdAt,
+    user: { name: s.submitterName, email: s.submitterEmail },
+    userId: s.submittedByUserId,
     attachments: attachmentMap.get(s.id) || [],
   }));
 
