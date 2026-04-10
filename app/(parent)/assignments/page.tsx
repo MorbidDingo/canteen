@@ -21,10 +21,14 @@ import {
   Send,
   Trash2,
   Pencil,
+  CheckCircle2,
 } from "lucide-react";
 import { BottomSheet, motion } from "@/components/ui/motion";
 import { hapticSelection } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+
+/** Padding inside the tab container — matches the `p-1` (4px) on the tablist */
+const TAB_PADDING = "4px";
 
 type FeedAttachment = {
   id: string;
@@ -393,9 +397,9 @@ export default function AssignmentsFeedPage() {
             className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
             initial={false}
             animate={{
-              left: activeTab === "ASSIGNMENT" ? "4px" : "50%",
-              right: activeTab === "NOTE" ? "4px" : "50%",
+              x: activeTab === "ASSIGNMENT" ? 0 : `calc(100% + ${TAB_PADDING})`,
             }}
+            style={{ left: TAB_PADDING, width: `calc(50% - ${TAB_PADDING})` }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
           />
           {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
@@ -406,7 +410,7 @@ export default function AssignmentsFeedPage() {
               aria-selected={activeTab === tab}
               onClick={() => handleTabSwitch(tab)}
               className={cn(
-                "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
+                "relative z-10 min-h-9 flex-1 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
                 activeTab === tab
                   ? "text-primary-foreground"
                   : "text-primary hover:text-primary/80",
@@ -646,9 +650,17 @@ export default function AssignmentsFeedPage() {
                     >
                       <Link href={`/assignments/${post.id}`} className="block">
                       {/* Title */}
-                      <p className="line-clamp-2 text-[16px] font-semibold leading-snug">
-                        {post.title}
-                      </p>
+                      <div className="flex items-start gap-2">
+                        <p className="line-clamp-2 min-w-0 flex-1 text-[16px] font-semibold leading-snug">
+                          {post.title}
+                        </p>
+                        {post.hasSubmitted && post.type === "ASSIGNMENT" && (
+                          <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Submitted
+                          </span>
+                        )}
+                      </div>
 
                       {/* Body preview */}
                       {post.body && (

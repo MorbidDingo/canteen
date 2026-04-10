@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
 import { toast } from "sonner";
 import { hapticSuccess, hapticError } from "@/lib/haptics";
 import { Button } from "@/components/ui/button";
@@ -41,7 +40,6 @@ import {
   User,
   Users,
   Trash2,
-  Eye,
   Send,
   Lock,
   FileText,
@@ -441,14 +439,6 @@ export default function EditPostPage() {
           </Badge>
         </div>
         <div className="flex items-center gap-1.5">
-          {postType === "ASSIGNMENT" && (
-            <Link href={`/content/${postId}/submissions`}>
-              <Button variant="outline" size="sm" className="h-7 text-xs">
-                <Eye className="mr-1 h-3 w-3" />
-                Submissions
-              </Button>
-            </Link>
-          )}
           <Button
             variant="ghost"
             size="sm"
