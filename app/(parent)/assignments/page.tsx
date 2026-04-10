@@ -394,12 +394,12 @@ export default function AssignmentsFeedPage() {
         >
           {/* Sliding focus indicator */}
           <motion.div
-            className={`absolute inset-y-1 w-[calc(50%-${TAB_PADDING})] rounded-full bg-primary shadow-sm`}
+            className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
             initial={false}
             animate={{
               x: activeTab === "ASSIGNMENT" ? 0 : `calc(100% + ${TAB_PADDING})`,
             }}
-            style={{ left: TAB_PADDING }}
+            style={{ left: TAB_PADDING, width: `calc(50% - ${TAB_PADDING})` }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
           />
           {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
