@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import {
   IoRestaurant,
@@ -2321,8 +2322,8 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 {mounted ? getInitials(session?.user?.name) : "?"}
               </div>
             )}
-            {/* Action buttons — spaced apart so they never overlap */}
-            <div className="absolute top-3 right-3 flex items-center gap-2">
+            {/* Upload button */}
+            <div className="absolute top-3 right-14 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => profilePhotoInputRef.current?.click()}
@@ -2333,18 +2334,22 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 )}
                 aria-label="Upload new profile photo"
               >
-                <Pencil className="h-4 w-4" />
+                {profileUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Pencil className="h-4 w-4" />
+                )}
               </button>
-              <DialogClose asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors hover:bg-muted/70"
-                  aria-label="Close"
-                >
-                  <IoClose className="h-5 w-5" />
-                </button>
-              </DialogClose>
             </div>
+            {/* Uploading indicator overlay */}
+            {profileUploading && (
+              <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-background/90 px-4 py-3 backdrop-blur-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-[13px] font-medium text-foreground">
+                  Uploading photo… you can close this dialog.
+                </span>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
