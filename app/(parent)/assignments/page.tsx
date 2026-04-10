@@ -391,12 +391,12 @@ export default function AssignmentsFeedPage() {
         >
           {/* Sliding focus indicator */}
           <motion.div
-            className="absolute inset-y-1 rounded-full bg-primary shadow-sm"
+            className="absolute inset-y-1 w-[calc(50%-4px)] rounded-full bg-primary shadow-sm"
             initial={false}
             animate={{
-              left: activeTab === "ASSIGNMENT" ? "4px" : "50%",
-              right: activeTab === "NOTE" ? "4px" : "50%",
+              x: activeTab === "ASSIGNMENT" ? 0 : "calc(100% + 4px)",
             }}
+            style={{ left: "4px" }}
             transition={{ type: "spring", stiffness: 500, damping: 35 }}
           />
           {(["ASSIGNMENT", "NOTE"] as const).map((tab) => (
@@ -407,7 +407,7 @@ export default function AssignmentsFeedPage() {
               aria-selected={activeTab === tab}
               onClick={() => handleTabSwitch(tab)}
               className={cn(
-                "relative z-10 min-h-9 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
+                "relative z-10 min-h-9 flex-1 min-w-[5.5rem] rounded-full px-4 text-[15px] font-semibold transition-colors duration-150",
                 activeTab === tab
                   ? "text-primary-foreground"
                   : "text-primary hover:text-primary/80",

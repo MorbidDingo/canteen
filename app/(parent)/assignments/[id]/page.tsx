@@ -22,6 +22,7 @@ import {
   FileQuestion,
   Pencil,
   Trash2,
+  Eye,
 } from "lucide-react";
 import { BottomSheet } from "@/components/ui/motion";
 import { MarkdownContent } from "@/components/ui/markdown-content";
@@ -227,14 +228,17 @@ export default function PostDetailPage() {
     document.body.removeChild(link);
   }
 
+  const isAuthor = !!post && post.authorUserId === session?.user?.id;
+
   const canSubmit =
     post?.type === "ASSIGNMENT" &&
     post?.status === "PUBLISHED" &&
-    (!post?.dueAt || !isPastDue(post.dueAt));
+    (!post?.dueAt || !isPastDue(post.dueAt)) &&
+    !isAuthor;
 
   const backHref =
     post?.type === "NOTE" ? "/assignments?type=NOTE" : "/assignments";
-  const canEditPost = !!post && post.authorUserId === session?.user?.id;
+  const canEditPost = isAuthor;
 
   async function handleDeletePost() {
     if (!post) return;
@@ -477,76 +481,90 @@ export default function PostDetailPage() {
       {/* Submission section — only for ASSIGNMENT */}
       {post.type === "ASSIGNMENT" && (
         <div className="mt-8">
-          {/* Existing submission — shown inline */}
-          {submission ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
-                  {submission.status === "RESUBMITTED"
-                    ? "Resubmitted"
-                    : "Submitted"}
-                </span>
-                <span className="text-[12px] text-muted-foreground">
-                  · {formatDateTime(submission.submittedAt)}
-                </span>
-              </div>
-
-              {submission.textContent && (
-                <p className="whitespace-pre-wrap rounded-xl bg-muted/30 p-3 text-[14px] text-foreground/80">
-                  {submission.textContent}
-                </p>
-              )}
-
-              {subAttachments.length > 0 && (
-                <div className="space-y-1.5">
-                  {subAttachments.map((att) => (
-                    <button
-                      key={att.id}
-                      type="button"
-                      onClick={() => handleDownload(att.id, "submission")}
-                      className="flex w-full items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-[13px] transition-colors active:bg-muted/50"
-                    >
-                      <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-left">
-                        {getFileName(att)}
-                      </span>
-                      <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {canSubmit && (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary"
-                  onClick={() => {
-                    setShowSubmitForm(true);
-                    setSubmitText(submission.textContent || "");
-                  }}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Resubmit
-                </button>
-              )}
-            </div>
-          ) : canSubmit ? (
+          {/* Author view — show View Submissions button */}
+          {isAuthor ? (
             <button
               type="button"
-              className="h-14 w-full rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
-              onClick={() => setShowSubmitForm(true)}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-card text-[15px] font-semibold text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-transform active:scale-[0.98]"
+              onClick={() => router.push(`/content/${post.id}/submissions`)}
             >
-              Submit Assignment
+              <Eye className="h-4 w-4" />
+              View Submissions
             </button>
           ) : (
-            <p className="text-center text-[13px] text-muted-foreground">
-              {post.status === "CLOSED"
-                ? "This assignment is closed for submissions."
-                : post.dueAt && isPastDue(post.dueAt)
-                  ? "The due date has passed."
-                  : "Submissions are not available."}
-            </p>
+            <>
+              {/* Existing submission — shown inline */}
+              {submission ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span className="text-[13px] font-semibold text-emerald-700 dark:text-emerald-400">
+                      {submission.status === "RESUBMITTED"
+                        ? "Resubmitted"
+                        : "Submitted"}
+                    </span>
+                    <span className="text-[12px] text-muted-foreground">
+                      · {formatDateTime(submission.submittedAt)}
+                    </span>
+                  </div>
+
+                  {submission.textContent && (
+                    <p className="whitespace-pre-wrap rounded-xl bg-muted/30 p-3 text-[14px] text-foreground/80">
+                      {submission.textContent}
+                    </p>
+                  )}
+
+                  {subAttachments.length > 0 && (
+                    <div className="space-y-1.5">
+                      {subAttachments.map((att) => (
+                        <button
+                          key={att.id}
+                          type="button"
+                          onClick={() => handleDownload(att.id, "submission")}
+                          className="flex w-full items-center gap-2 rounded-xl bg-muted/30 px-3 py-2 text-[13px] transition-colors active:bg-muted/50"
+                        >
+                          <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate text-left">
+                            {getFileName(att)}
+                          </span>
+                          <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {canSubmit && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 text-[13px] font-medium text-primary"
+                      onClick={() => {
+                        setShowSubmitForm(true);
+                        setSubmitText(submission.textContent || "");
+                      }}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Resubmit
+                    </button>
+                  )}
+                </div>
+              ) : canSubmit ? (
+                <button
+                  type="button"
+                  className="h-14 w-full rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-transform active:scale-[0.98]"
+                  onClick={() => setShowSubmitForm(true)}
+                >
+                  Submit Assignment
+                </button>
+              ) : (
+                <p className="text-center text-[13px] text-muted-foreground">
+                  {post.status === "CLOSED"
+                    ? "This assignment is closed for submissions."
+                    : post.dueAt && isPastDue(post.dueAt)
+                      ? "The due date has passed."
+                      : "Submissions are not available."}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}
