@@ -1,114 +1,14 @@
 {
-  "generatedAt": "2026-04-13T16:58:11.387Z",
-  "configPath": "/home/runner/work/canteen/canteen/scripts/security/matrix.sample.json",
+  "generatedAt": "2026-03-19T11:22:26.033Z",
+  "configPath": "C:\\Users\\eesha\\OneDrive\\Documents\\code\\canteen\\scripts\\security\\matrix.sample.json",
   "totals": {
     "checks": 16,
-    "passed": 0,
-    "failed": 16,
-    "securityBreaches": 9,
-    "availabilityIssues": 7
+    "passed": 11,
+    "failed": 5,
+    "securityBreaches": 0,
+    "availabilityIssues": 5
   },
-  "securityBreaches": [
-    {
-      "actor": "kiosk-device",
-      "checkId": "attendance-page",
-      "phase": "denied",
-      "path": "/attendance",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "kiosk-device",
-      "checkId": "attendance-api",
-      "phase": "denied",
-      "path": "/api/attendance",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "kiosk-device",
-      "checkId": "management-page",
-      "phase": "denied",
-      "path": "/management",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "kiosk-device",
-      "checkId": "management-stats",
-      "phase": "denied",
-      "path": "/api/management/statistics",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "kiosk-device",
-      "checkId": "admin-page",
-      "phase": "denied",
-      "path": "/admin/orders",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "gate-device",
-      "checkId": "attendance-api",
-      "phase": "denied",
-      "path": "/api/attendance",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "gate-device",
-      "checkId": "attendance-report-api",
-      "phase": "denied",
-      "path": "/api/attendance/reports",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "gate-device",
-      "checkId": "lib-operator-page",
-      "phase": "denied",
-      "path": "/lib-operator/dashboard",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "owner",
-      "checkId": "platform-page",
-      "phase": "denied",
-      "path": "/platform",
-      "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
-    }
-  ],
+  "securityBreaches": [],
   "availabilityIssues": [
     {
       "actor": "kiosk-device",
@@ -116,10 +16,10 @@
       "phase": "allowed",
       "path": "/kiosk",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "kiosk-device",
@@ -127,21 +27,10 @@
       "phase": "allowed",
       "path": "/api/org/context",
       "method": "GET",
-      "status": 0,
+      "status": 401,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "kiosk-device",
-      "checkId": "kiosk-order",
-      "phase": "allowed",
-      "path": "/api/kiosk/order",
-      "method": "POST",
-      "status": 0,
-      "pass": false,
-      "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 401"
     },
     {
       "actor": "gate-device",
@@ -149,21 +38,10 @@
       "phase": "allowed",
       "path": "/gate",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
-    },
-    {
-      "actor": "gate-device",
-      "checkId": "gate-tap",
-      "phase": "allowed",
-      "path": "/api/gate/tap",
-      "method": "POST",
-      "status": 0,
-      "pass": false,
-      "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "owner",
@@ -171,10 +49,10 @@
       "phase": "allowed",
       "path": "/owner",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "owner",
@@ -182,10 +60,10 @@
       "phase": "allowed",
       "path": "/api/owner/organizations",
       "method": "GET",
-      "status": 0,
+      "status": 401,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 401"
     }
   ],
   "results": [
@@ -195,10 +73,10 @@
       "phase": "allowed",
       "path": "/kiosk",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "kiosk-device",
@@ -206,10 +84,10 @@
       "phase": "allowed",
       "path": "/api/org/context",
       "method": "GET",
-      "status": 0,
+      "status": 401,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 401"
     },
     {
       "actor": "kiosk-device",
@@ -217,10 +95,10 @@
       "phase": "allowed",
       "path": "/api/kiosk/order",
       "method": "POST",
-      "status": 0,
-      "pass": false,
-      "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "status": 400,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Allowed endpoint returned expected status 400"
     },
     {
       "actor": "kiosk-device",
@@ -228,10 +106,10 @@
       "phase": "denied",
       "path": "/attendance",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
     },
     {
       "actor": "kiosk-device",
@@ -239,10 +117,10 @@
       "phase": "denied",
       "path": "/api/attendance",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
     },
     {
       "actor": "kiosk-device",
@@ -250,10 +128,10 @@
       "phase": "denied",
       "path": "/management",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
     },
     {
       "actor": "kiosk-device",
@@ -261,10 +139,10 @@
       "phase": "denied",
       "path": "/api/management/statistics",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
     },
     {
       "actor": "kiosk-device",
@@ -272,10 +150,10 @@
       "phase": "denied",
       "path": "/admin/orders",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
     },
     {
       "actor": "gate-device",
@@ -283,10 +161,10 @@
       "phase": "allowed",
       "path": "/gate",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "gate-device",
@@ -294,10 +172,10 @@
       "phase": "allowed",
       "path": "/api/gate/tap",
       "method": "POST",
-      "status": 0,
-      "pass": false,
-      "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "status": 400,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Allowed endpoint returned expected status 400"
     },
     {
       "actor": "gate-device",
@@ -305,10 +183,10 @@
       "phase": "denied",
       "path": "/api/attendance",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
     },
     {
       "actor": "gate-device",
@@ -316,10 +194,10 @@
       "phase": "denied",
       "path": "/api/attendance/reports",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 401,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly blocked with status 401"
     },
     {
       "actor": "gate-device",
@@ -327,10 +205,10 @@
       "phase": "denied",
       "path": "/lib-operator/dashboard",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
     },
     {
       "actor": "owner",
@@ -338,10 +216,10 @@
       "phase": "allowed",
       "path": "/owner",
       "method": "GET",
-      "status": 0,
+      "status": 307,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 307"
     },
     {
       "actor": "owner",
@@ -349,10 +227,10 @@
       "phase": "allowed",
       "path": "/api/owner/organizations",
       "method": "GET",
-      "status": 0,
+      "status": 401,
       "pass": false,
       "classification": "availability_issue",
-      "detail": "Request error: fetch failed"
+      "detail": "Expected one of [200, 201, 202], got 401"
     },
     {
       "actor": "owner",
@@ -360,10 +238,10 @@
       "phase": "denied",
       "path": "/platform",
       "method": "GET",
-      "status": 0,
-      "pass": false,
-      "classification": "security_breach",
-      "detail": "Request error: fetch failed"
+      "status": 307,
+      "pass": true,
+      "classification": "ok",
+      "detail": "Denied endpoint correctly redirected to login with status 307"
     }
   ]
 }
