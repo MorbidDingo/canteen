@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { hapticSuccess, hapticError, hapticWarning } from "@/lib/haptics";
 import {
   Wallet as WalletIcon,
   Loader2,
@@ -421,9 +422,9 @@ export default function WalletPage() {
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
     if (isNaN(amount) || amount < 10 || amount > 5000) {
-      toast.error("Enter an amount between ₹10 and ₹5,000"); return;
+      hapticError(); toast.error("Enter an amount between ₹10 and ₹5,000"); return;
     }
-    if (!selectedChildId) { toast.error("Select a child first"); return; }
+    if (!selectedChildId) { hapticError(); toast.error("Select a child first"); return; }
     setTopUpLoading(true);
     try {
       const res = await fetch("/api/wallet/topup", {
@@ -438,14 +439,15 @@ export default function WalletPage() {
       const { razorpayOrderId, amount: amountPaise, keyId, walletId } = await res.json();
       const childName = wallets.find((w) => w.childId === selectedChildId)?.childName || "";
       const { newBalance } = await handleRazorpayTopUp(razorpayOrderId, amountPaise, keyId, walletId, childName);
+      hapticSuccess();
       toast.success(`₹${amount.toFixed(0)} added to wallet!`);
       setTopUpAmount("");
       setTopUpOpen(false);
       setWallets((prev) => prev.map((w) => w.childId === selectedChildId ? { ...w, balance: newBalance } : w));
       fetchTransactions(selectedChildId);
     } catch (err) {
-      if (err instanceof Error && err.message === "Payment cancelled") toast.info("Payment cancelled");
-      else toast.error(err instanceof Error ? err.message : "Failed to initiate payment");
+      if (err instanceof Error && err.message === "Payment cancelled") { hapticWarning(); toast.info("Payment cancelled"); }
+      else { hapticError(); toast.error(err instanceof Error ? err.message : "Failed to initiate payment"); }
     } finally { setTopUpLoading(false); }
   };
 

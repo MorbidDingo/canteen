@@ -196,7 +196,8 @@ export function BottomSheet({
       document.body.style.left = "";
       document.body.style.right = "";
       document.body.style.overflow = "";
-      window.scrollTo(0, scrollY);
+      // Use 'instant' to override global smooth scroll-behavior CSS
+      window.scrollTo({ top: scrollY, behavior: "instant" as ScrollBehavior });
     };
   }, [open]);
 

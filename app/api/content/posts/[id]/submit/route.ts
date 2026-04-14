@@ -175,7 +175,10 @@ export async function POST(
     request,
   });
 
-  return NextResponse.json({ submission, attachments }, { status: 201 });
+  return NextResponse.json({
+    submission: { ...submission, submittedAt: submission.createdAt },
+    attachments,
+  }, { status: 201 });
 }
 
 // PATCH — resubmit (update status, replace attachments)
@@ -316,7 +319,10 @@ export async function PATCH(
       attachments.push(att);
     }
 
-    return NextResponse.json({ submission, attachments });
+    return NextResponse.json({
+      submission: { ...submission, submittedAt: submission.createdAt },
+      attachments,
+    });
   }
 
   // If no new files, return existing attachments
@@ -325,5 +331,8 @@ export async function PATCH(
     .from(contentSubmissionAttachment)
     .where(eq(contentSubmissionAttachment.submissionId, existing.id));
 
-  return NextResponse.json({ submission, attachments });
+  return NextResponse.json({
+    submission: { ...submission, submittedAt: submission.createdAt },
+    attachments,
+  });
 }

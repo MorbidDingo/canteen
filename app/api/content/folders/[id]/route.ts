@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { AccessDeniedError, requireAccess } from "@/lib/auth-server";
-import { checkAudienceAccess } from "@/lib/content-audience";
+import { checkAudienceAccess, checkFolderAudienceAccess } from "@/lib/content-audience";
 
 // GET — get folder detail with posts
 export async function GET(
@@ -59,6 +59,12 @@ export async function GET(
     return NextResponse.json({ error: "Folder not found" }, { status: 404 });
   }
 
+  // Check folder audience access
+  const hasFolderAccess = await checkFolderAudienceAccess(organizationId, userId, folder.id, folder.authorUserId);
+  if (!hasFolderAccess) {
+    return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+  }
+
   // Fetch author name
   const [author] = await db
     .select({ name: user.name })
@@ -82,6 +88,7 @@ export async function GET(
       dueAt: contentPost.dueAt,
       status: contentPost.status,
       createdAt: contentPost.createdAt,
+      authorUserId: contentPost.authorUserId,
       authorName: user.name,
     })
     .from(contentPost)
@@ -98,9 +105,22 @@ export async function GET(
     )
     .orderBy(sql`${contentPost.createdAt} DESC`);
 
-  // Fetch attachments for all posts
-  const postIds = posts.map((p) => p.id);
-  let attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
+  // For non-author non-management users, filter posts by audience access
+  let visiblePosts = posts;
+  if (folder.authorUserId !== userId) {
+    const accessChecks = await Promise.all(
+      posts.map(async (p) => {
+        // Post authors can always see their own posts
+        if (p.authorUserId === userId) return true;
+        return checkAudienceAccess(organizationId, userId, p.id);
+      }),
+    );
+    visiblePosts = posts.filter((_, i) => accessChecks[i]);
+  }
+
+  // Fetch attachments for visible posts
+  const postIds = visiblePosts.map((p) => p.id);
+  const attachmentsByPost = new Map<string, Array<{ id: string; mimeType: string; size: number }>>();
 
   if (postIds.length > 0) {
     const postAttachments = await db
@@ -120,7 +140,7 @@ export async function GET(
     }
   }
 
-  const postsWithAttachments = posts.map((p) => ({
+  const postsWithAttachments = visiblePosts.map((p) => ({
     ...p,
     attachments: attachmentsByPost.get(p.id) || [],
   }));

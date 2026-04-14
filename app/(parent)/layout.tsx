@@ -21,6 +21,7 @@ import {
   Check,
   ChevronDown,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import {
   IoRestaurant,
@@ -1505,15 +1506,6 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
             </div>
-            <input
-              ref={profilePhotoInputRef}
-              id="parent-profile-photo"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="sr-only"
-              disabled={profileUploading}
-              onChange={handleProfilePhotoInputChange}
-            />
             <div className="mt-2 text-xs text-muted-foreground">
               Select the pencil icon to edit your profile photo.
             </div>
@@ -2294,6 +2286,17 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </BottomSheet>
 
+      {/* Hidden file input – lives outside all sheets/dialogs so the ref is always reachable */}
+      <input
+        ref={profilePhotoInputRef}
+        id="parent-profile-photo"
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        disabled={profileUploading}
+        onChange={handleProfilePhotoInputChange}
+      />
+
       <Dialog
         open={profilePhotoPreviewOpen}
         onOpenChange={(open) => setProfilePhotoPreviewOpen(open)}
@@ -2318,18 +2321,34 @@ function ParentLayoutContent({ children }: { children: React.ReactNode }) {
                 {mounted ? getInitials(session?.user?.name) : "?"}
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => profilePhotoInputRef.current?.click()}
-              disabled={profileUploading}
-              className={cn(
-                "absolute right-3 top-3 inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors",
-                profileUploading ? "cursor-not-allowed opacity-70" : "hover:bg-muted/70",
-              )}
-              aria-label="Upload new profile photo"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
+            {/* Upload button */}
+            <div className="absolute top-3 right-14 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => profilePhotoInputRef.current?.click()}
+                disabled={profileUploading}
+                className={cn(
+                  "inline-flex h-11 min-h-11 w-11 min-w-11 items-center justify-center rounded-full border border-border/70 bg-background/95 text-foreground shadow-sm transition-colors",
+                  profileUploading ? "cursor-not-allowed opacity-70" : "hover:bg-muted/70",
+                )}
+                aria-label="Upload new profile photo"
+              >
+                {profileUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Pencil className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {/* Uploading indicator overlay */}
+            {profileUploading && (
+              <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-background/90 px-4 py-3 backdrop-blur-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-[13px] font-medium text-foreground">
+                  Uploading photo… you can close this dialog.
+                </span>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
